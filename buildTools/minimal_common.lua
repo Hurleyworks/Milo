@@ -73,7 +73,7 @@ local ROOT = "../"
 			"cpptrace",
 			"libassert",
 			"binarytools",
-			
+			"nanogui",
 		}
 			
 			
@@ -103,6 +103,7 @@ local ROOT = "../"
 			"cpptrace",
 			"libassert",
 			"binarytools",
+			"nanogui",
 			
 		}
 		defines { "NDEBUG"}
