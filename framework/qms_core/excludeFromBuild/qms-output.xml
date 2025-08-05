@@ -1,0 +1,1314 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+The content has been processed where comments have been removed, empty lines have been removed.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Code comments have been removed from supported file types
+- Empty lines have been removed from all files
+</notes>
+
+<additional_info>
+
+</additional_info>
+
+</file_summary>
+
+<directory_structure>
+ClaudeMessages.h
+DreamerMessages.h
+GeometryMessages.h
+ImagingMessages.h
+PhysicsMessages.h
+QmsData.h
+QmsDispatcher.h
+QmsDispatcherT.h
+qmsqueue.h
+QmsReceiver.h
+QmsSender.h
+QuickSilverMessengerService.h
+RenderMessages.h
+WorldMessages.h
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path="ClaudeMessages.h">
+#pragma once
+
+
+struct initSocketServer
+{
+    QmsID id = QmsID::InitSocketServer;
+    QmsID realID = QmsID::InitSocketServer;
+    int port;
+    MessageService messengers;
+
+    initSocketServer (int p, MessageService ms) :
+        port (p), messengers (ms) {}
+
+
+};
+
+struct clientConnected
+{
+    QmsID id = QmsID::ClientConnected;
+    QmsID realID = QmsID::ClientConnected;
+    SocketHandle clientSocket;
+
+    clientConnected (SocketHandle socket) :
+        clientSocket (socket) {}
+};
+
+struct processMsg
+{
+    QmsID id = QmsID::ProcessMsg;
+    QmsID realID = QmsID::ProcessMsg;
+    std::string message;
+
+    processMsg (const std::string& msg) :
+        message (msg) {}
+};
+
+struct sendMsg
+{
+    QmsID id = QmsID::SendMsg;
+    QmsID realID = QmsID::SendMsg;
+    SocketHandle clientSocket;
+    std::string message;
+
+    sendMsg (SocketHandle socket, const std::string& msg) :
+        clientSocket (socket), message (msg) {}
+};
+
+struct broadcastMsg
+{
+    QmsID id = QmsID::BroadcastMsg;
+    QmsID realID = QmsID::BroadcastMsg;
+    std::string message;
+
+    broadcastMsg (const std::string& msg) :
+        message (msg) {}
+};
+
+struct updateSocketServer
+{
+    QmsID id = QmsID::TopPriority; // Make it high priority so it gets processed quickly
+    QmsID realID = QmsID::UpdateSocketServer;
+
+    updateSocketServer() {}
+};
+
+struct executeCommand
+{
+    QmsID id = QmsID::ExecuteCommand;
+    QmsID realID = QmsID::ExecuteCommand;
+
+    executeCommand (const std::string& cmd) :
+        command (cmd) {}
+    std::string command;
+};
+
+struct commandResult
+{
+    QmsID id = QmsID::CommandResult;
+    QmsID realID = QmsID::CommandResult;
+
+    commandResult (bool s, const std::string& cmd, const std::string& resp) :
+        success (s), command (cmd), response (resp) {}
+    bool success;
+    std::string command;
+    std::string response;
+};
+
+#if 0
+struct initCommandProcessor
+{
+    initCommandProcessor (MessageService m, GlobalFunc* g) :
+        messengers (m), global (g) {}
+    MessageService messengers;
+    GlobalFunc* global;
+};
+
+#endif
+</file>
+
+<file path="DreamerMessages.h">
+#pragma once
+
+using mace::InputEvent;
+
+struct init
+{
+    init (const MessageService& messengers, const PropertyService& properties) :
+        messengers (messengers),
+        properties (properties)
+    {
+    }
+    QmsID id = QmsID::Init;
+    QmsID realID = QmsID::Init;
+
+    MessageService messengers;
+    PropertyService properties;
+};
+
+struct tick
+{
+    tick (uint32_t frameNumber = 0) :
+        frame (frameNumber)
+    {
+    }
+
+    QmsID id = QmsID::Tick;
+    QmsID realID = QmsID::Tick;
+
+    uint32_t frame = 0;
+};
+
+struct rendererReady
+{
+    rendererReady () 
+    {
+    }
+
+    QmsID id = QmsID::TopPriority;
+    QmsID realID = QmsID::RendererReady;
+
+    uint32_t frame = 0;
+};
+
+
+struct onPriorityInput
+{
+    onPriorityInput (const InputEvent& input, uint32_t frameNumber = 0) :
+        input (input),
+        frameNumber (frameNumber)
+    {
+    }
+
+    // must be responsive to user input!
+    QmsID id = QmsID::TopPriority;
+    QmsID realID = QmsID::OnPriorityInput;
+
+    InputEvent input;
+    uint32_t frameNumber = 0;
+};
+
+struct onRenderFrameComplete
+{
+    onRenderFrameComplete (const std::string& fullPath, uint32_t frameNumber) :
+        fullPath (fullPath),
+        frameNumber (frameNumber)
+    {
+    }
+
+    QmsID id = QmsID::TopPriority;
+    QmsID realID = QmsID::OnRenderFrameComplete;
+
+    std::string fullPath = UNSET_PATH;
+    uint32_t frameNumber = 0;
+};
+
+struct onError
+{
+    onError (const std::string& message, ErrorSeverity severity = ErrorSeverity::Critical) :
+        errorMessage (message),
+        level (severity)
+    {
+    }
+
+    QmsID id = QmsID::TopPriority;
+    QmsID realID = QmsID::OnError;
+
+    std::string errorMessage;
+    ErrorSeverity level;
+};
+</file>
+
+<file path="GeometryMessages.h">
+#pragma once
+
+using mace::InputEvent;
+using sabi::MeshOptions;
+
+struct loadModel
+{
+    loadModel (const std::filesystem::path& path, MeshOptions options = MeshOptions()) :
+        filePath (path),
+        meshOptions (options)
+    {
+    }
+
+    QmsID id = QmsID::LoadModel;
+    QmsID realID = QmsID::LoadModel;
+
+    std::filesystem::path filePath;
+    MeshOptions meshOptions;
+};
+
+struct loadModelList
+{
+    loadModelList (const PathList& paths, MeshOptions options = MeshOptions()) :
+        modelPaths (paths),
+        meshOptions(options)
+    {
+    }
+
+    QmsID id = QmsID::LoadModelList;
+    QmsID realID = QmsID::LoadModelList;
+
+    PathList modelPaths;
+    MeshOptions meshOptions;
+};
+</file>
+
+<file path="ImagingMessages.h">
+#pragma once
+
+
+struct initImageServices
+{
+    initImageServices (ImageCacheHandlerPtr cache) :
+        imageCache (cache)
+    {
+    }
+    QmsID id = QmsID::InitImageServices;
+    QmsID realID = QmsID::InitImageServices;
+
+    ImageCacheHandlerPtr imageCache = nullptr;
+};
+
+struct loadImageFolder
+{
+    loadImageFolder (const std::filesystem::path& imageFolder) :
+        imageFolder (imageFolder)
+    {
+    }
+
+    QmsID id = QmsID::LoadImageFolder;
+    QmsID realID = QmsID::LoadImageFolder;
+
+    std::filesystem::path imageFolder;
+};
+
+struct loadImageList
+{
+    loadImageList (const PathList& paths) :
+        imagePaths (paths)
+    {
+    }
+
+    QmsID id = QmsID::LoadImageList;
+    QmsID realID = QmsID::LoadImageList;
+
+    PathList imagePaths;
+};
+
+struct loadImage
+{
+    loadImage (const std::filesystem::path& path) :
+        imagePath (path)
+    {
+    }
+
+    QmsID id = QmsID::LoadImage;
+    QmsID realID = QmsID::LoadImage;
+
+    std::filesystem::path imagePath;
+};
+</file>
+
+<file path="PhysicsMessages.h">
+#pragma once
+
+using sabi::PhysicsEngineState;
+using sabi::SpaceTime;
+
+struct updatePhysics
+{
+    updatePhysics (PhysicsEngineState state, uint32_t frameNumber = 0) :
+        state (state),
+        frame (frameNumber)
+    {
+    }
+
+    QmsID id = QmsID::UpdatePhysics;
+    QmsID realID = QmsID::UpdatePhysics;
+
+    PhysicsEngineState state = PhysicsEngineState::Pause;
+    uint32_t frame = 0;
+};
+
+struct updatePose
+{
+    updatePose (RenderableWeakRef weakNode) :
+        weakNode (weakNode)
+    {
+        // start with the current SpaceTime
+        if (!weakNode.expired())
+            st = weakNode.lock()->getSpaceTime();
+    }
+
+    QmsID id = QmsID::TopPriority;
+    QmsID realID = QmsID::UpdatePose;
+
+    RenderableWeakRef weakNode;
+
+    // we need to keep a separate SpaceTime
+    // for the command system
+    SpaceTime st;
+};
+
+struct updatePhysicsProperties
+{
+    updatePhysicsProperties (RenderableWeakRef weakNode) :
+        weakNode (weakNode)
+    {
+    
+    }
+
+    QmsID id = QmsID::TopPriority;
+    QmsID realID = QmsID::UpdatePhysicsProperties;
+
+    RenderableWeakRef weakNode;
+};
+
+struct createOrUpdatePhantom
+{
+    createOrUpdatePhantom (RenderableWeakRef weakNode) :
+        weakNode (weakNode)
+    {
+    }
+
+    QmsID id = QmsID::CreateOrUpdatePhantom;
+    QmsID realID = QmsID::CreateOrUpdatePhantom;
+
+    RenderableWeakRef weakNode;
+};
+</file>
+
+<file path="QmsData.h">
+// This header file was auto-generated by ClassMate++
+// Created: 11 Sep 2015 7:51:05 am
+// Copyright (c) 2015, HurleyWorks
+
+#pragma once
+
+namespace qms
+{
+    static const char* QmsIDTable[] =
+        {
+            "TopPriority",
+            "ClearQueue",
+
+            // dreamer messages
+            "Init",
+            "OnError",
+            "OnPriorityInput",
+            "OnRenderFrameComplete",
+            "Tick",
+            "RendererReady",
+
+            // geometry messages
+            "LoadModel",
+            "LoadModelList",
+
+            // imaging messages
+            "InitImageServices",
+            "LoadImage",
+            "LoadImageList",
+            "LoadImageFolder",
+
+            // world messages
+            "AddNodeToWorld",
+            "AddNodeListToWorld",
+            "CreateInstanceStack",
+            "CreateInstanceClump",
+            "SelectAll",
+            "DeselectAll",
+            "SelectByOptions",
+
+            // render messages
+            "AddWeakNode",
+            "RemoveWeakNode",
+            "RemoveWeakNodeByID",
+            "RemoveWeakNodeListByID",
+            "AddWeakNodeList",
+            "RemoveWeakNodeList",
+            "InitRenderEngine",
+            "RenderNextFrame",
+            "RenderNextAnimationFrame",
+            "AddSkydomeHDR",
+            "ResetModtion",
+            "SetAllModelsVisibility",
+            "UpdateNodeMaterial",
+            "UpdateViewportCameras",
+            "GPUStatsMsg",
+            "RenderableNodeProcessed",
+            "RemovedRenderableNodes",
+
+            // physics messages
+            "UpdatePhysics",
+            "UpdatePose",
+            "UpdatePhysicsProperties",
+            "CreateOrUpdatePhantom",
+
+            // ClaudeMessages
+            "InitSocketServer",
+            "ClientConnected",
+            "ProcessMsg",
+            "SendMsg",
+            "BroadcastMsg",
+            "UpdateSocketServer",
+            "ExecuteCommand",
+            "CommandResult",
+            "UpdateSocketServer",
+            "UpdateSocketServer",
+            "Invalid"};
+
+    struct QmsID
+    {
+        enum EQmsID
+        {
+            TopPriority,
+            ClearQueue,
+
+            // dreamer messages
+            Init,
+            OnError,
+            OnPriorityInput,
+            OnRenderFrameComplete,
+            Tick,
+            RendererReady,
+
+            // geometry messages
+            LoadModel,
+            LoadModelList,
+
+            // imaging messages
+            InitImageServices,
+            LoadImage,
+            LoadImageList,
+            LoadImageFolder,
+
+            // world messages
+            AddNodeToWorld,
+            AddNodeListToWorld,
+            CreateInstanceStack,
+            CreateInstanceClump,
+            SelectAll,
+            DeselectAll,
+            SelectByOptions,
+
+            // rendering messages
+            AddWeakNode,
+            RemoveWeakNode,
+            RemoveWeakNodeByID,
+            RemoveWeakNodeListByID,
+            AddWeakNodeList,
+            RemoveWeakNodeList,
+            InitRenderEngine,
+            RenderNextFrame,
+            RenderNextAnimationFrame,
+            AddSkydomeHDR,
+            ResetModtion,
+            SetAllModelsVisibility,
+            UpdateNodeMaterial,
+            UpdateViewportCameras,
+            GPUStatsMsg,
+            RenderableNodeProcessed,
+            RemovedRenderableNodes,
+
+            // physics messages
+            UpdatePhysics,
+            UpdatePose,
+            UpdatePhysicsProperties,
+            CreateOrUpdatePhantom,
+
+            // ClaudeMessages
+            InitSocketServer,
+            ClientConnected,
+            ProcessMsg,
+            SendMsg,
+            BroadcastMsg,
+            UpdateSocketServer,
+            ExecuteCommand,
+            CommandResult,
+
+            Count,
+            Invalid = Count
+        };
+
+        union
+        {
+            EQmsID name;
+            unsigned int value;
+        };
+
+        QmsID (EQmsID name) :
+            name (name) {}
+        QmsID (unsigned int value) :
+            value (value) {}
+        QmsID() :
+            value (Invalid) {}
+        operator EQmsID() const { return name; }
+        const char* toString() const { return QmsIDTable[value]; }
+    };
+
+    struct clear_queue
+    {
+        QmsID id = QmsID::TopPriority;
+        QmsID realID = QmsID::ClearQueue;
+    };
+
+} // namespace qms
+</file>
+
+<file path="QmsDispatcher.h">
+// from Anthony Williams Concurrency Book -- Boost License
+#pragma once
+
+namespace qms
+{
+    class dispatcher
+    {
+        queue* q;
+        bool chained;
+
+        dispatcher(dispatcher const&)=delete;
+        dispatcher& operator=(dispatcher const&)=delete;
+
+        template<
+            typename Dispatcher,
+            typename Msg,
+            typename Func>
+        friend class TemplateDispatcher;
+
+        void wait_and_dispatch()
+        {
+            for(;;)
+            {
+                auto msg=q->wait_and_pop();
+                dispatch(msg);
+            }
+        }
+
+        bool dispatch(std::shared_ptr<message_base> const& msg)
+        {
+            return false;
+        }
+    public:
+        dispatcher(dispatcher&& other):
+            q(other.q),chained(other.chained)
+        {
+            other.chained=true;
+        }
+
+        explicit dispatcher(queue* q_):
+            q(q_),chained(false)
+        {}
+
+        template<typename Message,typename Func>
+        TemplateDispatcher<dispatcher,Message,Func>
+        handle(Func&& f)
+        {
+            return TemplateDispatcher<dispatcher,Message,Func>(
+                q,this,std::forward<Func>(f));
+        }
+
+        ~dispatcher() //noexcept(false)
+        {
+            if(!chained)
+            {
+                wait_and_dispatch();
+            }
+        }
+    };
+}
+</file>
+
+<file path="QmsDispatcherT.h">
+// from Anthony Williams Concurrency Book -- Boost License
+#pragma once
+
+namespace qms
+{
+    template<typename PreviousDispatcher,typename Msg,typename Func>
+    class TemplateDispatcher
+    {
+        queue* q;
+        PreviousDispatcher* prev;
+        Func f;
+        bool chained;
+
+        TemplateDispatcher(TemplateDispatcher const&)=delete;
+        TemplateDispatcher& operator=(TemplateDispatcher const&)=delete;
+
+        template<typename Dispatcher,typename OtherMsg,typename OtherFunc>
+        friend class TemplateDispatcher;
+
+        void wait_and_dispatch()
+        {
+            for(;;)
+            {
+                auto msg=q->wait_and_pop();
+                if(dispatch(msg))
+                    break;
+            }
+        }
+
+        bool dispatch(std::shared_ptr<message_base> const& msg)
+        {
+            if(wrapped_message<Msg>* wrapper=
+               dynamic_cast<wrapped_message<Msg>*>(msg.get()))
+            {
+                f(wrapper->contents);
+                return true;
+            }
+            else
+            {
+                return prev->dispatch(msg);
+            }
+        }
+    public:
+        TemplateDispatcher(TemplateDispatcher&& other):
+            q(other.q),prev(other.prev),f(std::move(other.f)),
+            chained(other.chained)
+        {
+            other.chained=true;
+        }
+
+        TemplateDispatcher(queue* q_,PreviousDispatcher* prev_,Func&& f_):
+            q(q_),prev(prev_),f(std::forward<Func>(f_)),chained(false)
+        {
+            prev_->chained=true;
+        }
+
+        template<typename OtherMsg,typename OtherFunc>
+        TemplateDispatcher<TemplateDispatcher,OtherMsg,OtherFunc>
+        handle(OtherFunc&& of)
+        {
+            return TemplateDispatcher<
+                TemplateDispatcher,OtherMsg,OtherFunc>(
+                    q,this,std::forward<OtherFunc>(of));
+        }
+
+        ~TemplateDispatcher() //noexcept(false)
+        {
+            if(!chained)
+            {
+                wait_and_dispatch();
+            }
+        }
+    };
+}
+</file>
+
+<file path="qmsqueue.h">
+// from Anthony Williams Concurrency Book -- Boost License
+#pragma once
+
+namespace qms
+{
+    struct message_base
+    {
+        QmsID baseID;
+        message_base (QmsID id)
+        {
+            baseID = id;
+        }
+        virtual ~message_base()
+        {
+        }
+    };
+
+    template <typename Msg>
+    struct wrapped_message : message_base
+    {
+        Msg contents;
+        explicit wrapped_message (Msg const&& contents_) :
+            message_base (contents_.realID),
+            contents (std::move (contents_))
+        {
+        }
+    };
+
+    // class queue : public HasId
+    class queue
+    {
+        std::mutex m;
+        std::condition_variable c;
+        std::deque<std::shared_ptr<message_base>> q;
+        QmsID lastID = QmsID::Invalid;
+        QmsID lastRealID = QmsID::Invalid;
+
+     public:
+        template <typename T>
+        void push (T const& msg)
+        {
+            std::lock_guard<std::mutex> lk (m);
+
+            // if the incoming message is the same as the last message then replace the
+            // last message with the new one. We only want to do this with certain message types
+            // like RenderNextFrame that don't have any important state. Actually RenderNextFrame
+            // did have some important state, namely mouse press and release events which can't be
+            // replaced here without affecting PaintTools and Picking so now mouse press and release
+            // evemts were moved to the onPriorityInput message and they are top priority so they go to
+            //  the front of the queue
+            if (q.size() && msg.id == QmsID::RenderNextFrame && lastID == QmsID::RenderNextFrame)
+            {
+                //LOG (DBUG) << " ate RENDER NEXT FRAME";
+                q.pop_back();
+            }
+
+            if (q.size() && msg.id == QmsID::UpdatePhysics && lastID == QmsID::UpdatePhysics)
+            {
+                
+                q.pop_back();
+            }
+         
+
+            // priority messages go to the front
+            if (msg.id == QmsID::TopPriority)
+            {
+                // LOG (DBUG) << msg.realID;
+                q.push_front (std::make_shared<wrapped_message<T>> (std::move (msg)));
+            }
+            else
+            {
+                q.push_back (std::make_shared<wrapped_message<T>> (std::move (msg)));
+            }
+
+            lastRealID = msg.realID;
+            lastID = msg.id;
+
+            c.notify_all();
+        }
+
+        std::shared_ptr<message_base> wait_and_pop()
+        {
+            std::unique_lock<std::mutex> lk (m);
+            c.wait (lk, [&]
+                    { return !q.empty(); });
+            auto res = q.front();
+            q.pop_front();
+            return res;
+        }
+
+        std::shared_ptr<message_base> wait_and_pop_back()
+        {
+            std::unique_lock<std::mutex> lk (m);
+            c.wait (lk, [&]
+                    { return !q.empty(); });
+            auto res = q.back();
+            q.pop_back();
+            return res;
+        }
+
+        void clear()
+        {
+            std::unique_lock<std::mutex> lk (m);
+            if (q.size())
+            {
+                // LOG(DBUG) << "Clearing QUEUE";
+                q.clear();
+                c.notify_all();
+            }
+        }
+        size_t size()
+        {
+            return q.size();
+        }
+    };
+} // namespace qms
+</file>
+
+<file path="QmsReceiver.h">
+// from Anthony Williams Concurrency Book -- Boost License
+#pragma once
+
+namespace qms
+{
+    class receiver
+    {
+        queue q;
+
+    public:
+        operator sender()
+        {
+            return sender(&q);
+        }
+
+        dispatcher wait()
+        {
+            return dispatcher(&q);
+        }
+    };
+}
+</file>
+
+<file path="QmsSender.h">
+// from Anthony Williams Concurrency Book -- Boost License
+#pragma once
+
+namespace qms
+{
+    class sender
+    {
+        queue*q;
+    public:
+        sender():
+            q(nullptr)
+        {}
+        explicit sender(queue*q_):
+            q(q_)
+        {}
+        template<typename Message>
+        void send(Message const& msg)
+        {
+			if (msg.id == QmsID::ClearQueue)
+			{
+				q->clear();
+			}
+
+            if(q)
+            {
+                q->push(msg);
+            }
+        }
+    };
+}
+</file>
+
+<file path="QuickSilverMessengerService.h">
+#pragma once
+
+// quicksilver messenger service
+#include "QmsData.h"
+#include "QmsQueue.h"
+#include "QmsSender.h"
+#include "QmsDispatcherT.h"
+#include "QmsDispatcher.h"
+#include "QmsReceiver.h"
+
+using MsgSender = qms::sender;
+using MsgReceiver = qms::receiver;
+
+static const char* MessageDestinationTable[] =
+    {
+        "Dreamer",
+        "Renderer",
+        "World",
+        "Geometry",
+        "Imaging",
+        "Physics",
+        "Invalid"};
+
+struct MessageDestination
+{
+    enum EMessageDestination
+    {
+        Dreamer,
+        Renderer,
+        World,
+        Geometry,
+        Imaging,
+        Physics,
+        Count,
+        Invalid = Count
+    };
+
+    union
+    {
+        EMessageDestination name;
+        unsigned int value;
+    };
+
+    MessageDestination (EMessageDestination name) :
+        name (name) {}
+    MessageDestination (unsigned int value) :
+        value (value) {}
+    MessageDestination() :
+        value (Invalid) {}
+    operator EMessageDestination() const { return name; }
+    const char* toString() const { return MessageDestinationTable[value]; }
+};
+
+struct MessageService
+{
+    MsgSender dreamer;
+    MsgSender render;
+    MsgSender world;
+    MsgSender geometry;
+    MsgSender imaging;
+    MsgSender physics;
+    MsgSender claude;
+};
+
+namespace qms
+{
+    namespace activeMsg
+    {
+        #include "DreamerMessages.h"
+        #include "GeometryMessages.h"
+        #include "ImagingMessages.h"
+        #include "RenderMessages.h"
+        #include "WorldMessages.h"
+        #include "PhysicsMessages.h"
+        #include "ClaudeMessages.h"
+
+    } // namespace activeMsg
+
+} // namespace qms
+
+#define QMS qms::activeMsg
+</file>
+
+<file path="RenderMessages.h">
+#pragma once
+
+using mace::InputEvent;
+using sabi::CameraHandle;
+using sabi::RenderableList;
+using sabi::RenderableNode;
+using sabi::RenderableWeakRef;
+using sabi::ViewportCameraPtr;
+using sabi::WeakRenderableList;
+
+struct gpuStatsMsg
+{
+    gpuStatsMsg (GPUMemoryStats stats) :
+        stats (stats)
+    {
+    }
+
+    GPUMemoryStats stats;
+    QmsID id = QmsID::TopPriority;
+    QmsID realID = QmsID::GPUStatsMsg;
+};
+
+struct addWeakNode
+{
+    addWeakNode (RenderableWeakRef renderable) :
+        weakNode (renderable)
+    {
+    }
+
+    QmsID id = QmsID::AddWeakNode;
+    QmsID realID = QmsID::AddWeakNode;
+
+    RenderableWeakRef weakNode;
+};
+
+struct removeWeakNode
+{
+    removeWeakNode (RenderableWeakRef renderable) :
+        weakNode (renderable)
+    {
+    }
+
+    QmsID id = QmsID::RemoveWeakNode;
+    QmsID realID = QmsID::RemoveWeakNode;
+
+    RenderableWeakRef weakNode;
+};
+
+struct removeWeakNodeByID
+{
+    removeWeakNodeByID (BodyID bodyID) :
+        bodyID (bodyID)
+    {
+    }
+
+    QmsID id = QmsID::RemoveWeakNodeByID;
+    QmsID realID = QmsID::RemoveWeakNodeByID;
+
+    BodyID bodyID;
+};
+
+struct removeWeakNodeListByID
+{
+    removeWeakNodeListByID (const std::vector<BodyID>& bodyIDs) :
+        bodyIDs (bodyIDs)
+    {
+    }
+
+    QmsID id = QmsID::RemoveWeakNodeListByID;
+    QmsID realID = QmsID::RemoveWeakNodeListByID;
+
+    std::vector<BodyID> bodyIDs;
+};
+
+struct updateNodeMaterial
+{
+    updateNodeMaterial (RenderableWeakRef renderable) :
+        weakNode (renderable)
+    {
+    }
+
+    QmsID id = QmsID::UpdateNodeMaterial;
+    QmsID realID = QmsID::UpdateNodeMaterial;
+
+    RenderableWeakRef weakNode;
+};
+
+struct addWeakNodeList
+{
+    addWeakNodeList (WeakRenderableList&& weakNodes) :
+        weakNodes (std::move (weakNodes))
+    {
+    }
+
+    QmsID id = QmsID::AddWeakNodeList;
+    QmsID realID = QmsID::AddWeakNodeList;
+
+    WeakRenderableList weakNodes;
+};
+
+struct removedRenderableNodes
+{
+    removedRenderableNodes (uint32_t count) :
+        count(count)
+    {
+    }
+
+    QmsID id = QmsID::RemovedRenderableNodes;
+    QmsID realID = QmsID::RemovedRenderableNodes;
+
+    uint32_t count = 0;
+};
+
+struct removeWeakNodeList
+{
+    removeWeakNodeList (WeakRenderableList&& weakNodes) :
+        weakNodes (std::move (weakNodes))
+    {
+    }
+
+    QmsID id = QmsID::RemoveWeakNodeList;
+    QmsID realID = QmsID::RemoveWeakNodeList;
+
+    WeakRenderableList weakNodes;
+};
+
+struct initRenderEngine
+{
+    initRenderEngine (const CameraHandle& camera, ImageCacheHandlerPtr imageCache) :
+        camera (camera),
+        imageCache (imageCache)
+    {
+    }
+    QmsID id = QmsID::InitRenderEngine;
+    QmsID realID = QmsID::InitRenderEngine;
+
+    CameraHandle camera = nullptr;
+    ImageCacheHandlerPtr imageCache = nullptr;
+};
+
+struct renderNextFrame
+{
+    renderNextFrame (const InputEvent& inputEvent, bool updateMotion, uint32_t frameNumber = 0) :
+        input (inputEvent),
+        updateMotion (updateMotion),
+        frameNumber (frameNumber)
+    {
+    }
+    QmsID id = QmsID::RenderNextFrame;
+    QmsID realID = QmsID::RenderNextFrame;
+
+    InputEvent input;
+    bool updateMotion = false;
+    uint32_t frameNumber = 0;
+};
+
+struct renderNextAnimationFrame
+{
+    renderNextAnimationFrame (const InputEvent& inputEvent, bool updateMotion, uint32_t frameNumber = 0) :
+        input (inputEvent),
+        updateMotion (updateMotion),
+        frameNumber (frameNumber)
+    {
+    }
+    // Make sure animation frames aren't eaten by the dispatcher
+    // unlike preview mode, they all need to pass on to the renderer
+    QmsID id = QmsID::TopPriority;
+    QmsID realID = QmsID::RenderNextFrame;
+
+    InputEvent input;
+    bool updateMotion = false;
+    uint32_t frameNumber = 0;
+};
+
+struct addSkydomeHDR
+{
+    addSkydomeHDR (const std::filesystem::path& hdrPath) :
+        path (hdrPath)
+    {
+    }
+    QmsID id = QmsID::AddSkydomeHDR;
+    QmsID realID = QmsID::AddSkydomeHDR;
+
+    std::filesystem::path path;
+};
+
+struct resetMotion
+{
+    resetMotion()
+    {
+    }
+    QmsID id = QmsID::TopPriority;
+    QmsID realID = QmsID::RenderNextFrame;
+};
+
+struct setAllModelsVisibity
+{
+    setAllModelsVisibity (uint32_t mask) :
+        visibilityMask (mask)
+    {
+    }
+    QmsID id = QmsID::TopPriority;
+    QmsID realID = QmsID::SetAllModelsVisibility;
+
+    uint32_t visibilityMask = 0;
+};
+
+struct updateViewportCameras
+{
+    updateViewportCameras (const std::vector<ViewportCameraPtr>& cameras) :
+        viewportCameras (cameras)
+    {
+    }
+    QmsID id = QmsID::TopPriority;
+    QmsID realID = QmsID::UpdateViewportCameras;
+
+    std::vector<ViewportCameraPtr> viewportCameras;
+};
+
+struct renderableNodeProcessed
+{
+    renderableNodeProcessed (BodyID nodeID) :
+        nodeID (nodeID)
+    {
+    }
+    QmsID id = QmsID::TopPriority; // High priority to ensure quick processing
+    QmsID realID = QmsID::RenderableNodeProcessed;
+
+    BodyID nodeID;
+};
+</file>
+
+<file path="WorldMessages.h">
+#pragma once
+
+using sabi::RenderableList;
+using sabi::RenderableNode;
+using sabi::SelectionOptions;
+
+struct addNodeToWorld
+{
+    addNodeToWorld (RenderableNode& renderable) :
+        node (renderable)
+    {
+    }
+
+    QmsID id = QmsID::AddNodeToWorld;
+    QmsID realID = QmsID::AddNodeToWorld;
+
+    RenderableNode node = nullptr;
+};
+
+struct addNodeListToWorld
+{
+    addNodeListToWorld (RenderableList&& nodeList) :
+        nodeList (std::move (nodeList))
+    {
+    }
+
+    QmsID id = QmsID::AddNodeListToWorld;
+    QmsID realID = QmsID::AddNodeListToWorld;
+
+    RenderableList nodeList;
+};
+
+struct createInstanceStack
+{
+    createInstanceStack (uint32_t count) :
+        count (count)
+    {
+    }
+
+    QmsID id = QmsID::CreateInstanceStack;
+    QmsID realID = QmsID::CreateInstanceStack;
+    uint32_t count = 0;
+};
+
+struct createInstanceClump
+{
+    createInstanceClump (uint32_t count) :
+        count (count)
+    {
+    }
+
+    QmsID id = QmsID::CreateInstanceClump;
+    QmsID realID = QmsID::CreateInstanceClump;
+    uint32_t count = 0;
+};
+
+struct selectAll
+{
+    QmsID id = QmsID::SelectAll;
+    QmsID realID = QmsID::SelectAll;
+};
+
+struct deselectAll
+{
+    QmsID id = QmsID::DeselectAll;
+    QmsID realID = QmsID::DeselectAll;
+};
+
+struct selectByOptions
+{
+    selectByOptions (SelectionOptions options) :
+        options(options)
+    {
+    }
+
+    QmsID id = QmsID::SelectByOptions;
+    QmsID realID = QmsID::SelectByOptions;
+
+    SelectionOptions options;
+};
+</file>
+
+</files>
