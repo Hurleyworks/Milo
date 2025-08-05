@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(./b.bat)",
-      "Bash(cmd.exe /c b.bat)"
+      "Bash(cmd.exe /c b.bat)",
+      "Bash(mkdir:*)",
+      "Bash(ls:*)",
+      "Bash(grep:*)",
+      "Bash(cmd.exe:*)"
     ],
     "deny": []
   }

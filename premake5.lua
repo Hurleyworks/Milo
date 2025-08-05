@@ -146,4 +146,5 @@ project "AppCore"
 	-- add projects here
 	include "appSandbox/HelloWorld"
 	include "appSandbox/RenderDog"
+	include "unittest/tests/HelloTest"
 	
