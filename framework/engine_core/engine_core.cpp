@@ -32,6 +32,9 @@
 #include "excludeFromBuild/handlers/TextureHandler.cpp"
 #include "excludeFromBuild/handlers/MiloDenoiserHandler.cpp"
 
+// shocker
+#include "excludeFromBuild/handlers/ShockerModelHandler.cpp"
+
 // engines
 #include "excludeFromBuild/engines/BaseRenderingEngine.cpp"
 #include "excludeFromBuild/engines/RenderEngineManager.cpp"
@@ -41,6 +44,7 @@
 
 // models
 #include "excludeFromBuild/model/MiloModel.cpp"
+#include "excludeFromBuild/model/ShockerModel.cpp"
 
 
 

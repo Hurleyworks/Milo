@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShockerModel Architecture Design Plan</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 4px solid #667eea;
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 40px;
+            background: linear-gradient(90deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 15px;
+            border-left: 6px solid #667eea;
+            border-radius: 5px;
+        }
+        h3 {
+            color: #555;
+            margin-top: 25px;
+            font-size: 1.3em;
+            border-bottom: 2px dotted #ddd;
+            padding-bottom: 5px;
+        }
+        .architecture-diagram {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            overflow-x: auto;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .code-block {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        pre {
+            margin: 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            color: #2c3e50;
+        }
+        .highlight-box {
+            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .feature-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.15);
+        }
+        .feature-card h4 {
+            color: #667eea;
+            margin-top: 0;
+            font-size: 1.2em;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        tr:hover {
+            background: #e8eaf6;
+        }
+        .phase-timeline {
+            position: relative;
+            padding: 20px 0;
+            margin: 30px 0;
+        }
+        .phase-item {
+            display: flex;
+            align-items: center;
+            margin: 20px 0;
+            position: relative;
+        }
+        .phase-number {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.2em;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+        }
+        .phase-content {
+            margin-left: 30px;
+            flex: 1;
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #e0e0e0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .phase-content h4 {
+            margin-top: 0;
+            color: #667eea;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 15px;
+            font-size: 0.85em;
+            font-weight: 600;
+            margin: 2px;
+        }
+        .badge-geometry {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        .badge-handler {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+        .badge-core {
+            background: #e8f5e9;
+            color: #388e3c;
+        }
+        .flow-arrow {
+            text-align: center;
+            font-size: 24px;
+            color: #667eea;
+            margin: 10px 0;
+        }
+        code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            color: #e91e63;
+        }
+        .toc {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 30px 0;
+        }
+        .toc h3 {
+            margin-top: 0;
+            color: #667eea;
+        }
+        .toc ul {
+            list-style-type: none;
+            padding-left: 20px;
+        }
+        .toc li {
+            margin: 8px 0;
+        }
+        .toc a {
+            color: #555;
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+        .toc a:hover {
+            color: #667eea;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 ShockerModel Architecture Design Plan</h1>
+        
+        <div class="highlight-box">
+            <strong>Objective:</strong> Create a new model conversion system that combines MiloModel's object-oriented design 
+            with the explicit conversion approach from the unit tests, while maintaining handler-based separation of concerns 
+            and supporting all geometry types from <code>common_host.h</code>.
+        </div>
+
+        <div class="toc">
+            <h3>📋 Table of Contents</h3>
+            <ul>
+                <li><a href="#architecture">1. Core Architecture with Handler Pattern</a></li>
+                <li><a href="#base-class">2. ShockerModel Base Class Design</a></li>
+                <li><a href="#geometry-types">3. Geometry-Specific Model Classes</a></li>
+                <li><a href="#handler">4. ShockerModelHandler Design</a></li>
+                <li><a href="#data-flow">5. Data Flow with Handler Architecture</a></li>
+                <li><a href="#principles">6. Key Design Principles</a></li>
+                <li><a href="#integration">7. Integration Points</a></li>
+                <li><a href="#implementation">8. Implementation Priority</a></li>
+            </ul>
+        </div>
+
+        <h2 id="architecture">1. Core Architecture with Handler Pattern</h2>
+        
+        <h3>Model Hierarchy</h3>
+        <div class="architecture-diagram">
+<pre>ShockerModel (abstract base)
+├── ShockerTriangleModel    <span style="color: #95a5a6;">// Triangle meshes</span>
+├── ShockerCurveModel        <span style="color: #95a5a6;">// Hair/fur curves</span>
+├── ShockerTFDMModel         <span style="color: #95a5a6;">// Texture-space deformation</span>
+├── ShockerNRTDSMModel       <span style="color: #95a5a6;">// Non-rigid texture-space deformation with shell mapping</span>
+├── ShockerFlyweightModel    <span style="color: #95a5a6;">// Instancing (no geometry)</span>
+└── ShockerPhantomModel      <span style="color: #95a5a6;">// Collision-free instances</span></pre>
+        </div>
+
+        <h3>Handler Architecture</h3>
+        <div class="architecture-diagram">
+<pre>ShockerEngine
+├── ShockerModelHandler      <span style="color: #95a5a6;">// Manages model lifecycle & geometry</span>
+├── ShockerMaterialHandler   <span style="color: #95a5a6;">// Material conversion & management</span>
+├── ShockerSceneHandler      <span style="color: #95a5a6;">// Scene graph & instances</span>
+├── ShockerTextureHandler    <span style="color: #95a5a6;">// Texture loading & GPU arrays</span>
+└── ShockerDenoiserHandler   <span style="color: #95a5a6;">// Denoising pipeline</span></pre>
+        </div>
+
+        <h2 id="base-class">2. ShockerModel Base Class Design</h2>
+        
+        <div class="code-block">
+<pre>class ShockerModel {
+protected:
+    // Geometry instance management
+    uint32_t geomInstSlot_ = SlotFinder::InvalidSlotIndex;
+    GeometryInstance* geometryInstance_ = nullptr;
+    
+    // Transform data from RenderableNode
+    Matrix4x4 localTransform_;
+    Matrix4x4 worldTransform_;
+    Matrix3x3 normalMatrix_;
+    
+    // Instance data
+    Instance instance_;
+    
+public:
+    // Core interface
+    virtual GeometryType getGeometryType() const = 0;
+    virtual void createFromRenderableNode(RenderableNode& node) = 0;
+    virtual void populateGeometryInstance(GeometryInstance* geomInst) = 0;
+    virtual void updateInstance(const SpaceTime& spacetime);
+    
+    // Transform utilities (shared implementation)
+    Matrix4x4 convertSpaceTimeToMatrix(const SpaceTime& st);
+    Matrix3x3 calculateNormalMatrix(const Matrix4x4& transform);
+    
+    // Slot management
+    void setGeomInstSlot(uint32_t slot) { geomInstSlot_ = slot; }
+    uint32_t getGeomInstSlot() const { return geomInstSlot_; }
+    
+    // Instance access
+    Instance& getInstance() { return instance_; }
+    const GeometryInstance* getGeometryInstance() const { return geometryInstance_; }
+};</pre>
+        </div>
+
+        <h2 id="geometry-types">3. Geometry-Specific Model Classes</h2>
+        
+        <div class="feature-grid">
+            <div class="feature-card">
+                <h4>🔺 ShockerTriangleModel</h4>
+                <p>Standard triangle mesh geometry with vertex and triangle buffers.</p>
+                <ul>
+                    <li>Vertex/triangle extraction from CgModel</li>
+                    <li>Material index management</li>
+                    <li>Emitter distribution for area lights</li>
+                    <li>Support for deformation</li>
+                </ul>
+                <span class="badge badge-geometry">TriangleGeometry</span>
+            </div>
+            
+            <div class="feature-card">
+                <h4>〰️ ShockerCurveModel</h4>
+                <p>Curve-based geometry for hair, fur, and fibers.</p>
+                <ul>
+                    <li>Curve vertex with radius data</li>
+                    <li>Segment connectivity</li>
+                    <li>Curve interpolation modes</li>
+                    <li>Strand-based material assignment</li>
+                </ul>
+                <span class="badge badge-geometry">CurveGeometry</span>
+            </div>
+            
+            <div class="feature-card">
+                <h4>🗺️ ShockerTFDMModel</h4>
+                <p>Texture-space Finite Difference Method for displacement.</p>
+                <ul>
+                    <li>Base mesh with displacement texture</li>
+                    <li>Min/max mip mapping</li>
+                    <li>Per-triangle AABB calculation</li>
+                    <li>Auxiliary triangle information</li>
+                </ul>
+                <span class="badge badge-geometry">TFDMGeometry</span>
+            </div>
+            
+            <div class="feature-card">
+                <h4>🐚 ShockerNRTDSMModel</h4>
+                <p>Non-rigid texture deformation with shell mapping.</p>
+                <ul>
+                    <li>All TFDM features</li>
+                    <li>Shell BVH construction</li>
+                    <li>Triangle storage optimization</li>
+                    <li>Primitive references</li>
+                </ul>
+                <span class="badge badge-geometry">NRTDSMGeometry</span>
+            </div>
+        </div>
+
+        <h3>ShockerTriangleModel Implementation</h3>
+        <div class="code-block">
+<pre>class ShockerTriangleModel : public ShockerModel {
+private:
+    TriangleGeometry triangleGeometry_;
+    std::vector&lt;shared::Vertex&gt; vertices_;
+    std::vector&lt;shared::Triangle&gt; triangles_;
+    std::vector&lt;uint32_t&gt; materialIndices_;
+    
+public:
+    GeometryType getGeometryType() const override { 
+        return GeometryType::Triangle; 
+    }
+    
+    void createFromRenderableNode(RenderableNode& node) override {
+        // Extract CgModel
+        // Convert vertices/triangles following test pattern
+        // Setup emitter distribution
+    }
+    
+    void populateGeometryInstance(GeometryInstance* geomInst) override {
+        // Populate TriangleGeometry variant
+        // Set vertex/triangle buffers
+        // Configure light distribution
+    }
+};</pre>
+        </div>
+
+        <h2 id="handler">4. ShockerModelHandler Design</h2>
+        
+        <div class="highlight-box">
+            <strong>Purpose:</strong> Orchestrates the model conversion pipeline, manages geometry instances and groups, 
+            and coordinates with other handlers for materials and textures.
+        </div>
+
+        <div class="code-block">
+<pre>class ShockerModelHandler {
+private:
+    // Model registry
+    std::unordered_map&lt;std::string, std::shared_ptr&lt;ShockerModel&gt;&gt; models_;
+    
+    // Geometry instances following test pattern
+    std::vector&lt;std::unique_ptr&lt;GeometryInstance&gt;&gt; geometryInstances_;
+    std::vector&lt;std::unique_ptr&lt;GeometryGroup&gt;&gt; geometryGroups_;
+    
+    // Slot management
+    SlotFinder geomInstSlotFinder_;
+    
+    // Dependencies
+    ShockerMaterialHandler* materialHandler_;
+    ShockerTextureHandler* textureHandler_;
+    
+public:
+    // Main conversion pipeline
+    std::shared_ptr&lt;ShockerModel&gt; createModelFromRenderableNode(
+        RenderableNode& node);
+    
+    // Geometry group management (following test pattern)
+    GeometryGroup* createGeometryGroup(
+        const std::vector&lt;ShockerModel*&gt;& models);
+    
+    // Instance creation (following test lines 640-686)
+    Instance createInstance(
+        ShockerModel* model, 
+        const SpaceTime& spacetime);
+    
+private:
+    // Factory method for model creation
+    std::shared_ptr&lt;ShockerModel&gt; createModelByType(
+        const CgModel& model);
+    
+    // Geometry instance creation (test lines 573-601)
+    GeometryInstance* createGeometryInstance(
+        ShockerModel* model,
+        const CgModelSurface& surface);
+};</pre>
+        </div>
+
+        <h2 id="data-flow">5. Data Flow with Handler Architecture</h2>
+        
+        <div class="highlight-box">
+            <strong>Key Insight:</strong> The handler architecture separates concerns while maintaining clear data flow. 
+            Each handler owns its domain but collaborates through well-defined interfaces.
+        </div>
+
+        <h3>Detailed Processing Pipeline</h3>
+        
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin: 20px 0;">
+            <h4 style="color: #667eea; margin-top: 0;">📥 INPUT: RenderableNode</h4>
+            <ul style="list-style: none; padding-left: 20px;">
+                <li>• CgModel with geometry data</li>
+                <li>• SpaceTime with transforms</li>
+                <li>• Material descriptions</li>
+            </ul>
+        </div>
+
+        <div style="text-align: center; font-size: 30px; color: #667eea; margin: 20px 0;">⬇</div>
+
+        <div style="background: white; border: 2px solid #667eea; border-radius: 10px; padding: 20px; margin: 20px 0;">
+            <h4 style="color: #667eea; margin-top: 0;">STEP 1: Scene Handler Initiates Processing</h4>
+            <code style="display: block; background: #f0f0f0; padding: 10px; border-radius: 5px; margin: 10px 0;">
+                ShockerSceneHandler::processNode(RenderableNode& node)
+            </code>
+            <ul>
+                <li>Extracts node from scene graph</li>
+                <li>Determines if node needs geometry</li>
+                <li>Calls: <code>modelHandler->processRenderableNode(node)</code></li>
+            </ul>
+        </div>
+
+        <div style="text-align: center; font-size: 30px; color: #667eea; margin: 20px 0;">⬇</div>
+
+        <div style="background: white; border: 2px solid #667eea; border-radius: 10px; padding: 20px; margin: 20px 0;">
+            <h4 style="color: #667eea; margin-top: 0;">STEP 2: Model Handler Orchestrates</h4>
+            <code style="display: block; background: #f0f0f0; padding: 10px; border-radius: 5px; margin: 10px 0;">
+                ShockerModelHandler::processRenderableNode(RenderableNode& node)
+            </code>
+            
+            <div style="margin-left: 20px;">
+                <h5>2.1 Determine Geometry Type</h5>
+                <ul>
+                    <li>Has curves? → <span class="badge badge-geometry">ShockerCurveModel</span></li>
+                    <li>Has displacement? → <span class="badge badge-geometry">ShockerTFDMModel</span></li>
+                    <li>Has shell mapping? → <span class="badge badge-geometry">ShockerNRTDSMModel</span></li>
+                    <li>Standard mesh → <span class="badge badge-geometry">ShockerTriangleModel</span></li>
+                </ul>
+                
+                <h5>2.2 Create Model and Allocate Slot</h5>
+                <div style="background: #f8f9fa; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 14px;">
+                    model = std::make_shared&lt;ShockerTriangleModel&gt;()<br>
+                    slot = geomInstSlotFinder_.findSlot()<br>
+                    model->setGeomInstSlot(slot)<br>
+                    model->createFromRenderableNode(node)
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align: center; font-size: 30px; color: #667eea; margin: 20px 0;">⬇</div>
+
+        <div style="background: white; border: 2px solid #667eea; border-radius: 10px; padding: 20px; margin: 20px 0;">
+            <h4 style="color: #667eea; margin-top: 0;">STEP 3: Model Converts Geometry</h4>
+            <code style="display: block; background: #f0f0f0; padding: 10px; border-radius: 5px; margin: 10px 0;">
+                ShockerTriangleModel::createFromRenderableNode(RenderableNode& node)
+            </code>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px;">
+                <div>
+                    <h5>Extract & Convert</h5>
+                    <ul>
+                        <li>Extract CgModel from node</li>
+                        <li>Convert vertices (pos, normal, UV)</li>
+                        <li>Extract triangle indices</li>
+                        <li>Track material per triangle</li>
+                        <li>Calculate surface AABBs</li>
+                    </ul>
+                </div>
+                <div>
+                    <h5>Store Data</h5>
+                    <ul>
+                        <li><code>vertices_</code> = converted vertices</li>
+                        <li><code>triangles_</code> = triangle indices</li>
+                        <li><code>materialIndices_</code> = per-tri materials</li>
+                        <li><code>worldTransform_</code> = from SpaceTime</li>
+                        <li><code>normalMatrix_</code> = inverse transpose</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align: center; font-size: 30px; color: #667eea; margin: 20px 0;">⬇</div>
+
+        <div style="background: white; border: 2px solid #667eea; border-radius: 10px; padding: 20px; margin: 20px 0;">
+            <h4 style="color: #667eea; margin-top: 0;">STEP 4: Create Geometry Instance</h4>
+            <code style="display: block; background: #f0f0f0; padding: 10px; border-radius: 5px; margin: 10px 0;">
+                ShockerModelHandler::createGeometryInstance(ShockerModel* model)
+            </code>
+            
+            <ol>
+                <li><strong>Allocate GeometryInstance:</strong> <code>auto geomInst = std::make_unique&lt;GeometryInstance&gt;()</code></li>
+                <li><strong>Convert Materials:</strong> For each surface, call <code>materialHandler->convertCgMaterial()</code></li>
+                <li><strong>Populate Geometry:</strong> <code>model->populateGeometryInstance(geomInst.get())</code></li>
+                <li><strong>Create OptiX Instance:</strong> Setup buffers, materials, and user data</li>
+                <li><strong>Store Instance:</strong> <code>geometryInstances_.push_back(std::move(geomInst))</code></li>
+            </ol>
+        </div>
+
+        <div style="text-align: center; font-size: 30px; color: #667eea; margin: 20px 0;">⬇</div>
+
+        <div style="background: white; border: 2px solid #667eea; border-radius: 10px; padding: 20px; margin: 20px 0;">
+            <h4 style="color: #667eea; margin-top: 0;">STEP 5: Build Geometry Group</h4>
+            <code style="display: block; background: #f0f0f0; padding: 10px; border-radius: 5px; margin: 10px 0;">
+                ShockerModelHandler::createGeometryGroup(vector&lt;GeometryInstance*&gt; instances)
+            </code>
+            
+            <ul>
+                <li>Create GeometryGroup container</li>
+                <li>Add all geometry instances</li>
+                <li>Calculate combined AABB</li>
+                <li>Build OptiX GAS (Geometry Acceleration Structure)</li>
+                <li>Allocate GPU memory for acceleration structure</li>
+            </ul>
+        </div>
+
+        <div style="text-align: center; font-size: 30px; color: #667eea; margin: 20px 0;">⬇</div>
+
+        <div style="background: white; border: 2px solid #667eea; border-radius: 10px; padding: 20px; margin: 20px 0;">
+            <h4 style="color: #667eea; margin-top: 0;">STEP 6: Create Final Instance</h4>
+            <code style="display: block; background: #f0f0f0; padding: 10px; border-radius: 5px; margin: 10px 0;">
+                ShockerModelHandler::createInstance(ShockerModel* model, GeometryGroup* group)
+            </code>
+            
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; font-family: monospace; font-size: 14px;">
+                Instance inst;<br>
+                inst.geomGroupInst.geomGroup = group;<br>
+                inst.geomGroupInst.transform = model->getWorldTransform();<br>
+                inst.matM2W = model->getWorldTransform();<br>
+                inst.nMatM2W = model->getNormalMatrix();<br>
+                inst.prevMatM2W = inst.matM2W;<br>
+                inst.instSlot = instanceSlotFinder_.findSlot();<br>
+                return inst;
+            </div>
+        </div>
+
+        <div style="text-align: center; font-size: 30px; color: #667eea; margin: 20px 0;">⬇</div>
+
+        <div style="background: white; border: 2px solid #667eea; border-radius: 10px; padding: 20px; margin: 20px 0;">
+            <h4 style="color: #667eea; margin-top: 0;">STEP 7: Scene Handler Integration</h4>
+            <code style="display: block; background: #f0f0f0; padding: 10px; border-radius: 5px; margin: 10px 0;">
+                ShockerSceneHandler::addInstance(Instance& inst)
+            </code>
+            
+            <ul>
+                <li>Add to scene's instance collection</li>
+                <li>Update IAS (Instance Acceleration Structure)</li>
+                <li>Manage visibility and layers</li>
+                <li>Handle parent-child relationships</li>
+            </ul>
+        </div>
+
+        <div style="text-align: center; font-size: 30px; color: #667eea; margin: 20px 0;">⬇</div>
+
+        <div style="background: #e8f5e9; padding: 20px; border-radius: 10px; margin: 20px 0;">
+            <h4 style="color: #388e3c; margin-top: 0;">✅ OUTPUT: GPU-Ready Scene</h4>
+            <ul style="list-style: none; padding-left: 20px;">
+                <li>✓ Instances with transforms in GPU buffers</li>
+                <li>✓ Geometry in OptiX acceleration structures</li>
+                <li>✓ Materials in GPU texture arrays</li>
+                <li>✓ Ready for ray tracing</li>
+            </ul>
+        </div>
+
+        <h3>Handler Interactions</h3>
+        <div class="code-block">
+<pre>// Example: Processing a single RenderableNode through the pipeline
+
+// 1. Scene handler initiates
+void ShockerSceneHandler::processSceneGraph() {
+    for (auto& node : sceneNodes) {
+        if (node->hasGeometry()) {
+            modelHandler_->processRenderableNode(node);
+        }
+    }
+}
+
+// 2. Model handler orchestrates
+std::shared_ptr<ShockerModel> ShockerModelHandler::processRenderableNode(
+    RenderableNode& node) {
+    
+    // Create model based on geometry type
+    auto model = createModelByType(node->getModel());
+    
+    // Convert geometry
+    model->createFromRenderableNode(node);
+    
+    // Create geometry instance with materials
+    auto* geomInst = createGeometryInstance(model.get());
+    
+    // For each surface, get materials from material handler
+    for (size_t i = 0; i < node->getModel()->S.size(); ++i) {
+        auto& surface = node->getModel()->S[i];
+        
+        // Material handler converts CgMaterial to DisneyMaterial
+        auto* material = materialHandler_->convertMaterial(
+            surface.cgMaterial, 
+            textureHandler_
+        );
+        
+        // Link material to geometry
+        geomInst->setMaterial(i, material);
+    }
+    
+    // Create instance with transforms
+    Instance inst = createInstance(model.get(), node->getSpaceTime());
+    
+    // Pass to scene handler
+    sceneHandler_->addInstance(inst);
+    
+    return model;
+}
+
+// 3. Material handler converts materials
+DisneyMaterial* ShockerMaterialHandler::convertMaterial(
+    const CgMaterial& cgMat,
+    ShockerTextureHandler* texHandler) {
+    
+    // Create Disney material
+    auto* disneyMat = allocateMaterial();
+    
+    // Convert each property with texture handler
+    disneyMat->baseColor = texHandler->createTexture(
+        cgMat.core.baseColor, true  // sRGB
+    );
+    
+    disneyMat->roughness = texHandler->createTexture(
+        cgMat.core.roughness, false  // Linear
+    );
+    
+    // ... convert all other properties ...
+    
+    return disneyMat;
+}</pre>
+        </div>
+
+        <h3>Data Ownership</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Component</th>
+                    <th>Owns</th>
+                    <th>References</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>ShockerModel</strong></td>
+                    <td>• CPU geometry data<br>• Transform matrices<br>• Geometry type info</td>
+                    <td>• RenderableNode<br>• GeometryInstance pointer</td>
+                </tr>
+                <tr>
+                    <td><strong>ShockerModelHandler</strong></td>
+                    <td>• All ShockerModel instances<br>• GeometryInstances<br>• GeometryGroups</td>
+                    <td>• MaterialHandler<br>• TextureHandler<br>• SceneHandler</td>
+                </tr>
+                <tr>
+                    <td><strong>ShockerMaterialHandler</strong></td>
+                    <td>• DisneyMaterial instances<br>• Material slots<br>• Material buffer</td>
+                    <td>• TextureHandler<br>• CgMaterials</td>
+                </tr>
+                <tr>
+                    <td><strong>ShockerSceneHandler</strong></td>
+                    <td>• Scene graph<br>• Instance collection<br>• IAS (Instance Acceleration Structure)</td>
+                    <td>• ModelHandler<br>• GeometryGroups</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2 id="principles">6. Key Design Principles</h2>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Principle</th>
+                    <th>Description</th>
+                    <th>Implementation</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Separation of Concerns</strong></td>
+                    <td>Each component has a single, well-defined responsibility</td>
+                    <td>
+                        • Models: Geometry conversion only<br>
+                        • MaterialHandler: Material conversion<br>
+                        • ModelHandler: Pipeline orchestration<br>
+                        • SceneHandler: Scene graph management
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>Test-Driven Design</strong></td>
+                    <td>Implementation follows patterns from unit tests</td>
+                    <td>
+                        • GeometryInstance: Test lines 573-601<br>
+                        • Transform conversion: Test lines 613-636<br>
+                        • Instance population: Test lines 640-686<br>
+                        • AABB calculation: Test pattern
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>Type Safety</strong></td>
+                    <td>Strong typing for geometry variants</td>
+                    <td>
+                        • Each geometry type has dedicated class<br>
+                        • Variant-based storage<br>
+                        • Compile-time type checking
+                    </td>
+                </tr>
+                <tr>
+                    <td><strong>Consistency</strong></td>
+                    <td>Aligns with existing MiloModel patterns</td>
+                    <td>
+                        • Same handler architecture<br>
+                        • Same slot management<br>
+                        • Same acceleration structures<br>
+                        • Test-based implementation
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2 id="integration">7. Integration Points</h2>
+        
+        <div class="feature-grid">
+            <div class="feature-card">
+                <h4>🎨 ShockerMaterialHandler</h4>
+                <p><strong>Integration:</strong></p>
+                <ul>
+                    <li>Material conversion happens separately</li>
+                    <li>Model receives material slots/indices</li>
+                    <li>Clean interface between geometry and materials</li>
+                </ul>
+                <span class="badge badge-handler">Handler</span>
+            </div>
+            
+            <div class="feature-card">
+                <h4>🖼️ ShockerTextureHandler</h4>
+                <p><strong>Integration:</strong></p>
+                <ul>
+                    <li>Texture creation for displacement maps</li>
+                    <li>Height texture management for TFDM/NRTDSM</li>
+                    <li>Mip map generation</li>
+                </ul>
+                <span class="badge badge-handler">Handler</span>
+            </div>
+            
+            <div class="feature-card">
+                <h4>🌳 ShockerSceneHandler</h4>
+                <p><strong>Integration:</strong></p>
+                <ul>
+                    <li>Instance management</li>
+                    <li>Transform hierarchies</li>
+                    <li>Scene graph traversal</li>
+                </ul>
+                <span class="badge badge-handler">Handler</span>
+            </div>
+        </div>
+
+        <h2 id="implementation">8. Implementation Priority</h2>
+        
+        <div class="phase-timeline">
+            <div class="phase-item">
+                <div class="phase-number">1</div>
+                <div class="phase-content">
+                    <h4>Phase 1: Core + Triangle</h4>
+                    <p>Foundation and most common geometry type</p>
+                    <ul>
+                        <li>ShockerModel base class with transform utilities</li>
+                        <li>ShockerTriangleModel implementation</li>
+                        <li>Basic ShockerModelHandler with instance creation</li>
+                        <li>Unit tests for triangle conversion</li>
+                    </ul>
+                    <span class="badge badge-core">Core</span>
+                    <span class="badge badge-geometry">Triangle</span>
+                </div>
+            </div>
+            
+            <div class="phase-item">
+                <div class="phase-number">2</div>
+                <div class="phase-content">
+                    <h4>Phase 2: Advanced Geometry</h4>
+                    <p>Support for specialized geometry types</p>
+                    <ul>
+                        <li>ShockerCurveModel for hair/fur</li>
+                        <li>ShockerTFDMModel for displacement</li>
+                        <li>ShockerNRTDSMModel with shell mapping</li>
+                        <li>Geometry-specific optimizations</li>
+                    </ul>
+                    <span class="badge badge-geometry">Curve</span>
+                    <span class="badge badge-geometry">TFDM</span>
+                    <span class="badge badge-geometry">NRTDSM</span>
+                </div>
+            </div>
+            
+            <div class="phase-item">
+                <div class="phase-number">3</div>
+                <div class="phase-content">
+                    <h4>Phase 3: Integration & Optimization</h4>
+                    <p>Complete handler pipeline and performance tuning</p>
+                    <ul>
+                        <li>Full handler integration</li>
+                        <li>Scene graph support</li>
+                        <li>Memory pooling and resource sharing</li>
+                        <li>Performance benchmarking</li>
+                    </ul>
+                    <span class="badge badge-handler">Handlers</span>
+                    <span class="badge badge-core">Optimization</span>
+                </div>
+            </div>
+        </div>
+
+        <h2>Key Advantages</h2>
+        
+        <div class="highlight-box">
+            <h3>✨ Benefits of This Architecture</h3>
+            <ul>
+                <li><strong>Modularity:</strong> Each geometry type is independently implementable and testable</li>
+                <li><strong>Extensibility:</strong> New geometry types can be added without modifying existing code</li>
+                <li><strong>Clarity:</strong> Explicit conversion steps match unit test patterns</li>
+                <li><strong>Performance:</strong> Optimized data layout for each geometry type</li>
+                <li><strong>Maintainability:</strong> Clear separation of concerns with handler pattern</li>
+            </ul>
+        </div>
+
+        <h2>Reference Implementation Mapping</h2>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Component</th>
+                    <th>Unit Test Reference</th>
+                    <th>MiloModel Reference</th>
+                    <th>ShockerModel Approach</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Geometry Creation</td>
+                    <td>Lines 188-211</td>
+                    <td>MiloModel.cpp:31-48</td>
+                    <td>Explicit vertex/triangle conversion</td>
+                </tr>
+                <tr>
+                    <td>Transform Handling</td>
+                    <td>Lines 613-636</td>
+                    <td>Not in model</td>
+                    <td>Built into base class</td>
+                </tr>
+                <tr>
+                    <td>Material Mapping</td>
+                    <td>Lines 248-309</td>
+                    <td>Delegated to handler</td>
+                    <td>Handler with explicit mapping</td>
+                </tr>
+                <tr>
+                    <td>Instance Creation</td>
+                    <td>Lines 640-686</td>
+                    <td>OptiX wrapper</td>
+                    <td>Explicit Instance struct</td>
+                </tr>
+                <tr>
+                    <td>AABB Calculation</td>
+                    <td>Lines 589-592</td>
+                    <td>Per-surface</td>
+                    <td>Multi-level (surface/group/instance)</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <footer style="margin-top: 60px; padding-top: 30px; border-top: 2px solid #e0e0e0; text-align: center; color: #7f8c8d;">
+            <p><strong>ShockerModel Architecture Design</strong></p>
+            <p>Combining MiloModel's OO design with unit test implementation patterns</p>
+            <p style="font-size: 0.9em;">Generated for ShockerEngine development</p>
+        </footer>
+    </div>
+</body>
+</html>
