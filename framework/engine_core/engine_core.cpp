@@ -32,40 +32,16 @@
 #include "excludeFromBuild/handlers/TextureHandler.cpp"
 #include "excludeFromBuild/handlers/MiloDenoiserHandler.cpp"
 
-
-#if 0
-#include "excludeFromBuild/handlers/RenderHandler.cpp"
-#include "excludeFromBuild/handlers/ShockerRenderHandler.cpp"
-#include "excludeFromBuild/handlers/EngineSceneHandler.cpp"
-
-#include "excludeFromBuild/handlers/ShockerSceneHandler.cpp"
-#include "excludeFromBuild/handlers/ShockerMaterialHandler.cpp"
-#include "excludeFromBuild/handlers/ShockerGeometryHandler.cpp"
-#include "excludeFromBuild/handlers/RiPRSceneHandler.cpp"
-#include "excludeFromBuild/handlers/RiPRMaterialHandler.cpp"
-#include "excludeFromBuild/handlers/RiPRModelHandler.cpp"
-#include "excludeFromBuild/handlers/RiPRRenderHandler.cpp"
-#endif
-
-
 // engines
 #include "excludeFromBuild/engines/BaseRenderingEngine.cpp"
 #include "excludeFromBuild/engines/RenderEngineManager.cpp"
 #include "excludeFromBuild/engines/MiloEngine.cpp"
 
-//#include "excludeFromBuild/engines/BasicPathTracingEngine.cpp"
-//#include "excludeFromBuild/engines/EnvironmentRenderEngine.cpp"
-//#include "excludeFromBuild/engines/ShockerRenderEngine.cpp"
-//#include "excludeFromBuild/engines/RiPREngine.cpp"
-//#include "excludeFromBuild/engines/TestEngine.cpp"
-
 
 
 // models
-//#include "excludeFromBuild/model/RiPRModel.cpp"
 #include "excludeFromBuild/model/MiloModel.cpp"
 
-//#include "excludeFromBuild/geometry/EngineTriangleMesh.cpp"
 
 
 

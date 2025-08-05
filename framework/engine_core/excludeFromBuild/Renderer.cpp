@@ -278,26 +278,7 @@ void Renderer::render (const InputEvent& input, bool updateMotion, uint32_t fram
             return;
         }
 
-//#ifndef ENGINE_ONLY_MODE
-//        // Fallback to legacy pipeline system
-//        auto& handlers = renderContext_->getHandlers();
-//        if (!handlers.pipelineHandler || !handlers.pipelineHandler->getActive())
-//        {
-//            LOG (WARNING) << "No active pipeline or engine for rendering";
-//            return;
-//        }
-//
-//        // Pass the render call to the active pipeline
-//        // The pipeline will handle building if dirty, processing input,
-//        // and launching with appropriate parameters
-//        IPipeline* activePipeline = handlers.pipelineHandler->getActive();
-//        activePipeline->render (input, updateMotion, frameNumber);
-//#else
-//        LOG (WARNING) << "No active engine for rendering in engine-only mode";
-//#endif
 
-        // LOG(DBUG) << "Rendered frame " << frameNumber << " with pipeline: "
-        //      << getCurrentPipelineName();
     }
     catch (std::exception& e)
     {

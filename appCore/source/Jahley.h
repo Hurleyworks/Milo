@@ -12,7 +12,7 @@
 #include <windows.h>
 
 // Repository name for searching in the path
-const std::string REPOSITORY_NAME = "Dog";
+const std::string REPOSITORY_NAME = "Milo";
 
 // not possible to get executablePath from std::filesystem
 // https://stackoverflow.com/questions/55982441/get-executables-path-with-stdfilesystem
