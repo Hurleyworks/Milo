@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./b.bat)",
+      "Bash(cmd.exe /c b.bat)"
+    ],
+    "deny": []
+  }
+}

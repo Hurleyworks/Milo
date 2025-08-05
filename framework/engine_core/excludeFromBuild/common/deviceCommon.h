@@ -6,10 +6,15 @@
 static constexpr float Pi = 3.14159265358979323846f; // Pi value for circular/spherical calculations
 static constexpr float RayEpsilon = 1e-4;            // Small value to prevent self-intersection of rays
 
+
+
+
 // Helpful macros for vector printing
 #define V2FMT "%g, %g"
 #define V3FMT "%g, %g, %g"
+#ifndef V4FMT
 #define V4FMT "%g, %g, %g"
+#endif
 #define v2print(v) (v).x, (v).y
 #define v3print(v) (v).x, (v).y, (v).z
 #define v4print(v) (v).x, (v).y, (v).z, (v).w
