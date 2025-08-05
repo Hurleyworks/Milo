@@ -6,7 +6,12 @@
       "Bash(mkdir:*)",
       "Bash(ls:*)",
       "Bash(grep:*)",
-      "Bash(cmd.exe:*)"
+      "Bash(cmd.exe:*)",
+      "Bash(find:*)",
+      "Bash(rg:*)",
+      "Bash(b)",
+      "Bash(msbuild:*)",
+      "Bash(claude --version)"
     ],
     "deny": []
   }

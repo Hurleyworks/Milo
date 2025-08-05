@@ -25,4 +25,5 @@ end
 
 	
 	include "tests/HelloTest"
+	include "tests/GeometryTest"
 	
