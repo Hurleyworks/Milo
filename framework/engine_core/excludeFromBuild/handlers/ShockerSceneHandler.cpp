@@ -9,12 +9,12 @@
 ShockerSceneHandler::ShockerSceneHandler(RenderContextPtr ctx)
     : ctx_(ctx)
 {
-    LOG(DBUG) << "ShockerSceneHandler constructor";
+    // Constructor - no logging needed
 }
 
 ShockerSceneHandler::~ShockerSceneHandler()
 {
-    LOG(DBUG) << "ShockerSceneHandler destructor";
+    // Destructor - no logging needed
     clear();
 }
 
@@ -79,8 +79,7 @@ Instance* ShockerSceneHandler::createInstance(RenderableWeakRef& weakNode)
     // Map instance to node
     nodeMap_[instance->instSlot] = weakNode;
     
-    LOG(DBUG) << "Created instance for node: " << node->getName() 
-              << " at slot " << instance->instSlot;
+    // Successfully created instance (no logging needed for routine operations)
     
     return instance;
 }
@@ -92,8 +91,10 @@ void ShockerSceneHandler::createInstanceList(const WeakRenderableList& weakNodeL
     size_t successCount = 0;
     size_t failCount = 0;
     
-    for (auto& weakNode : weakNodeList) {
-        Instance* instance = createInstance(const_cast<RenderableWeakRef&>(weakNode));
+    for (const auto& weakNode : weakNodeList) {
+        // Create a copy to pass as non-const reference
+        RenderableWeakRef weakNodeCopy = weakNode;
+        Instance* instance = createInstance(weakNodeCopy);
         if (instance) {
             successCount++;
         } else {
@@ -122,8 +123,6 @@ void ShockerSceneHandler::processRenderableNode(RenderableNode& node)
 
 void ShockerSceneHandler::clear()
 {
-    LOG(DBUG) << "Clearing ShockerSceneHandler";
-    
     // Clear instances (they're owned by model handler)
     instances_.clear();
     
@@ -141,8 +140,6 @@ void ShockerSceneHandler::clear()
     if (materialHandler_) {
         materialHandler_->clear();
     }
-    
-    LOG(INFO) << "ShockerSceneHandler cleared";
 }
 
 Instance* ShockerSceneHandler::getInstance(uint32_t index) const
@@ -177,7 +174,7 @@ void ShockerSceneHandler::buildAccelerationStructures()
         if (geomGroup && geomGroup->needsRebuild) {
             // TODO: Build GAS when we have OptiX integration
             geomGroup->needsRebuild = 0;
-            LOG(DBUG) << "Built GAS for model: " << model.first;
+            // GAS built for model
         }
     }
     
@@ -193,20 +190,20 @@ void ShockerSceneHandler::updateAccelerationStructures()
         return;
     }
 
-    LOG(DBUG) << "Updating acceleration structures";
+    // Updating acceleration structures
     
     // Update any refittable geometry acceleration structures
     for (const auto& model : modelHandler_->getAllModels()) {
         GeometryGroup* geomGroup = model.second->getGeometryGroup();
         if (geomGroup && geomGroup->refittable) {
             // TODO: Refit GAS when we have OptiX integration
-            LOG(DBUG) << "Refitted GAS for model: " << model.first;
+            // GAS refitted for model
         }
     }
     
     // TODO: Update instance acceleration structure (IAS) when we have OptiX integration
     
-    LOG(DBUG) << "Acceleration structures updated";
+    // Acceleration structures updated
 }
 
 size_t ShockerSceneHandler::getGeometryInstanceCount() const
@@ -214,7 +211,7 @@ size_t ShockerSceneHandler::getGeometryInstanceCount() const
     if (!modelHandler_) {
         return 0;
     }
-    return modelHandler_->getGeometryInstances().size();
+    return modelHandler_->getGeometryInstanceCount();
 }
 
 size_t ShockerSceneHandler::getMaterialCount() const

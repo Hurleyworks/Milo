@@ -50,8 +50,8 @@ public:
     // Get all models
     const std::unordered_map<std::string, ShockerModelPtr>& getAllModels() const { return models_; }
     
-    // Get all geometry instances
-    const std::vector<std::unique_ptr<GeometryInstance>>& getGeometryInstances() const { return geometryInstances_; }
+    // Get count of all geometry instances across all models
+    size_t getGeometryInstanceCount() const;
     
     // Get all geometry groups  
     const std::vector<std::unique_ptr<GeometryGroup>>& getGeometryGroups() const { return geometryGroups_; }

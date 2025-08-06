@@ -50,7 +50,7 @@ TEST_CASE("ShockerModelHandler Basic Operations")
         handler.initialize(nullptr);
         
         CHECK(handler.getAllModels().empty());
-        CHECK(handler.getGeometryInstances().empty());
+        CHECK(handler.getGeometryInstanceCount() == 0);
         CHECK(handler.getGeometryGroups().empty());
         
         handler.clear();

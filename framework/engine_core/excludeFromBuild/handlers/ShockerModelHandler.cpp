@@ -14,9 +14,7 @@ void ShockerModelHandler::initialize(RenderContextPtr context)
     geomInstSlotFinder_.initialize(maxGeometryInstances);
     instanceSlotFinder_.initialize(maxInstances);
     
-    LOG(DBUG) << "ShockerModelHandler initialized with capacity for " 
-              << maxGeometryInstances << " geometry instances and "
-              << maxInstances << " instances";
+    // Handler initialized
 }
 
 ShockerModelPtr ShockerModelHandler::processRenderableNode(const sabi::RenderableNode& node)
@@ -24,8 +22,11 @@ ShockerModelPtr ShockerModelHandler::processRenderableNode(const sabi::Renderabl
     // Get the CgModel from the node
     sabi::CgModelPtr cgModel = node->getModel();
     if (!cgModel) {
-        LOG(WARNING) << "RenderableNode has no model: " << node->getName();
-        return nullptr;
+        // Create phantom model for nodes without geometry
+        ShockerModelPtr phantomModel = ShockerPhantomModel::create();
+        phantomModel->createFromRenderableNode(node, geomInstSlotFinder_);
+        models_[node->getName()] = phantomModel;
+        return phantomModel;
     }
     
     // Create appropriate model type
@@ -60,9 +61,7 @@ ShockerModelPtr ShockerModelHandler::processRenderableNode(const sabi::Renderabl
     
     // Update statistics - count geometry instances
     const auto& geomInstances = model->getGeometryInstances();
-    LOG(DBUG) << "Created model: " << node->getName() 
-              << " with " << geomInstances.size() << " geometry instances"
-              << " (type: " << static_cast<int>(model->getGeometryType()) << ")";
+    // Model created successfully (no logging needed for routine operations)
     
     return model;
 }
@@ -196,7 +195,7 @@ Instance* ShockerModelHandler::createInstance(ShockerModel* model, const sabi::S
     inst->nMatM2W = ShockerModel::calculateNormalMatrix(transform);
     inst->prevMatM2W = inst->matM2W;  // Initially same as current
     
-    LOG(DBUG) << "Created Instance (slot: " << inst->instSlot << ")";
+    // Instance created successfully (no logging needed for routine operations)
     
     // Store and return raw pointer (handler maintains ownership)
     Instance* ptr = inst.get();
@@ -230,7 +229,7 @@ void ShockerModelHandler::clear()
     totalTriangles_ = 0;
     totalVertices_ = 0;
     
-    LOG(DBUG) << "ShockerModelHandler cleared";
+    // Handler cleared
 }
 
 ShockerGeometryType ShockerModelHandler::determineGeometryType(const sabi::CgModelPtr& model) const
@@ -287,4 +286,15 @@ AABB ShockerModelHandler::calculateCombinedAABB(const std::vector<GeometryInstan
     }
     
     return combined;
+}
+
+size_t ShockerModelHandler::getGeometryInstanceCount() const
+{
+    size_t totalCount = 0;
+    for (const auto& [name, model] : models_) {
+        if (model) {
+            totalCount += model->getGeometryInstances().size();
+        }
+    }
+    return totalCount;
 }

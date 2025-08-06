@@ -105,8 +105,7 @@ void ShockerMaterialHandler::processMaterialsForModel(
         assignMaterialToGeometryInstance(geomInst, material);
     }
     
-    LOG(INFO) << "Processed materials for model with " << geomInstances.size() 
-              << " geometry instances";
+    // Materials processed for model
 }
 
 DisneyMaterial* ShockerMaterialHandler::createMaterialFromCg(
@@ -210,7 +209,7 @@ void ShockerMaterialHandler::assignMaterialToGeometryInstance(
     // GeometryInstance expects a DisneyMaterial pointer
     geomInst->mat = reinterpret_cast<Material*>(material);
     
-    LOG(DBUG) << "Assigned material to geometry instance slot " << geomInst->geomInstSlot;
+    // Material assigned to geometry instance
 }
 
 void ShockerMaterialHandler::uploadMaterialsToGPU()
@@ -343,8 +342,7 @@ void ShockerMaterialHandler::processTextureInfo(
     const Eigen::Vector3f& defaultValue)
 {
     if (!ctx_ || !ctx_->getHandlers().textureHandler) {
-        // Only log as debug since this is expected in tests without texture handler
-        LOG(DBUG) << "No texture handler available for " << requestedInput;
+        // No texture handler available - this is expected in tests
         return;
     }
     

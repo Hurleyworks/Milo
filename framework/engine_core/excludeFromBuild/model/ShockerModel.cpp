@@ -172,8 +172,7 @@ void ShockerTriangleModel::createFromRenderableNode(const RenderableNode& node, 
     geometryGroup_->needsRebuild = 1;  // Needs initial build
     geometryGroup_->refittable = 0;    // Static geometry by default
     
-    LOG(DBUG) << "Created ShockerTriangleModel with " << geometryInstances_.size() 
-              << " geometry instances for " << node->getName();
+    // Triangle model created successfully
 }
 
 void ShockerTriangleModel::createGeometryForSurface(
@@ -184,7 +183,7 @@ void ShockerTriangleModel::createGeometryForSurface(
     // Determine appropriate geometry type for this surface
     if (shouldUseDisplacementGeometry(model, surfaceIndex)) {
         // TODO: Create TFDM or NRTDSM geometry
-        LOG(DBUG) << "Surface " << surfaceIndex << " would use displacement geometry (not yet implemented)";
+        // Surface would use displacement geometry (not yet implemented)
     }
     else if (shouldUseCurveGeometry(model, surfaceIndex)) {
         // Create curve geometry
@@ -254,7 +253,7 @@ void ShockerTriangleModel::extractCurveGeometry(
         // In real implementation, would create proper curve segments
         // For now, just store the control points
         
-        LOG(DBUG) << "Created curve geometry with " << controlPoints.size() << " control points";
+        // Created curve geometry with control points
     }
     
     geomInst->geometry = std::move(curveGeom);
@@ -400,7 +399,7 @@ void ShockerFlyweightModel::createFromRenderableNode(const RenderableNode& node,
     // Copy the AABB from source
     combinedAABB_ = sourceModel_->getAABB();
     
-    LOG(DBUG) << "Created ShockerFlyweightModel referencing source for " << node->getName();
+    // Flyweight model created referencing source
 }
 
 // =============================================================================
@@ -414,8 +413,31 @@ void ShockerPhantomModel::createFromRenderableNode(const RenderableNode& node, S
     // Phantom models have no visible geometry
     // They're used for physics/collision only
     
+    // Create a single empty geometry instance for the instance system
+    uint32_t slot = slotFinder.getFirstAvailableSlot();
+    if (slot != SlotFinder::InvalidSlotIndex) {
+        slotFinder.setInUse(slot);
+        
+        auto geomInst = std::make_unique<GeometryInstance>();
+        geomInst->geomInstSlot = slot;
+        geomInst->mat = nullptr;  // No material for phantom
+        
+        // Set empty AABB for the instance
+        geomInst->aabb.minP = Point3D(0.0f, 0.0f, 0.0f);
+        geomInst->aabb.maxP = Point3D(0.0f, 0.0f, 0.0f);
+        
+        // Empty triangle geometry (no actual triangles)
+        TriangleGeometry emptyGeom;
+        geomInst->geometry = std::move(emptyGeom);
+        
+        geometryInstances_.push_back(std::move(geomInst));
+    }
+    
     // Create empty geometry group
     geometryGroup_ = std::make_unique<GeometryGroup>();
+    if (!geometryInstances_.empty()) {
+        geometryGroup_->geomInsts.insert(geometryInstances_[0].get());
+    }
     geometryGroup_->numEmitterPrimitives = 0;
     geometryGroup_->needsReallocation = 0;
     geometryGroup_->needsRebuild = 0;
@@ -426,5 +448,5 @@ void ShockerPhantomModel::createFromRenderableNode(const RenderableNode& node, S
     combinedAABB_.maxP = Point3D(0.0f, 0.0f, 0.0f);
     geometryGroup_->aabb = combinedAABB_;
     
-    LOG(DBUG) << "Created ShockerPhantomModel for " << node->getName();
+    // Phantom model created (no logging needed for routine operations)
 }

@@ -376,10 +376,15 @@ TEST_CASE("ShockerPhantomModel")
         CHECK(aabb.minP.x == 0.0f);
         CHECK(aabb.maxP.x == 0.0f);
         
-        // Phantom should have empty geometry group
+        // Phantom should have geometry group with single empty instance
         GeometryGroup* geomGroup = model->getGeometryGroup();
         CHECK(geomGroup != nullptr);
-        CHECK(geomGroup->geomInsts.empty());
+        CHECK(geomGroup->geomInsts.size() == 1);  // Has one empty instance for the instance system
+        
+        // The geometry instance should exist but be empty
+        const auto& geomInstances = model->getGeometryInstances();
+        CHECK(geomInstances.size() == 1);
+        CHECK(geomInstances[0]->mat == nullptr);  // No material for phantom
     }
 }
 
@@ -405,3 +410,4 @@ Jahley::App* Jahley::CreateApplication()
 #include "ShockerMaterialHandlerTest.cpp"
 #include "ShockerMaterialHandlerComplexTest.cpp"
 #include "ShockerMaterialHandlerGPUTest.cpp"
+#include "ShockerSceneHandlerTest.cpp"
