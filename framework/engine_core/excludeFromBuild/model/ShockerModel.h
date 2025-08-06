@@ -1,14 +1,15 @@
 #pragma once
 
 // ShockerModel.h
-// Redesigned to follow the correct pattern from common_host.h:
-// - Creates multiple GeometryInstances (one per surface)
-// - Creates a GeometryGroup containing all GeometryInstances
-// - Does NOT own Instance - Instances are created separately
+// Uses Shocker-specific types that work directly with DisneyMaterial
+// - Creates multiple ShockerSurfaces (one per surface)
+// - Creates a ShockerSurfaceGroup containing all ShockerSurfaces
+// - Does NOT own ShockerNode - Nodes are created separately
 
 #include "../RenderContext.h"
 #include "../common/common_host.h"
 #include "../milo_shared.h"
+#include "ShockerCore.h"
 
 #include <sabi_core/sabi_core.h>
 
@@ -36,8 +37,8 @@ enum class ShockerGeometryType
 };
 
 // Base class for all Shocker models
-// Creates GeometryInstances for each surface and groups them
-// Each GeometryInstance will have one DisneyMaterial (not shared::Material)
+// Creates ShockerSurfaces for each surface and groups them
+// Each ShockerSurface will have one DisneyMaterial directly
 class ShockerModel
 {
 public:
@@ -50,13 +51,13 @@ public:
     // Create all geometry from the RenderableNode
     virtual void createFromRenderableNode(const RenderableNode& node, SlotFinder& slotFinder) = 0;
     
-    // Get the GeometryGroup for this model
-    GeometryGroup* getGeometryGroup() { return geometryGroup_.get(); }
-    const GeometryGroup* getGeometryGroup() const { return geometryGroup_.get(); }
+    // Get the ShockerSurfaceGroup for this model
+    shocker::ShockerSurfaceGroup* getSurfaceGroup() { return surfaceGroup_.get(); }
+    const shocker::ShockerSurfaceGroup* getSurfaceGroup() const { return surfaceGroup_.get(); }
     
-    // Get all GeometryInstances
-    const std::vector<std::unique_ptr<GeometryInstance>>& getGeometryInstances() const { 
-        return geometryInstances_; 
+    // Get all ShockerSurfaces
+    const std::vector<std::unique_ptr<shocker::ShockerSurface>>& getSurfaces() const { 
+        return surfaces_; 
     }
     
     // Get all geometry instance slots
@@ -73,15 +74,15 @@ public:
     sabi::Renderable* getSourceNode() const { return sourceNode_; }
     
 protected:
-    // Helper to calculate combined AABB from all geometry instances
+    // Helper to calculate combined AABB from all surfaces
     void calculateCombinedAABB();
     
 protected:
-    // Geometry instances (one per surface/material)
-    std::vector<std::unique_ptr<GeometryInstance>> geometryInstances_;
+    // Shocker surfaces (one per surface/material)
+    std::vector<std::unique_ptr<shocker::ShockerSurface>> surfaces_;
     
-    // Geometry group containing all instances
-    std::unique_ptr<GeometryGroup> geometryGroup_;
+    // Surface group containing all surfaces
+    std::unique_ptr<shocker::ShockerSurfaceGroup> surfaceGroup_;
     
     // Combined bounding box
     AABB combinedAABB_;
@@ -116,7 +117,7 @@ private:
     void createGeometryForSurface(
         const CgModelPtr& model,
         size_t surfaceIndex,
-        GeometryInstance* geomInst);
+        shocker::ShockerSurface* surface);
     
     // Helper to extract triangle geometry for a specific surface
     void extractTriangleGeometry(
@@ -130,7 +131,7 @@ private:
     void extractCurveGeometry(
         const CgModelPtr& model,
         size_t surfaceIndex,
-        GeometryInstance* geomInst);
+        shocker::ShockerSurface* surface);
     
     // Helper to calculate AABB for vertices
     AABB calculateAABBForVertices(const std::vector<shared::Vertex>& vertices);

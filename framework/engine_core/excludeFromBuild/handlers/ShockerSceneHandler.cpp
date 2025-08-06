@@ -5,6 +5,7 @@
 #include "ShockerModelHandler.h"
 #include "ShockerMaterialHandler.h"
 #include "../model/ShockerModel.h"
+#include "../model/ShockerCore.h"
 
 ShockerSceneHandler::ShockerSceneHandler(RenderContextPtr ctx)
     : ctx_(ctx)
@@ -28,14 +29,14 @@ void ShockerSceneHandler::initialize()
     // Initialize instance slot finder
     instanceSlotFinder_.initialize(MaxNumInstances);
     
-    // Reserve space for instances
-    instances_.reserve(1000); // Start with reasonable capacity
+    // Reserve space for nodes
+    nodes_.reserve(1000); // Start with reasonable capacity
     
     isInitialized_ = true;
-    LOG(INFO) << "ShockerSceneHandler initialized with capacity for " << MaxNumInstances << " instances";
+    LOG(INFO) << "ShockerSceneHandler initialized with capacity for " << MaxNumInstances << " nodes";
 }
 
-Instance* ShockerSceneHandler::createInstance(RenderableWeakRef& weakNode)
+shocker::ShockerNode* ShockerSceneHandler::createShockerNode(RenderableWeakRef& weakNode)
 {
     if (!isInitialized_) {
         LOG(WARNING) << "ShockerSceneHandler not initialized";
@@ -66,27 +67,27 @@ Instance* ShockerSceneHandler::createInstance(RenderableWeakRef& weakNode)
         materialHandler_->processMaterialsForModel(model.get(), node->getModel());
     }
 
-    // Create instance from the model
-    Instance* instance = modelHandler_->createInstance(model.get(), node->getSpaceTime());
-    if (!instance) {
-        LOG(WARNING) << "Failed to create instance for node: " << node->getName();
+    // Create ShockerNode from the model
+    shocker::ShockerNode* shockerNode = modelHandler_->createShockerNode(model.get(), node->getSpaceTime());
+    if (!shockerNode) {
+        LOG(WARNING) << "Failed to create ShockerNode for node: " << node->getName();
         return nullptr;
     }
 
-    // Store instance
-    instances_.push_back(instance);
+    // Store node
+    nodes_.push_back(shockerNode);
     
-    // Map instance to node
-    nodeMap_[instance->instSlot] = weakNode;
+    // Map node to renderable node
+    nodeMap_[shockerNode->instSlot] = weakNode;
     
-    // Successfully created instance (no logging needed for routine operations)
+    // Successfully created node (no logging needed for routine operations)
     
-    return instance;
+    return shockerNode;
 }
 
-void ShockerSceneHandler::createInstanceList(const WeakRenderableList& weakNodeList)
+void ShockerSceneHandler::createNodeList(const WeakRenderableList& weakNodeList)
 {
-    LOG(INFO) << "Creating instances for " << weakNodeList.size() << " nodes";
+    LOG(INFO) << "Creating nodes for " << weakNodeList.size() << " renderable nodes";
     
     size_t successCount = 0;
     size_t failCount = 0;
@@ -94,17 +95,17 @@ void ShockerSceneHandler::createInstanceList(const WeakRenderableList& weakNodeL
     for (const auto& weakNode : weakNodeList) {
         // Create a copy to pass as non-const reference
         RenderableWeakRef weakNodeCopy = weakNode;
-        Instance* instance = createInstance(weakNodeCopy);
-        if (instance) {
+        shocker::ShockerNode* shockerNode = createShockerNode(weakNodeCopy);
+        if (shockerNode) {
             successCount++;
         } else {
             failCount++;
         }
     }
     
-    LOG(INFO) << "Created " << successCount << " instances successfully";
+    LOG(INFO) << "Created " << successCount << " nodes successfully";
     if (failCount > 0) {
-        LOG(WARNING) << "Failed to create " << failCount << " instances";
+        LOG(WARNING) << "Failed to create " << failCount << " nodes";
     }
 }
 
@@ -117,14 +118,14 @@ void ShockerSceneHandler::processRenderableNode(RenderableNode& node)
     // Create weak reference
     RenderableWeakRef weakNode = node;
     
-    // Create instance
-    createInstance(weakNode);
+    // Create ShockerNode
+    createShockerNode(weakNode);
 }
 
 void ShockerSceneHandler::clear()
 {
-    // Clear instances (they're owned by model handler)
-    instances_.clear();
+    // Clear nodes (they're owned by model handler)
+    nodes_.clear();
     
     // Clear node map
     nodeMap_.clear();
@@ -142,17 +143,17 @@ void ShockerSceneHandler::clear()
     }
 }
 
-Instance* ShockerSceneHandler::getInstance(uint32_t index) const
+shocker::ShockerNode* ShockerSceneHandler::getShockerNode(uint32_t index) const
 {
-    if (index >= instances_.size()) {
+    if (index >= nodes_.size()) {
         return nullptr;
     }
-    return instances_[index];
+    return nodes_[index];
 }
 
-RenderableWeakRef ShockerSceneHandler::getNode(uint32_t instanceIndex) const
+RenderableWeakRef ShockerSceneHandler::getRenderableNode(uint32_t nodeIndex) const
 {
-    auto it = nodeMap_.find(instanceIndex);
+    auto it = nodeMap_.find(nodeIndex);
     if (it != nodeMap_.end()) {
         return it->second;
     }
@@ -166,15 +167,14 @@ void ShockerSceneHandler::buildAccelerationStructures()
         return;
     }
 
-    LOG(INFO) << "Building acceleration structures for " << instances_.size() << " instances";
+    LOG(INFO) << "Building acceleration structures for " << nodes_.size() << " nodes";
     
-    // Build geometry acceleration structures for all models
-    for (const auto& model : modelHandler_->getAllModels()) {
-        GeometryGroup* geomGroup = model.second->getGeometryGroup();
-        if (geomGroup && geomGroup->needsRebuild) {
+    // Build surface acceleration structures for all models
+    for (const auto& surfaceGroup : modelHandler_->getShockerSurfaceGroups()) {
+        if (surfaceGroup && surfaceGroup->needsRebuild) {
             // TODO: Build GAS when we have OptiX integration
-            geomGroup->needsRebuild = 0;
-            // GAS built for model
+            surfaceGroup->needsRebuild = 0;
+            // GAS built for surface group
         }
     }
     
@@ -192,10 +192,9 @@ void ShockerSceneHandler::updateAccelerationStructures()
 
     // Updating acceleration structures
     
-    // Update any refittable geometry acceleration structures
-    for (const auto& model : modelHandler_->getAllModels()) {
-        GeometryGroup* geomGroup = model.second->getGeometryGroup();
-        if (geomGroup && geomGroup->refittable) {
+    // Update any refittable surface acceleration structures
+    for (const auto& surfaceGroup : modelHandler_->getShockerSurfaceGroups()) {
+        if (surfaceGroup && surfaceGroup->refittable) {
             // TODO: Refit GAS when we have OptiX integration
             // GAS refitted for model
         }
@@ -206,12 +205,12 @@ void ShockerSceneHandler::updateAccelerationStructures()
     // Acceleration structures updated
 }
 
-size_t ShockerSceneHandler::getGeometryInstanceCount() const
+size_t ShockerSceneHandler::getSurfaceCount() const
 {
     if (!modelHandler_) {
         return 0;
     }
-    return modelHandler_->getGeometryInstanceCount();
+    return modelHandler_->getShockerSurfaceCount();
 }
 
 size_t ShockerSceneHandler::getMaterialCount() const

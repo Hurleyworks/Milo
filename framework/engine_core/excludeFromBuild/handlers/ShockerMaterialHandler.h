@@ -9,6 +9,7 @@
 #include "../material/HostDisneyMaterial.h"
 #include "../material/DeviceDisneyMaterial.h"
 #include "../model/ShockerModel.h"
+#include "../model/ShockerCore.h"
 
 #include <sabi_core/sabi_core.h>
 
@@ -38,7 +39,7 @@ public:
     void clear();
     
     // Process materials for a ShockerModel
-    // Creates DisneyMaterials for each surface and assigns them to GeometryInstances
+    // Creates DisneyMaterials for each surface and assigns them to ShockerSurfaces
     void processMaterialsForModel(
         ShockerModel* model,
         const CgModelPtr& cgModel,
@@ -50,11 +51,12 @@ public:
         const CgModelPtr& model = nullptr,
         const std::filesystem::path& materialFolder = {});
     
-    // Assign a material to a GeometryInstance
-    void assignMaterialToGeometryInstance(
-        GeometryInstance* geomInst,
+    // Assign a material to a ShockerSurface (new type-safe version)
+    void assignMaterialToSurface(
+        shocker::ShockerSurface* surface,
         DisneyMaterial* material);
     
+   
     // Get all created materials
     const std::vector<std::unique_ptr<DisneyMaterial>>& getAllMaterials() const { 
         return materials_; 

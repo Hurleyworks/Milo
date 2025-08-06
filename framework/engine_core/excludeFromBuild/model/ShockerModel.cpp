@@ -7,8 +7,8 @@
 std::vector<uint32_t> ShockerModel::getGeomInstSlots() const
 {
     std::vector<uint32_t> slots;
-    for (const auto& geomInst : geometryInstances_) {
-        slots.push_back(geomInst->geomInstSlot);
+    for (const auto& surface : surfaces_) {
+        slots.push_back(surface->geomInstSlot);
     }
     return slots;
 }
@@ -65,18 +65,18 @@ void ShockerModel::calculateCombinedAABB()
     combinedAABB_.minP = Point3D(FLT_MAX, FLT_MAX, FLT_MAX);
     combinedAABB_.maxP = Point3D(-FLT_MAX, -FLT_MAX, -FLT_MAX);
     
-    for (const auto& geomInst : geometryInstances_) {
-        combinedAABB_.minP.x = std::min(combinedAABB_.minP.x, geomInst->aabb.minP.x);
-        combinedAABB_.minP.y = std::min(combinedAABB_.minP.y, geomInst->aabb.minP.y);
-        combinedAABB_.minP.z = std::min(combinedAABB_.minP.z, geomInst->aabb.minP.z);
+    for (const auto& surface : surfaces_) {
+        combinedAABB_.minP.x = std::min(combinedAABB_.minP.x, surface->aabb.minP.x);
+        combinedAABB_.minP.y = std::min(combinedAABB_.minP.y, surface->aabb.minP.y);
+        combinedAABB_.minP.z = std::min(combinedAABB_.minP.z, surface->aabb.minP.z);
         
-        combinedAABB_.maxP.x = std::max(combinedAABB_.maxP.x, geomInst->aabb.maxP.x);
-        combinedAABB_.maxP.y = std::max(combinedAABB_.maxP.y, geomInst->aabb.maxP.y);
-        combinedAABB_.maxP.z = std::max(combinedAABB_.maxP.z, geomInst->aabb.maxP.z);
+        combinedAABB_.maxP.x = std::max(combinedAABB_.maxP.x, surface->aabb.maxP.x);
+        combinedAABB_.maxP.y = std::max(combinedAABB_.maxP.y, surface->aabb.maxP.y);
+        combinedAABB_.maxP.z = std::max(combinedAABB_.maxP.z, surface->aabb.maxP.z);
     }
     
     // Handle empty case
-    if (geometryInstances_.empty()) {
+    if (surfaces_.empty()) {
         combinedAABB_.minP = Point3D(0.0f, 0.0f, 0.0f);
         combinedAABB_.maxP = Point3D(0.0f, 0.0f, 0.0f);
     }
@@ -98,9 +98,9 @@ void ShockerTriangleModel::createFromRenderableNode(const RenderableNode& node, 
     }
     
     // Clear any existing geometry
-    geometryInstances_.clear();
+    surfaces_.clear();
     
-    // Create GeometryInstance for each surface
+    // Create ShockerSurface for each surface
     size_t numSurfaces = model->S.size();
     if (numSurfaces == 0) {
         LOG(WARNING) << "Model has no surfaces: " << node->getName();
@@ -120,20 +120,20 @@ void ShockerTriangleModel::createFromRenderableNode(const RenderableNode& node, 
         }
         slotFinder.setInUse(slot);
         
-        // Create geometry instance
-        auto geomInst = std::make_unique<GeometryInstance>();
-        geomInst->geomInstSlot = slot;
+        // Create shocker surface
+        auto surface = std::make_unique<shocker::ShockerSurface>();
+        surface->geomInstSlot = slot;
         
         // Create appropriate geometry type based on surface properties
-        createGeometryForSurface(model, surfIdx, geomInst.get());
+        createGeometryForSurface(model, surfIdx, surface.get());
         
-        // Note: geomInst->mat (DisneyMaterial*) will be set later by MaterialHandler
-        // Each surface gets its own DisneyMaterial since each GeometryInstance
+        // Note: surface->mat (DisneyMaterial*) will be set later by MaterialHandler
+        // Each surface gets its own DisneyMaterial since each ShockerSurface
         // can only have one material
-        geomInst->mat = nullptr;
+        surface->mat = nullptr;
         
-        // Store the geometry instance
-        geometryInstances_.push_back(std::move(geomInst));
+        // Store the surface
+        surfaces_.push_back(std::move(surface));
     }
     
     // If model has particle data, create additional curve geometry instances
@@ -142,35 +142,35 @@ void ShockerTriangleModel::createFromRenderableNode(const RenderableNode& node, 
         if (slot != SlotFinder::InvalidSlotIndex) {
             slotFinder.setInUse(slot);
             
-            auto geomInst = std::make_unique<GeometryInstance>();
-            geomInst->geomInstSlot = slot;
+            auto surface = std::make_unique<shocker::ShockerSurface>();
+            surface->geomInstSlot = slot;
             
             // Create curve geometry from particle data
-            extractCurveGeometry(model, 0, geomInst.get());
+            extractCurveGeometry(model, 0, surface.get());
             
             // Note: Curve geometry also needs a DisneyMaterial
             // Will be set by MaterialHandler based on curve rendering properties
-            geomInst->mat = nullptr;
+            surface->mat = nullptr;
             
-            geometryInstances_.push_back(std::move(geomInst));
+            surfaces_.push_back(std::move(surface));
         }
     }
     
-    // Create GeometryGroup containing all instances
-    geometryGroup_ = std::make_unique<GeometryGroup>();
-    for (const auto& geomInst : geometryInstances_) {
-        geometryGroup_->geomInsts.insert(geomInst.get());
+    // Create ShockerSurfaceGroup containing all surfaces
+    surfaceGroup_ = std::make_unique<shocker::ShockerSurfaceGroup>();
+    for (const auto& surface : surfaces_) {
+        surfaceGroup_->geomInsts.insert(surface.get());
     }
     
     // Calculate combined AABB
     calculateCombinedAABB();
-    geometryGroup_->aabb = combinedAABB_;
+    surfaceGroup_->aabb = combinedAABB_;
     
     // Set other geometry group properties
-    geometryGroup_->numEmitterPrimitives = 0;  // Will be set when materials are added
-    geometryGroup_->needsReallocation = 0;
-    geometryGroup_->needsRebuild = 1;  // Needs initial build
-    geometryGroup_->refittable = 0;    // Static geometry by default
+    surfaceGroup_->numEmitterPrimitives = 0;  // Will be set when materials are added
+    surfaceGroup_->needsReallocation = 0;
+    surfaceGroup_->needsRebuild = 1;  // Needs initial build
+    surfaceGroup_->refittable = 0;    // Static geometry by default
     
     // Triangle model created successfully
 }
@@ -178,7 +178,7 @@ void ShockerTriangleModel::createFromRenderableNode(const RenderableNode& node, 
 void ShockerTriangleModel::createGeometryForSurface(
     const CgModelPtr& model,
     size_t surfaceIndex,
-    GeometryInstance* geomInst)
+    shocker::ShockerSurface* surface)
 {
     // Determine appropriate geometry type for this surface
     if (shouldUseDisplacementGeometry(model, surfaceIndex)) {
@@ -187,7 +187,7 @@ void ShockerTriangleModel::createGeometryForSurface(
     }
     else if (shouldUseCurveGeometry(model, surfaceIndex)) {
         // Create curve geometry
-        extractCurveGeometry(model, surfaceIndex, geomInst);
+        extractCurveGeometry(model, surfaceIndex, surface);
     }
     else {
         // Default to triangle geometry
@@ -205,10 +205,10 @@ void ShockerTriangleModel::createGeometryForSurface(
         // triGeom.triangleBuffer will be allocated and filled with triangles data
         // Note: TriangleGeometry doesn't have materialIndexBuffer - each GeometryInstance has one material
         
-        geomInst->geometry = std::move(triGeom);
+        surface->geometry = std::move(triGeom);
         
         // Calculate AABB for this surface
-        geomInst->aabb = calculateAABBForVertices(vertices);
+        surface->aabb = calculateAABBForVertices(vertices);
     }
 }
 
@@ -237,7 +237,7 @@ bool ShockerTriangleModel::shouldUseDisplacementGeometry(const CgModelPtr& model
 void ShockerTriangleModel::extractCurveGeometry(
     const CgModelPtr& model,
     size_t surfaceIndex,
-    GeometryInstance* geomInst)
+    shocker::ShockerSurface* surface)
 {
     CurveGeometry curveGeom;
     
@@ -256,20 +256,20 @@ void ShockerTriangleModel::extractCurveGeometry(
         // Created curve geometry with control points
     }
     
-    geomInst->geometry = std::move(curveGeom);
+    surface->geometry = std::move(curveGeom);
     
     // Calculate AABB for curves
-    geomInst->aabb.minP = Point3D(FLT_MAX, FLT_MAX, FLT_MAX);
-    geomInst->aabb.maxP = Point3D(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+    surface->aabb.minP = Point3D(FLT_MAX, FLT_MAX, FLT_MAX);
+    surface->aabb.maxP = Point3D(-FLT_MAX, -FLT_MAX, -FLT_MAX);
     
     for (const auto& p : model->P) {
-        geomInst->aabb.minP.x = std::min(geomInst->aabb.minP.x, p.x());
-        geomInst->aabb.minP.y = std::min(geomInst->aabb.minP.y, p.y());
-        geomInst->aabb.minP.z = std::min(geomInst->aabb.minP.z, p.z());
+        surface->aabb.minP.x = std::min(surface->aabb.minP.x, p.x());
+        surface->aabb.minP.y = std::min(surface->aabb.minP.y, p.y());
+        surface->aabb.minP.z = std::min(surface->aabb.minP.z, p.z());
         
-        geomInst->aabb.maxP.x = std::max(geomInst->aabb.maxP.x, p.x());
-        geomInst->aabb.maxP.y = std::max(geomInst->aabb.maxP.y, p.y());
-        geomInst->aabb.maxP.z = std::max(geomInst->aabb.maxP.z, p.z());
+        surface->aabb.maxP.x = std::max(surface->aabb.maxP.x, p.x());
+        surface->aabb.maxP.y = std::max(surface->aabb.maxP.y, p.y());
+        surface->aabb.maxP.z = std::max(surface->aabb.maxP.z, p.z());
     }
 }
 
@@ -394,7 +394,7 @@ void ShockerFlyweightModel::createFromRenderableNode(const RenderableNode& node,
     }
     
     // Reference the source model's geometry group
-    geometryGroup_ = nullptr;  // We don't own it, just reference it
+    surfaceGroup_ = nullptr;  // We don't own it, just reference it
     
     // Copy the AABB from source
     combinedAABB_ = sourceModel_->getAABB();
@@ -418,35 +418,35 @@ void ShockerPhantomModel::createFromRenderableNode(const RenderableNode& node, S
     if (slot != SlotFinder::InvalidSlotIndex) {
         slotFinder.setInUse(slot);
         
-        auto geomInst = std::make_unique<GeometryInstance>();
-        geomInst->geomInstSlot = slot;
-        geomInst->mat = nullptr;  // No material for phantom
+        auto surface = std::make_unique<shocker::ShockerSurface>();
+        surface->geomInstSlot = slot;
+        surface->mat = nullptr;  // No material for phantom
         
-        // Set empty AABB for the instance
-        geomInst->aabb.minP = Point3D(0.0f, 0.0f, 0.0f);
-        geomInst->aabb.maxP = Point3D(0.0f, 0.0f, 0.0f);
+        // Set empty AABB for the surface
+        surface->aabb.minP = Point3D(0.0f, 0.0f, 0.0f);
+        surface->aabb.maxP = Point3D(0.0f, 0.0f, 0.0f);
         
         // Empty triangle geometry (no actual triangles)
         TriangleGeometry emptyGeom;
-        geomInst->geometry = std::move(emptyGeom);
+        surface->geometry = std::move(emptyGeom);
         
-        geometryInstances_.push_back(std::move(geomInst));
+        surfaces_.push_back(std::move(surface));
     }
     
-    // Create empty geometry group
-    geometryGroup_ = std::make_unique<GeometryGroup>();
-    if (!geometryInstances_.empty()) {
-        geometryGroup_->geomInsts.insert(geometryInstances_[0].get());
+    // Create empty surface group
+    surfaceGroup_ = std::make_unique<shocker::ShockerSurfaceGroup>();
+    if (!surfaces_.empty()) {
+        surfaceGroup_->geomInsts.insert(surfaces_[0].get());
     }
-    geometryGroup_->numEmitterPrimitives = 0;
-    geometryGroup_->needsReallocation = 0;
-    geometryGroup_->needsRebuild = 0;
-    geometryGroup_->refittable = 0;
+    surfaceGroup_->numEmitterPrimitives = 0;
+    surfaceGroup_->needsReallocation = 0;
+    surfaceGroup_->needsRebuild = 0;
+    surfaceGroup_->refittable = 0;
     
     // Set empty AABB
     combinedAABB_.minP = Point3D(0.0f, 0.0f, 0.0f);
     combinedAABB_.maxP = Point3D(0.0f, 0.0f, 0.0f);
-    geometryGroup_->aabb = combinedAABB_;
+    surfaceGroup_->aabb = combinedAABB_;
     
     // Phantom model created (no logging needed for routine operations)
 }

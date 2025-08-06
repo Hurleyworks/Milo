@@ -6,6 +6,7 @@
 
 #include "../RenderContext.h"
 #include "../common/common_host.h"
+#include "../model/ShockerCore.h"
 
 using sabi::RenderableNode;
 using sabi::RenderableWeakRef;
@@ -50,26 +51,26 @@ public:
     ShockerModelHandlerPtr getModelHandler() const { return modelHandler_; }
     ShockerMaterialHandlerPtr getMaterialHandler() const { return materialHandler_; }
 
-    // Creates an instance from a renderable node
-    Instance* createInstance(RenderableWeakRef& weakNode);
+    // Creates a node from a renderable node (replaces createInstance)
+    shocker::ShockerNode* createShockerNode(RenderableWeakRef& weakNode);
 
-    // Creates multiple instances from a list of renderable nodes
-    void createInstanceList(const WeakRenderableList& weakNodeList);
+    // Creates multiple nodes from a list of renderable nodes
+    void createNodeList(const WeakRenderableList& weakNodeList);
 
-    // Process a renderable node (creates model and instance)
+    // Process a renderable node (creates model and node)
     void processRenderableNode(RenderableNode& node);
 
-    // Clear all instances and models
+    // Clear all nodes and models
     void clear();
 
-    // Get all instances
-    const std::vector<Instance*>& getInstances() const { return instances_; }
+    // Get all nodes
+    const std::vector<shocker::ShockerNode*>& getShockerNodes() const { return nodes_; }
 
-    // Get instance by index
-    Instance* getInstance(uint32_t index) const;
+    // Get node by index
+    shocker::ShockerNode* getShockerNode(uint32_t index) const;
 
-    // Get node by instance index
-    RenderableWeakRef getNode(uint32_t instanceIndex) const;
+    // Get renderable node by node index
+    RenderableWeakRef getRenderableNode(uint32_t nodeIndex) const;
 
     // Build acceleration structures
     void buildAccelerationStructures();
@@ -78,8 +79,8 @@ public:
     void updateAccelerationStructures();
 
     // Get statistics
-    size_t getInstanceCount() const { return instances_.size(); }
-    size_t getGeometryInstanceCount() const;
+    size_t getNodeCount() const { return nodes_.size(); }
+    size_t getSurfaceCount() const;
     size_t getMaterialCount() const;
 
 private:
@@ -91,7 +92,7 @@ private:
     ShockerMaterialHandlerPtr materialHandler_;
     
     // Scene data
-    std::vector<Instance*> instances_;
+    std::vector<shocker::ShockerNode*> nodes_;
     NodeMap nodeMap_;
     
     // Instance slot management

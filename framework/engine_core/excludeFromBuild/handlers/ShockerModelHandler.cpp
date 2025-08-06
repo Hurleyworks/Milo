@@ -1,6 +1,7 @@
 #include "ShockerModelHandler.h"
 #include "ShockerMaterialHandler.h"
 #include "../RenderContext.h"
+#include "../model/ShockerCore.h"
 
 void ShockerModelHandler::initialize(RenderContextPtr context)
 {
@@ -59,8 +60,6 @@ ShockerModelPtr ShockerModelHandler::processRenderableNode(const sabi::Renderabl
     // Store the model
     models_[node->getName()] = model;
     
-    // Update statistics - count geometry instances
-    const auto& geomInstances = model->getGeometryInstances();
     // Model created successfully (no logging needed for routine operations)
     
     return model;
@@ -101,45 +100,44 @@ ShockerModelPtr ShockerModelHandler::createModelByType(const sabi::CgModelPtr& c
     }
 }
 
-GeometryInstance* ShockerModelHandler::createGeometryInstance(ShockerModel* model)
+shocker::ShockerSurface* ShockerModelHandler::createShockerSurface(ShockerModel* model)
 {
     if (!model) {
-        LOG(WARNING) << "Cannot create GeometryInstance from null model";
+        LOG(WARNING) << "Cannot create ShockerSurface from null model";
         return nullptr;
     }
     
-    // The model already creates and owns its geometry instances
-    // This method now returns the first one for compatibility
-    const auto& instances = model->getGeometryInstances();
-    if (instances.empty()) {
-        LOG(WARNING) << "Model has no geometry instances";
+    // Get surfaces from model to use
+    const auto& modelSurfaces = model->getSurfaces();
+    if (modelSurfaces.empty()) {
+        LOG(WARNING) << "Model has no surfaces";
         return nullptr;
     }
     
-    // Return pointer to first instance
-    // Callers should use model->getGeometryInstances() for all instances
-    return instances[0].get();
+    // Return the first surface from the model
+    // Note: The model already owns the surfaces, we just return a pointer
+    return modelSurfaces[0].get();
 }
 
-GeometryGroup* ShockerModelHandler::createGeometryGroup(const std::vector<GeometryInstance*>& instances)
+shocker::ShockerSurfaceGroup* ShockerModelHandler::createShockerSurfaceGroup(const std::vector<shocker::ShockerSurface*>& surfaces)
 {
-    if (instances.empty()) {
-        LOG(WARNING) << "Cannot create GeometryGroup from empty instances";
+    if (surfaces.empty()) {
+        LOG(WARNING) << "Cannot create ShockerSurfaceGroup from empty surfaces";
         return nullptr;
     }
     
-    // Create new geometry group
-    auto group = std::make_unique<GeometryGroup>();
+    // Create new surface group
+    auto group = std::make_unique<shocker::ShockerSurfaceGroup>();
     
-    // Add all instances to the group
-    for (GeometryInstance* inst : instances) {
-        if (inst) {
-            group->geomInsts.insert(inst);
+    // Add all surfaces to the group
+    for (shocker::ShockerSurface* surface : surfaces) {
+        if (surface) {
+            group->geomInsts.insert(surface);
         }
     }
     
     // Calculate combined AABB
-    group->aabb = calculateCombinedAABB(instances);
+    group->aabb = calculateCombinedAABB(surfaces);
     
     // Initialize other properties
     group->numEmitterPrimitives = 0;  // Will be calculated when materials are added
@@ -148,30 +146,43 @@ GeometryGroup* ShockerModelHandler::createGeometryGroup(const std::vector<Geomet
     group->refittable = 0;    // Static geometry by default
     
     // Store and return raw pointer (handler maintains ownership)
-    GeometryGroup* ptr = group.get();
-    geometryGroups_.push_back(std::move(group));
+    shocker::ShockerSurfaceGroup* ptr = group.get();
+    surfaceGroups_.push_back(std::move(group));
     
-    LOG(DBUG) << "Created GeometryGroup with " << instances.size() << " instances";
+    LOG(DBUG) << "Created ShockerSurfaceGroup with " << surfaces.size() << " surfaces";
     
     return ptr;
 }
 
-Instance* ShockerModelHandler::createInstance(ShockerModel* model, const sabi::SpaceTime& spacetime)
+shocker::ShockerNode* ShockerModelHandler::createShockerNode(ShockerModel* model, const sabi::SpaceTime& spacetime)
 {
     if (!model) {
-        LOG(WARNING) << "Cannot create Instance from null model";
+        LOG(WARNING) << "Cannot create ShockerNode from null model";
         return nullptr;
     }
     
-    // Get the model's geometry group
-    GeometryGroup* geomGroup = model->getGeometryGroup();
-    if (!geomGroup) {
-        LOG(WARNING) << "Model has no geometry group";
+    // Get surfaces from the model
+    std::vector<shocker::ShockerSurface*> modelSurfaces;
+    for (const auto& surface : model->getSurfaces()) {
+        if (surface) {
+            modelSurfaces.push_back(surface.get());
+        }
+    }
+    
+    if (modelSurfaces.empty()) {
+        LOG(WARNING) << "Failed to create surfaces for model";
         return nullptr;
     }
     
-    // Create new instance
-    auto inst = std::make_unique<Instance>();
+    // Create surface group from surfaces
+    shocker::ShockerSurfaceGroup* surfaceGroup = createShockerSurfaceGroup(modelSurfaces);
+    if (!surfaceGroup) {
+        LOG(WARNING) << "Failed to create surface group";
+        return nullptr;
+    }
+    
+    // Create new node
+    auto node = std::make_unique<shocker::ShockerNode>();
     
     // Allocate instance slot
     uint32_t slot = allocateInstanceSlot();
@@ -179,27 +190,25 @@ Instance* ShockerModelHandler::createInstance(ShockerModel* model, const sabi::S
         LOG(WARNING) << "Failed to allocate instance slot";
         return nullptr;
     }
-    inst->instSlot = slot;
+    node->instSlot = slot;
     
     // Convert SpaceTime to Matrix4x4
     Matrix4x4 transform = ShockerModel::convertSpaceTimeToMatrix(spacetime);
     
-    // Create geometry group instance
-    Mesh::GeometryGroupInstance groupInst;
-    groupInst.geomGroup = geomGroup;
+    // Create surface group instance
+    shocker::ShockerMesh::ShockerSurfaceGroupInstance groupInst;
+    groupInst.geomGroup = surfaceGroup;
     groupInst.transform = transform;
     
-    // Set up the instance
-    inst->geomGroupInst = groupInst;
-    inst->matM2W = transform;
-    inst->nMatM2W = ShockerModel::calculateNormalMatrix(transform);
-    inst->prevMatM2W = inst->matM2W;  // Initially same as current
-    
-    // Instance created successfully (no logging needed for routine operations)
+    // Set up the node
+    node->geomGroupInst = groupInst;
+    node->matM2W = transform;
+    node->nMatM2W = ShockerModel::calculateNormalMatrix(transform);
+    node->prevMatM2W = node->matM2W;  // Initially same as current
     
     // Store and return raw pointer (handler maintains ownership)
-    Instance* ptr = inst.get();
-    instances_.push_back(std::move(inst));
+    shocker::ShockerNode* ptr = node.get();
+    nodes_.push_back(std::move(node));
     
     return ptr;
 }
@@ -221,9 +230,9 @@ bool ShockerModelHandler::hasModel(const std::string& name) const
 void ShockerModelHandler::clear()
 {
     models_.clear();
-    geometryInstances_.clear();
-    geometryGroups_.clear();
-    instances_.clear();
+    surfaces_.clear();
+    surfaceGroups_.clear();
+    nodes_.clear();
     geomInstSlotFinder_.reset();
     instanceSlotFinder_.reset();
     totalTriangles_ = 0;
@@ -261,26 +270,26 @@ ShockerGeometryType ShockerModelHandler::determineGeometryType(const sabi::CgMod
     return ShockerGeometryType::Triangle;
 }
 
-AABB ShockerModelHandler::calculateCombinedAABB(const std::vector<GeometryInstance*>& instances) const
+AABB ShockerModelHandler::calculateCombinedAABB(const std::vector<shocker::ShockerSurface*>& surfaces) const
 {
     AABB combined;
     combined.minP = Point3D(FLT_MAX, FLT_MAX, FLT_MAX);
     combined.maxP = Point3D(-FLT_MAX, -FLT_MAX, -FLT_MAX);
     
-    for (const GeometryInstance* inst : instances) {
-        if (inst) {
-            combined.minP.x = std::min(combined.minP.x, inst->aabb.minP.x);
-            combined.minP.y = std::min(combined.minP.y, inst->aabb.minP.y);
-            combined.minP.z = std::min(combined.minP.z, inst->aabb.minP.z);
+    for (const shocker::ShockerSurface* surface : surfaces) {
+        if (surface) {
+            combined.minP.x = std::min(combined.minP.x, surface->aabb.minP.x);
+            combined.minP.y = std::min(combined.minP.y, surface->aabb.minP.y);
+            combined.minP.z = std::min(combined.minP.z, surface->aabb.minP.z);
             
-            combined.maxP.x = std::max(combined.maxP.x, inst->aabb.maxP.x);
-            combined.maxP.y = std::max(combined.maxP.y, inst->aabb.maxP.y);
-            combined.maxP.z = std::max(combined.maxP.z, inst->aabb.maxP.z);
+            combined.maxP.x = std::max(combined.maxP.x, surface->aabb.maxP.x);
+            combined.maxP.y = std::max(combined.maxP.y, surface->aabb.maxP.y);
+            combined.maxP.z = std::max(combined.maxP.z, surface->aabb.maxP.z);
         }
     }
     
     // Handle empty case
-    if (instances.empty() || combined.minP.x > combined.maxP.x) {
+    if (surfaces.empty() || combined.minP.x > combined.maxP.x) {
         combined.minP = Point3D(0.0f, 0.0f, 0.0f);
         combined.maxP = Point3D(0.0f, 0.0f, 0.0f);
     }
@@ -288,13 +297,7 @@ AABB ShockerModelHandler::calculateCombinedAABB(const std::vector<GeometryInstan
     return combined;
 }
 
-size_t ShockerModelHandler::getGeometryInstanceCount() const
+size_t ShockerModelHandler::getShockerSurfaceCount() const
 {
-    size_t totalCount = 0;
-    for (const auto& [name, model] : models_) {
-        if (model) {
-            totalCount += model->getGeometryInstances().size();
-        }
-    }
-    return totalCount;
+    return surfaces_.size();
 }

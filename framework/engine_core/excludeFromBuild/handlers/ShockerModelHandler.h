@@ -5,6 +5,7 @@
 // Part of the ShockerEngine handler architecture
 
 #include "../model/ShockerModel.h"
+#include "../model/ShockerCore.h"
 #include "../common/common_host.h"
 #include "../milo_shared.h"
 #include <unordered_map>
@@ -32,14 +33,14 @@ public:
     // Create a model based on geometry type
     ShockerModelPtr createModelByType(const sabi::CgModelPtr& cgModel);
     
-    // Geometry instance management
-    GeometryInstance* createGeometryInstance(ShockerModel* model);
+    // Surface management (replaces geometry instance)
+    shocker::ShockerSurface* createShockerSurface(ShockerModel* model);
     
-    // Geometry group management
-    GeometryGroup* createGeometryGroup(const std::vector<GeometryInstance*>& instances);
+    // Surface group management (replaces geometry group)
+    shocker::ShockerSurfaceGroup* createShockerSurfaceGroup(const std::vector<shocker::ShockerSurface*>& surfaces);
     
-    // Instance creation with transforms
-    Instance* createInstance(ShockerModel* model, const sabi::SpaceTime& spacetime);
+    // Node creation with transforms (replaces instance)
+    shocker::ShockerNode* createShockerNode(ShockerModel* model, const sabi::SpaceTime& spacetime);
     
     // Get model by name
     ShockerModelPtr getModel(const std::string& name) const;
@@ -50,11 +51,11 @@ public:
     // Get all models
     const std::unordered_map<std::string, ShockerModelPtr>& getAllModels() const { return models_; }
     
-    // Get count of all geometry instances across all models
-    size_t getGeometryInstanceCount() const;
+    // Get count of all surfaces across all models
+    size_t getShockerSurfaceCount() const;
     
-    // Get all geometry groups  
-    const std::vector<std::unique_ptr<GeometryGroup>>& getGeometryGroups() const { return geometryGroups_; }
+    // Get all surface groups  
+    const std::vector<std::unique_ptr<shocker::ShockerSurfaceGroup>>& getShockerSurfaceGroups() const { return surfaceGroups_; }
     
     // Clear all data
     void clear();
@@ -70,7 +71,7 @@ private:
     ShockerGeometryType determineGeometryType(const sabi::CgModelPtr& model) const;
     
     // Helper to calculate combined AABB
-    AABB calculateCombinedAABB(const std::vector<GeometryInstance*>& instances) const;
+    AABB calculateCombinedAABB(const std::vector<shocker::ShockerSurface*>& surfaces) const;
     
     // Slot management helpers
     uint32_t allocateGeometryInstanceSlot()
@@ -109,14 +110,14 @@ private:
     // Model registry - stores all created models by name
     std::unordered_map<std::string, ShockerModelPtr> models_;
     
-    // Geometry instances - owns all created geometry instances
-    std::vector<std::unique_ptr<GeometryInstance>> geometryInstances_;
+    // Surfaces - owns all created surfaces (replaces geometry instances)
+    std::vector<std::unique_ptr<shocker::ShockerSurface>> surfaces_;
     
-    // Geometry groups - owns all created geometry groups
-    std::vector<std::unique_ptr<GeometryGroup>> geometryGroups_;
+    // Surface groups - owns all created surface groups (replaces geometry groups)
+    std::vector<std::unique_ptr<shocker::ShockerSurfaceGroup>> surfaceGroups_;
     
-    // Instances - owns all created instances
-    std::vector<std::unique_ptr<Instance>> instances_;
+    // Nodes - owns all created nodes (replaces instances)
+    std::vector<std::unique_ptr<shocker::ShockerNode>> nodes_;
     
     // Slot management
     SlotFinder geomInstSlotFinder_;

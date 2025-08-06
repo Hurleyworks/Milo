@@ -30,6 +30,23 @@ powershell -ExecutionPolicy Bypass -File scripts/claude_build_command.ps1 -Actio
 "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" builds\VisualStudio2022\Apps.sln /p:Configuration=Debug /p:Platform=x64
 ```
 
+### Unit Testing
+
+#### Run specific unit test (e.g., ShockerModelTest)
+```batch
+scripts\test_shocker_model.bat
+```
+Or compile and run manually:
+```batch
+"C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" unittest\builds\VisualStudio2022\projects\ShockerModelTest.vcxproj /p:Configuration=Debug /p:Platform=x64
+builds\bin\Debug-windows-x86_64\ShockerModelTest\ShockerModelTest.exe
+```
+
+#### Available tests
+- HelloTest
+- GeometryTest  
+- ShockerModelTest
+
 ### Code Formatting
 The project uses clang-format. Format files with:
 ```batch
@@ -120,7 +137,7 @@ Major dependencies managed through vcpkg and direct inclusion:
 - The project is Windows-only with Visual Studio 2022 support
 - x64 architecture only
 - Uses C++20 standard for VS2022 builds
-- No automated testing framework is currently set up
+- Unit tests use doctest framework in `unittest/` directory
 - The `b.bat` command is the primary build tool and includes error formatting for Claude
 
 ## Module System
@@ -155,7 +172,7 @@ These headers are not part of this codebase and will cause compilation errors.
 
 ### Build Workflow
 - **Build automatically after making changes** - by running `b.bat`
-- **Build errors**: Check `E:\1Dog\Dog\build_errors.txt`
+- **Build errors**: Saved to `build_errors.txt` in project root when build fails
 - **Fix errors**: Read the error file and fix issues when requested
 
 ## PTX File Management
@@ -203,7 +220,8 @@ These headers are not part of this codebase and will cause compilation errors.
 
 ## 5. Testing Requirements
 - Use C++ doctest for unit testing.
-- Be prepared to demonstrate doctest usage within the {{SDK_NAME}} SDK context.
+- Tests are located in `unittest/tests/` directory.
+- Each test project follows the pattern: `[Component]Test`.
 
 ## 6. Error Handling and Logging
 - Use g3log for logging.

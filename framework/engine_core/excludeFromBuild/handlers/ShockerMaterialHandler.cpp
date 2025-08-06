@@ -65,32 +65,39 @@ void ShockerMaterialHandler::processMaterialsForModel(
         return;
     }
     
+    // Get ShockerSurfaces from the model
+    std::vector<shocker::ShockerSurface*> shockerSurfaces;
+    for (const auto& surface : model->getSurfaces()) {
+        if (surface) {
+            shockerSurfaces.push_back(surface.get());
+        }
+    }
+    
     if (!cgModel) {
         LOG(WARNING) << "processMaterialsForModel: null CgModel provided";
-        // Assign default material to all geometry instances
+        // Assign default material to all surfaces
         DisneyMaterial* defaultMat = getMaterial(0); // Default is always at index 0
-        for (const auto& geomInst : model->getGeometryInstances()) {
-            assignMaterialToGeometryInstance(geomInst.get(), defaultMat);
+        for (auto* surface : shockerSurfaces) {
+            assignMaterialToSurface(surface, defaultMat);
         }
         return;
     }
     
-    const auto& geomInstances = model->getGeometryInstances();
-    const auto& surfaces = cgModel->S;
+    const auto& cgSurfaces = cgModel->S;
     
-    // Each surface should have a corresponding geometry instance
-    if (geomInstances.size() != surfaces.size()) {
-        LOG(WARNING) << "Mismatch: " << geomInstances.size() 
-                     << " geometry instances but " << surfaces.size() << " surfaces";
+    // Each CG surface should have a corresponding ShockerSurface
+    if (shockerSurfaces.size() != cgSurfaces.size()) {
+        LOG(WARNING) << "Mismatch: " << shockerSurfaces.size() 
+                     << " Shocker surfaces but " << cgSurfaces.size() << " CG surfaces";
     }
     
     // Process each surface's material
-    for (size_t i = 0; i < std::min(geomInstances.size(), surfaces.size()); ++i) {
-        GeometryInstance* geomInst = geomInstances[i].get();
-        const auto& surface = surfaces[i];
+    for (size_t i = 0; i < std::min(shockerSurfaces.size(), cgSurfaces.size()); ++i) {
+        shocker::ShockerSurface* surface = shockerSurfaces[i];
+        const auto& cgSurface = cgSurfaces[i];
         
         // Get material from surface directly
-        const CgMaterial& cgMat = surface.cgMaterial;
+        const CgMaterial& cgMat = cgSurface.cgMaterial;
         
         // Create material for this surface (TextureHandler already caches textures)
         DisneyMaterial* material = createMaterialFromCg(cgMat, cgModel, materialFolder);
@@ -101,8 +108,8 @@ void ShockerMaterialHandler::processMaterialsForModel(
             LOG(DBUG) << "Using default material for surface " << i;
         }
         
-        // Assign material to geometry instance
-        assignMaterialToGeometryInstance(geomInst, material);
+        // Assign material to ShockerSurface
+        assignMaterialToSurface(surface, material);
     }
     
     // Materials processed for model
@@ -197,20 +204,25 @@ DisneyMaterial* ShockerMaterialHandler::createMaterialFromCg(
     return result;
 }
 
-void ShockerMaterialHandler::assignMaterialToGeometryInstance(
-    GeometryInstance* geomInst,
+void ShockerMaterialHandler::assignMaterialToSurface(
+    shocker::ShockerSurface* surface,
     DisneyMaterial* material)
 {
-    if (!geomInst) {
-        LOG(WARNING) << "assignMaterialToGeometryInstance: null geometry instance";
+    if (!surface) {
+        LOG(WARNING) << "assignMaterialToSurface: null surface";
         return;
     }
     
-    // GeometryInstance expects a DisneyMaterial pointer
-    geomInst->mat = reinterpret_cast<Material*>(material);
+    if (!material) {
+        LOG(WARNING) << "assignMaterialToSurface: null material";
+        return;
+    }
     
-    // Material assigned to geometry instance
+    // Direct assignment - no casting needed!
+    surface->mat = material;
 }
+
+
 
 void ShockerMaterialHandler::uploadMaterialsToGPU()
 {
