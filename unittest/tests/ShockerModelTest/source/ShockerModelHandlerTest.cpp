@@ -8,6 +8,7 @@
 
 #include "engine_core/excludeFromBuild/handlers/ShockerModelHandler.h"
 #include "engine_core/excludeFromBuild/model/ShockerModel.h"
+#include "engine_core/excludeFromBuild/model/ShockerCore.h"
 
 static void loadGLTF (const std::filesystem::path& gltfPath)
 {
@@ -50,8 +51,8 @@ TEST_CASE("ShockerModelHandler Basic Operations")
         handler.initialize(nullptr);
         
         CHECK(handler.getAllModels().empty());
-        CHECK(handler.getGeometryInstanceCount() == 0);
-        CHECK(handler.getGeometryGroups().empty());
+        CHECK(handler.getShockerSurfaceCount() == 0);
+        CHECK(handler.getShockerSurfaceGroups().empty());
         
         handler.clear();
         CHECK(handler.getAllModels().empty());
@@ -75,7 +76,7 @@ TEST_CASE("ShockerModelHandler Basic Operations")
         
         CHECK(model != nullptr);
         CHECK(model->getGeometryType() == ShockerGeometryType::Triangle);
-        CHECK(!model->getGeometryInstances().empty());  // Should have created geometry instances
+        CHECK(!model->getSurfaces().empty());  // Should have created surfaces
         
         // Check model is stored
         CHECK(handler.hasModel("TestCube"));
@@ -109,7 +110,7 @@ TEST_CASE("ShockerModelHandler Basic Operations")
         CHECK(model->getGeometryType() == ShockerGeometryType::Phantom);
     }
     
-    SUBCASE("Model Creates Its Own Geometry Instances")
+    SUBCASE("Model Creates Its Own Surfaces")
     {
         ShockerModelHandler handler;
         handler.initialize(nullptr);
@@ -123,24 +124,24 @@ TEST_CASE("ShockerModelHandler Basic Operations")
         ShockerModelPtr model = handler.processRenderableNode(node);
         CHECK(model != nullptr);
         
-        // Model should have created its own geometry instances
-        const auto& geomInstances = model->getGeometryInstances();
-        CHECK(!geomInstances.empty());
-        CHECK(geomInstances.size() == cube->S.size());  // One per surface
+        // Model should have created its own surfaces
+        const auto& surfaces = model->getSurfaces();
+        CHECK(!surfaces.empty());
+        CHECK(surfaces.size() == cube->S.size());  // One per surface
         
-        // Check first geometry instance
-        const auto& firstInst = geomInstances[0];
-        CHECK(firstInst != nullptr);
-        CHECK(firstInst->geomInstSlot != SlotFinder::InvalidSlotIndex);
-        CHECK(std::holds_alternative<TriangleGeometry>(firstInst->geometry));
+        // Check first surface
+        const auto& firstSurface = surfaces[0];
+        CHECK(firstSurface != nullptr);
+        CHECK(firstSurface->geomInstSlot != SlotFinder::InvalidSlotIndex);
+        CHECK(std::holds_alternative<TriangleGeometry>(firstSurface->geometry));
         
-        // Model should have a geometry group
-        GeometryGroup* group = model->getGeometryGroup();
+        // Model should have a surface group
+        shocker::ShockerSurfaceGroup* group = model->getSurfaceGroup();
         CHECK(group != nullptr);
-        CHECK(group->geomInsts.size() == geomInstances.size());
+        CHECK(group->geomInsts.size() == surfaces.size());
     }
     
-    SUBCASE("Models Have Their Own Geometry Groups")
+    SUBCASE("Models Have Their Own Surface Groups")
     {
         ShockerModelHandler handler;
         handler.initialize(nullptr);
@@ -158,9 +159,9 @@ TEST_CASE("ShockerModelHandler Basic Operations")
             models.push_back(model);
         }
         
-        // Each model should have its own geometry group
+        // Each model should have its own surface group
         for (const auto& model : models) {
-            GeometryGroup* group = model->getGeometryGroup();
+            shocker::ShockerSurfaceGroup* group = model->getSurfaceGroup();
             CHECK(group != nullptr);
             CHECK(!group->geomInsts.empty());
             CHECK(group->needsRebuild == 1);
@@ -191,17 +192,17 @@ TEST_CASE("ShockerModelHandler Basic Operations")
         
         ShockerModelPtr model = handler.processRenderableNode(node);
         CHECK(model != nullptr);
-        CHECK(model->getGeometryGroup() != nullptr);  // Model must have geometry group
+        CHECK(model->getSurfaceGroup() != nullptr);  // Model must have surface group
         
-        // Create instance
-        Instance* inst = handler.createInstance(model.get(), st);
+        // Create node
+        shocker::ShockerNode* shockerNode = handler.createShockerNode(model.get(), st);
         
-        CHECK(inst != nullptr);
-        CHECK(inst->instSlot != SlotFinder::InvalidSlotIndex);
-        CHECK(inst->geomGroupInst.geomGroup == model->getGeometryGroup());
-        CHECK(inst->matM2W.c3.x == doctest::Approx(10.0f));
-        CHECK(inst->matM2W.c3.y == doctest::Approx(5.0f));
-        CHECK(inst->matM2W.c3.z == doctest::Approx(2.0f));
+        CHECK(shockerNode != nullptr);
+        CHECK(shockerNode->instSlot != SlotFinder::InvalidSlotIndex);
+        CHECK(shockerNode->geomGroupInst.geomGroup == model->getSurfaceGroup());
+        CHECK(shockerNode->matM2W.c3.x == doctest::Approx(10.0f));
+        CHECK(shockerNode->matM2W.c3.y == doctest::Approx(5.0f));
+        CHECK(shockerNode->matM2W.c3.z == doctest::Approx(2.0f));
     }
     
     SUBCASE("Multiple Models Management")
@@ -255,7 +256,7 @@ TEST_CASE("ShockerModelHandler Real-World GLTF Models")
         int modelsLoaded = 0;
         int modelsFailed = 0;
         size_t totalSurfaces = 0;
-        size_t totalGeometryInstances = 0;
+        size_t totalShockerSurfaces = 0;
         
         for (const auto& modelFile : testModels) {
             std::filesystem::path fullPath = modelsPath / modelFile;
@@ -302,16 +303,16 @@ TEST_CASE("ShockerModelHandler Real-World GLTF Models")
                 
                 // Verify model was created correctly
                 CHECK(model->getGeometryType() == ShockerGeometryType::Triangle);
-                CHECK(model->getGeometryGroup() != nullptr);
+                CHECK(model->getSurfaceGroup() != nullptr);
                 
-                // Check geometry instances
-                const auto& geomInstances = model->getGeometryInstances();
-                CHECK(!geomInstances.empty());
-                CHECK(geomInstances.size() == cgModel->S.size()); // One per surface
+                // Check surfaces
+                const auto& surfaces = model->getSurfaces();
+                CHECK(!surfaces.empty());
+                CHECK(surfaces.size() == cgModel->S.size()); // One per surface
                 
                 // Track statistics
                 totalSurfaces += cgModel->S.size();
-                totalGeometryInstances += geomInstances.size();
+                totalShockerSurfaces += surfaces.size();
                 
                 // Verify AABB is valid
                 const AABB& aabb = model->getAABB();
@@ -322,7 +323,7 @@ TEST_CASE("ShockerModelHandler Real-World GLTF Models")
                 // Log model info
                 LOG(DBUG) << "  - Vertices: " << cgModel->vertexCount();
                 LOG(DBUG) << "  - Surfaces: " << cgModel->S.size();
-                LOG(DBUG) << "  - GeometryInstances: " << geomInstances.size();
+                LOG(DBUG) << "  - ShockerSurfaces: " << surfaces.size();
                 LOG(DBUG) << "  - AABB: (" << aabb.minP.x << ", " << aabb.minP.y << ", " << aabb.minP.z 
                          << ") to (" << aabb.maxP.x << ", " << aabb.maxP.y << ", " << aabb.maxP.z << ")";
             } else {
@@ -336,7 +337,7 @@ TEST_CASE("ShockerModelHandler Real-World GLTF Models")
         LOG(INFO) << "Models loaded: " << modelsLoaded;
         LOG(INFO) << "Models failed: " << modelsFailed;
         LOG(INFO) << "Total surfaces: " << totalSurfaces;
-        LOG(INFO) << "Total geometry instances: " << totalGeometryInstances;
+        LOG(INFO) << "Total Shocker surfaces: " << totalShockerSurfaces;
         LOG(INFO) << "Models in handler: " << handler.getAllModels().size();
         
         // Basic assertions
@@ -371,18 +372,18 @@ TEST_CASE("ShockerModelHandler Real-World GLTF Models")
                 CHECK(model != nullptr);
                 
                 // BMW bike has many surfaces
-                CHECK(model->getGeometryInstances().size() == cgModel->S.size());
-                CHECK(model->getGeometryInstances().size() > 1); // Should have multiple surfaces
+                CHECK(model->getSurfaces().size() == cgModel->S.size());
+                CHECK(model->getSurfaces().size() > 1); // Should have multiple surfaces
                 
-                // Each geometry instance should have valid data
-                for (const auto& geomInst : model->getGeometryInstances()) {
-                    CHECK(geomInst != nullptr);
-                    CHECK(geomInst->geomInstSlot != SlotFinder::InvalidSlotIndex);
-                    CHECK(std::holds_alternative<TriangleGeometry>(geomInst->geometry));
+                // Each surface should have valid data
+                for (const auto& surface : model->getSurfaces()) {
+                    CHECK(surface != nullptr);
+                    CHECK(surface->geomInstSlot != SlotFinder::InvalidSlotIndex);
+                    CHECK(std::holds_alternative<TriangleGeometry>(surface->geometry));
                     
                     // Check AABB is valid
-                    CHECK(std::isfinite(geomInst->aabb.minP.x));
-                    CHECK(std::isfinite(geomInst->aabb.maxP.x));
+                    CHECK(std::isfinite(surface->aabb.minP.x));
+                    CHECK(std::isfinite(surface->aabb.maxP.x));
                 }
             }
         } else {

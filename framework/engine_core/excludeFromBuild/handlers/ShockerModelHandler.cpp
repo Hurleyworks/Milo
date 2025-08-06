@@ -161,23 +161,10 @@ shocker::ShockerNode* ShockerModelHandler::createShockerNode(ShockerModel* model
         return nullptr;
     }
     
-    // Get surfaces from the model
-    std::vector<shocker::ShockerSurface*> modelSurfaces;
-    for (const auto& surface : model->getSurfaces()) {
-        if (surface) {
-            modelSurfaces.push_back(surface.get());
-        }
-    }
-    
-    if (modelSurfaces.empty()) {
-        LOG(WARNING) << "Failed to create surfaces for model";
-        return nullptr;
-    }
-    
-    // Create surface group from surfaces
-    shocker::ShockerSurfaceGroup* surfaceGroup = createShockerSurfaceGroup(modelSurfaces);
+    // Get the model's existing surface group
+    shocker::ShockerSurfaceGroup* surfaceGroup = model->getSurfaceGroup();
     if (!surfaceGroup) {
-        LOG(WARNING) << "Failed to create surface group";
+        LOG(WARNING) << "Model has no surface group";
         return nullptr;
     }
     
@@ -299,5 +286,11 @@ AABB ShockerModelHandler::calculateCombinedAABB(const std::vector<shocker::Shock
 
 size_t ShockerModelHandler::getShockerSurfaceCount() const
 {
-    return surfaces_.size();
+    size_t totalCount = 0;
+    for (const auto& [name, model] : models_) {
+        if (model) {
+            totalCount += model->getSurfaces().size();
+        }
+    }
+    return totalCount;
 }

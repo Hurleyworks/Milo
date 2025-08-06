@@ -7,6 +7,7 @@
 #include "engine_core/excludeFromBuild/handlers/ShockerMaterialHandler.h"
 #include "engine_core/excludeFromBuild/handlers/ShockerModelHandler.h"
 #include "engine_core/excludeFromBuild/model/ShockerModel.h"
+#include "engine_core/excludeFromBuild/model/ShockerCore.h"
 
 TEST_CASE("ShockerMaterialHandler Complex GLTF Models")
 {
@@ -50,14 +51,14 @@ TEST_CASE("ShockerMaterialHandler Complex GLTF Models")
                 // Verify materials were created for each surface
                 CHECK(matHandler.getAllMaterials().size() > cgModel->S.size()); // Should have default + surface materials
                 
-                // Check each geometry instance has a material
-                for (const auto& geomInst : model->getGeometryInstances()) {
-                    CHECK(geomInst->mat != nullptr);
+                // Check each surface has a material
+                for (const auto& surface : model->getSurfaces()) {
+                    CHECK(surface->mat != nullptr);
                 }
                 
                 // Log material statistics
                 LOG(INFO) << "Created " << matHandler.getAllMaterials().size() << " materials";
-                LOG(INFO) << "Model has " << model->getGeometryInstances().size() << " geometry instances";
+                LOG(INFO) << "Model has " << model->getSurfaces().size() << " surfaces";
                 
                 // Check material properties from GLTF
                 for (size_t i = 0; i < cgModel->S.size(); ++i) {
@@ -125,7 +126,7 @@ TEST_CASE("ShockerMaterialHandler Complex GLTF Models")
                 CHECK(model != nullptr);
                 
                 // FlightHelmet typically has many surfaces with different materials
-                CHECK(model->getGeometryInstances().size() == cgModel->S.size());
+                CHECK(model->getSurfaces().size() == cgModel->S.size());
                 
                 // Verify each surface got a unique material
                 size_t uniqueMaterials = matHandler.getAllMaterials().size() - 1; // Subtract default
@@ -193,7 +194,7 @@ TEST_CASE("ShockerMaterialHandler Complex GLTF Models")
                 auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
                 
                 CHECK(model != nullptr);
-                CHECK(model->getGeometryInstances().size() == cgModel->S.size());
+                CHECK(model->getSurfaces().size() == cgModel->S.size());
                 
                 LOG(INFO) << "Processing time: " << duration.count() << "ms";
                 LOG(INFO) << "Materials created: " << matHandler.getAllMaterials().size();
@@ -206,15 +207,15 @@ TEST_CASE("ShockerMaterialHandler Complex GLTF Models")
                 
                 LOG(INFO) << "Unique material names: " << materialTypes.size();
                 
-                // Check all geometry instances have materials
+                // Check all surfaces have materials
                 int nullMaterialCount = 0;
-                for (const auto& geomInst : model->getGeometryInstances()) {
-                    if (geomInst->mat == nullptr) {
+                for (const auto& surface : model->getSurfaces()) {
+                    if (surface->mat == nullptr) {
                         nullMaterialCount++;
                     }
                 }
                 CHECK(nullMaterialCount == 0);
-                LOG(INFO) << "All " << model->getGeometryInstances().size() << " geometry instances have materials assigned";
+                LOG(INFO) << "All " << model->getSurfaces().size() << " surfaces have materials assigned";
             }
         } else {
             LOG(INFO) << "BMW bike model not found, skipping test";

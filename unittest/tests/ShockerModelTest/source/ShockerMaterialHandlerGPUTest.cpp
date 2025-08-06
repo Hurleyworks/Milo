@@ -126,9 +126,9 @@ TEST_CASE("ShockerMaterialHandler GPU Tests")
         // Materials should be created
         CHECK(matHandler.getAllMaterials().size() > 1); // Default + surface material
         
-        // Verify materials were assigned to geometry instances
-        for (const auto& geomInst : model->getGeometryInstances()) {
-            CHECK(geomInst->mat != nullptr);
+        // Verify materials were assigned to surfaces
+        for (const auto& surface : model->getSurfaces()) {
+            CHECK(surface->mat != nullptr);
         }
         
         LOG(INFO) << "Successfully processed simple model with GPU context";

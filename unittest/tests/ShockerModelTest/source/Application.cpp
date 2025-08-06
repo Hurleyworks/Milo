@@ -20,6 +20,7 @@ using nlohmann::json;
 
 // Include ShockerModel
 #include "engine_core/excludeFromBuild/model/ShockerModel.h"
+#include "engine_core/excludeFromBuild/model/ShockerCore.h"
 
 // Include common_host for geometry structures  
 #include "engine_core/excludeFromBuild/common/common_host.h"
@@ -117,13 +118,13 @@ TEST_CASE("ShockerTriangleModel")
         CHECK(model->getGeometryType() == ShockerGeometryType::Triangle);
         
         // Model should have created geometry instances for each surface
-        const auto& geomInstances = model->getGeometryInstances();
-        CHECK(geomInstances.size() == cube->S.size());  // One geometry instance per surface
+        const auto& surfaces = model->getSurfaces();
+        CHECK(surfaces.size() == cube->S.size());  // One geometry instance per surface
         
         // Model should have a geometry group
-        GeometryGroup* geomGroup = model->getGeometryGroup();
-        CHECK(geomGroup != nullptr);
-        CHECK(geomGroup->geomInsts.size() == geomInstances.size());
+        shocker::ShockerSurfaceGroup* surfaceGroup = model->getSurfaceGroup();
+        CHECK(surfaceGroup != nullptr);
+        CHECK(surfaceGroup->geomInsts.size() == surfaces.size());
         
         // Verify AABB calculation
         const AABB& aabb = model->getAABB();
@@ -145,16 +146,16 @@ TEST_CASE("ShockerTriangleModel")
         model->createFromRenderableNode(node, slotFinder);
         
         // Check geometry instances were created
-        const auto& geomInstances = model->getGeometryInstances();
-        CHECK(geomInstances.size() > 0);
+        const auto& surfaces = model->getSurfaces();
+        CHECK(surfaces.size() > 0);
         
         // Verify first geometry instance has valid slot
-        const auto& firstInst = geomInstances[0];
-        CHECK(firstInst != nullptr);
-        CHECK(firstInst->geomInstSlot != SlotFinder::InvalidSlotIndex);
+        const auto& firstSurface = surfaces[0];
+        CHECK(firstSurface != nullptr);
+        CHECK(firstSurface->geomInstSlot != SlotFinder::InvalidSlotIndex);
         
         // Check that geometry variant is set (should be TriangleGeometry)
-        CHECK(std::holds_alternative<TriangleGeometry>(firstInst->geometry));
+        CHECK(std::holds_alternative<TriangleGeometry>(firstSurface->geometry));
     }
     
     SUBCASE("Multiple Surface Support")
@@ -171,12 +172,12 @@ TEST_CASE("ShockerTriangleModel")
         model->createFromRenderableNode(node, slotFinder);
         
         // Check one geometry instance per surface
-        const auto& geomInstances = model->getGeometryInstances();
-        CHECK(geomInstances.size() == cube->S.size());
+        const auto& surfaces = model->getSurfaces();
+        CHECK(surfaces.size() == cube->S.size());
         
-        // Each geometry instance will have one DisneyMaterial (to be set by MaterialHandler)
-        for (const auto& geomInst : geomInstances) {
-            CHECK(geomInst->mat == nullptr);  // Not set yet, will be set by MaterialHandler
+        // Each surface will have one DisneyMaterial (to be set by MaterialHandler)
+        for (const auto& surface : surfaces) {
+            CHECK(surface->mat == nullptr);  // Not set yet, will be set by MaterialHandler
         }
     }
     
@@ -193,20 +194,20 @@ TEST_CASE("ShockerTriangleModel")
         model->createFromRenderableNode(node, slotFinder);
         
         // Get the geometry group
-        GeometryGroup* geomGroup = model->getGeometryGroup();
-        CHECK(geomGroup != nullptr);
+        shocker::ShockerSurfaceGroup* surfaceGroup = model->getSurfaceGroup();
+        CHECK(surfaceGroup != nullptr);
         
         // Verify geometry group contains all geometry instances
-        const auto& geomInstances = model->getGeometryInstances();
-        CHECK(geomGroup->geomInsts.size() == geomInstances.size());
+        const auto& surfaces = model->getSurfaces();
+        CHECK(surfaceGroup->geomInsts.size() == surfaces.size());
         
         // Check AABB was calculated for the group
-        CHECK(geomGroup->aabb.minP.x == model->getAABB().minP.x);
-        CHECK(geomGroup->aabb.maxP.x == model->getAABB().maxP.x);
+        CHECK(surfaceGroup->aabb.minP.x == model->getAABB().minP.x);
+        CHECK(surfaceGroup->aabb.maxP.x == model->getAABB().maxP.x);
         
         // Check flags are set correctly
-        CHECK(geomGroup->needsRebuild == 1);  // Needs initial build
-        CHECK(geomGroup->refittable == 0);     // Static geometry
+        CHECK(surfaceGroup->needsRebuild == 1);  // Needs initial build
+        CHECK(surfaceGroup->refittable == 0);     // Static geometry
     }
 }
 
@@ -234,27 +235,27 @@ TEST_CASE("ShockerModel Instance Creation")
         model->createFromRenderableNode(node, slotFinder);
         
         // Model should have geometry group
-        GeometryGroup* geomGroup = model->getGeometryGroup();
-        CHECK(geomGroup != nullptr);
+        shocker::ShockerSurfaceGroup* surfaceGroup = model->getSurfaceGroup();
+        CHECK(surfaceGroup != nullptr);
         
-        // Create an Instance separately (as done by ShockerModelHandler)
-        Instance inst;
-        inst.instSlot = 10;
+        // Create a ShockerNode separately (as done by ShockerModelHandler)
+        shocker::ShockerNode shockerNode;
+        shockerNode.instSlot = 10;
         
-        // Create geometry group instance
-        Mesh::GeometryGroupInstance groupInst;
-        groupInst.geomGroup = geomGroup;
+        // Create surface group instance
+        shocker::ShockerMesh::ShockerSurfaceGroupInstance groupInst;
+        groupInst.geomGroup = surfaceGroup;
         groupInst.transform = ShockerModel::convertSpaceTimeToMatrix(st);
         
-        inst.geomGroupInst = groupInst;
-        inst.matM2W = groupInst.transform;
-        inst.nMatM2W = ShockerModel::calculateNormalMatrix(inst.matM2W);
-        inst.prevMatM2W = inst.matM2W;
+        shockerNode.geomGroupInst = groupInst;
+        shockerNode.matM2W = groupInst.transform;
+        shockerNode.nMatM2W = ShockerModel::calculateNormalMatrix(shockerNode.matM2W);
+        shockerNode.prevMatM2W = shockerNode.matM2W;
         
         // Check that transform was applied
-        CHECK(inst.matM2W.c3.x == doctest::Approx(1.0f));
-        CHECK(inst.matM2W.c3.y == doctest::Approx(2.0f));
-        CHECK(inst.matM2W.c3.z == doctest::Approx(3.0f));
+        CHECK(shockerNode.matM2W.c3.x == doctest::Approx(1.0f));
+        CHECK(shockerNode.matM2W.c3.y == doctest::Approx(2.0f));
+        CHECK(shockerNode.matM2W.c3.z == doctest::Approx(3.0f));
     }
     
     SUBCASE("Transform Utilities")
@@ -377,14 +378,14 @@ TEST_CASE("ShockerPhantomModel")
         CHECK(aabb.maxP.x == 0.0f);
         
         // Phantom should have geometry group with single empty instance
-        GeometryGroup* geomGroup = model->getGeometryGroup();
-        CHECK(geomGroup != nullptr);
-        CHECK(geomGroup->geomInsts.size() == 1);  // Has one empty instance for the instance system
+        shocker::ShockerSurfaceGroup* surfaceGroup = model->getSurfaceGroup();
+        CHECK(surfaceGroup != nullptr);
+        CHECK(surfaceGroup->geomInsts.size() == 1);  // Has one empty instance for the instance system
         
         // The geometry instance should exist but be empty
-        const auto& geomInstances = model->getGeometryInstances();
-        CHECK(geomInstances.size() == 1);
-        CHECK(geomInstances[0]->mat == nullptr);  // No material for phantom
+        const auto& surfaces = model->getSurfaces();
+        CHECK(surfaces.size() == 1);
+        CHECK(surfaces[0]->mat == nullptr);  // No material for phantom
     }
 }
 

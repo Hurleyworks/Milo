@@ -8,6 +8,7 @@
 #include "engine_core/excludeFromBuild/handlers/ShockerMaterialHandler.h"
 #include "engine_core/excludeFromBuild/handlers/ShockerModelHandler.h"
 #include "engine_core/excludeFromBuild/model/ShockerModel.h"
+#include "engine_core/excludeFromBuild/model/ShockerCore.h"
 
 TEST_CASE("ShockerMaterialHandler Basic Operations")
 {
@@ -88,12 +89,11 @@ TEST_CASE("ShockerMaterialHandler Basic Operations")
         // Process materials for model with null CgModel
         handler.processMaterialsForModel(model.get(), nullptr);
         
-        // Should assign default material to all geometry instances
-        for (const auto& geomInst : model->getGeometryInstances()) {
-            CHECK(geomInst->mat != nullptr);
+        // Should assign default material to all surfaces
+        for (const auto& surface : model->getSurfaces()) {
+            CHECK(surface->mat != nullptr);
             // Should be the default material
-            // Material pointer comparison - cast away const
-            CHECK(const_cast<Material*>(geomInst->mat) == reinterpret_cast<Material*>(handler.getMaterial(0)));
+            CHECK(surface->mat == handler.getMaterial(0));
         }
     }
     
@@ -126,37 +126,37 @@ TEST_CASE("ShockerMaterialHandler Basic Operations")
         // Process materials for the model
         handler.processMaterialsForModel(model.get(), cube);
         
-        // Each geometry instance should have a material assigned
-        const auto& geomInstances = model->getGeometryInstances();
-        CHECK(geomInstances.size() == cube->S.size());
+        // Each surface should have a material assigned
+        const auto& surfaces = model->getSurfaces();
+        CHECK(surfaces.size() == cube->S.size());
         
-        for (const auto& geomInst : geomInstances) {
-            CHECK(geomInst->mat != nullptr);
+        for (const auto& surface : surfaces) {
+            CHECK(surface->mat != nullptr);
         }
         
         // Should have created materials for each surface plus default
         CHECK(handler.getAllMaterials().size() > 1);
     }
     
-    SUBCASE("Material Assignment to GeometryInstance")
+    SUBCASE("Material Assignment to ShockerSurface")
     {
         ShockerMaterialHandler handler;
         handler.initialize(nullptr);
         
-        // Create a geometry instance
-        GeometryInstance geomInst;
-        geomInst.geomInstSlot = 0;
+        // Create a ShockerSurface
+        shocker::ShockerSurface surface;
+        surface.geomInstSlot = 0;
         
         // Get default material
         DisneyMaterial* material = handler.getMaterial(0);
         CHECK(material != nullptr);
         
         // Assign material
-        handler.assignMaterialToGeometryInstance(&geomInst, material);
+        handler.assignMaterialToSurface(&surface, material);
         
-        // Check assignment
-        CHECK(geomInst.mat != nullptr);
-        CHECK(const_cast<Material*>(geomInst.mat) == reinterpret_cast<Material*>(material));
+        // Check assignment - direct comparison, no casting needed!
+        CHECK(surface.mat != nullptr);
+        CHECK(surface.mat == material);
     }
     
     SUBCASE("Multiple Materials Management")
@@ -252,8 +252,8 @@ TEST_CASE("ShockerMaterialHandler with Complex Models")
         CHECK(model != nullptr);
         
         // Verify materials were assigned
-        for (const auto& geomInst : model->getGeometryInstances()) {
-            CHECK(geomInst->mat != nullptr);
+        for (const auto& surface : model->getSurfaces()) {
+            CHECK(surface->mat != nullptr);
         }
         
         // Should have created materials
@@ -287,8 +287,8 @@ TEST_CASE("ShockerMaterialHandler with Complex Models")
         matHandler.processMaterialsForModel(model.get(), cube);
         
         // Should still assign materials (even if they're default/empty)
-        for (const auto& geomInst : model->getGeometryInstances()) {
-            CHECK(geomInst->mat != nullptr);
+        for (const auto& surface : model->getSurfaces()) {
+            CHECK(surface->mat != nullptr);
         }
     }
 }

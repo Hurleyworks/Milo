@@ -170,7 +170,8 @@ void ShockerSceneHandler::buildAccelerationStructures()
     LOG(INFO) << "Building acceleration structures for " << nodes_.size() << " nodes";
     
     // Build surface acceleration structures for all models
-    for (const auto& surfaceGroup : modelHandler_->getShockerSurfaceGroups()) {
+    for (const auto& [name, model] : modelHandler_->getAllModels()) {
+        shocker::ShockerSurfaceGroup* surfaceGroup = model->getSurfaceGroup();
         if (surfaceGroup && surfaceGroup->needsRebuild) {
             // TODO: Build GAS when we have OptiX integration
             surfaceGroup->needsRebuild = 0;
@@ -193,10 +194,11 @@ void ShockerSceneHandler::updateAccelerationStructures()
     // Updating acceleration structures
     
     // Update any refittable surface acceleration structures
-    for (const auto& surfaceGroup : modelHandler_->getShockerSurfaceGroups()) {
+    for (const auto& [name, model] : modelHandler_->getAllModels()) {
+        shocker::ShockerSurfaceGroup* surfaceGroup = model->getSurfaceGroup();
         if (surfaceGroup && surfaceGroup->refittable) {
             // TODO: Refit GAS when we have OptiX integration
-            // GAS refitted for model
+            // GAS refitted for surface group
         }
     }
     
