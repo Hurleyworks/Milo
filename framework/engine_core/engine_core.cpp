@@ -34,6 +34,8 @@
 
 // shocker
 #include "excludeFromBuild/handlers/ShockerModelHandler.cpp"
+#include "excludeFromBuild/handlers/ShockerMaterialHandler.cpp"
+#include "excludeFromBuild/handlers/ShockerSceneHandler.cpp"
 
 // engines
 #include "excludeFromBuild/engines/BaseRenderingEngine.cpp"

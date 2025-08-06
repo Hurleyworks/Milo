@@ -399,3 +399,9 @@ Jahley::App* Jahley::CreateApplication()
 {
     return new Application();
 }
+
+// Include additional test files
+#include "ShockerModelHandlerTest.cpp"
+#include "ShockerMaterialHandlerTest.cpp"
+#include "ShockerMaterialHandlerComplexTest.cpp"
+#include "ShockerMaterialHandlerGPUTest.cpp"

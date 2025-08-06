@@ -1,4 +1,5 @@
 #include "ShockerModelHandler.h"
+#include "ShockerMaterialHandler.h"
 #include "../RenderContext.h"
 
 void ShockerModelHandler::initialize(RenderContextPtr context)
@@ -37,6 +38,22 @@ ShockerModelPtr ShockerModelHandler::processRenderableNode(const sabi::Renderabl
     // Create geometry from the renderable node
     // The model will internally allocate slots for each geometry instance
     model->createFromRenderableNode(node, geomInstSlotFinder_);
+    
+    // Process materials if we have a material handler
+    if (materialHandler_) {
+        // Get material folder from node description if available
+        std::filesystem::path materialFolder;
+        const auto& desc = node->description();
+        if (!desc.modelPath.empty()) {
+            materialFolder = desc.modelPath.parent_path();
+        }
+        
+        // Process materials for the model
+        materialHandler_->processMaterialsForModel(
+            model.get(), 
+            cgModel, 
+            materialFolder);
+    }
     
     // Store the model
     models_[node->getName()] = model;

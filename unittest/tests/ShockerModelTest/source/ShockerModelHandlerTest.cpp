@@ -9,7 +9,7 @@
 #include "engine_core/excludeFromBuild/handlers/ShockerModelHandler.h"
 #include "engine_core/excludeFromBuild/model/ShockerModel.h"
 
-  void loadGLTF (const std::filesystem::path& gltfPath)
+static void loadGLTF (const std::filesystem::path& gltfPath)
 {
   
 
