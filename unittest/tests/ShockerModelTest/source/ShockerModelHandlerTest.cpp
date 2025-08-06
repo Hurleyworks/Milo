@@ -2,8 +2,43 @@
 // Unit tests for ShockerModelHandler
 
 #include <doctest/doctest.h>
+#include <sabi_core/sabi_core.h>
+#include <filesystem>
+#include <chrono>
+
 #include "engine_core/excludeFromBuild/handlers/ShockerModelHandler.h"
 #include "engine_core/excludeFromBuild/model/ShockerModel.h"
+
+  void loadGLTF (const std::filesystem::path& gltfPath)
+{
+  
+
+    GLTFImporter gltf;
+  //  std::vector<Animation> animations;
+    auto [cgModel, animations] = gltf.importModel (gltfPath.generic_string());
+    if (!cgModel)
+    {
+        LOG (WARNING) << "Load failed " << gltfPath.string();
+        return;
+    }
+
+    RenderableNode node = sabi::WorldItem::create();
+    node->setClientID (node->getID());
+    node->setModel (cgModel);
+    node->getState().state |= sabi::PRenderableState::Visible;
+
+    // Set the model path in the description so texture loading can find the content folder
+    sabi::RenderableDesc desc = node->description();
+    desc.modelPath = gltfPath;
+    node->setDescription (desc);
+
+    std::string modelName = getFileNameWithoutExtension (gltfPath);
+
+    for (auto& s : cgModel->S)
+    {
+        s.vertexCount = cgModel->vertexCount();
+    }
+}
 
 TEST_CASE("ShockerModelHandler Basic Operations")
 {
@@ -194,5 +229,206 @@ TEST_CASE("ShockerModelHandler Basic Operations")
         handler.clear();
         CHECK(handler.getAllModels().empty());
         CHECK(!handler.hasModel("Model_0"));
+    }
+}
+
+TEST_CASE("ShockerModelHandler Real-World GLTF Models")
+{
+    SUBCASE("Load and Process GLTF Models")
+    {
+        ShockerModelHandler handler;
+        handler.initialize(nullptr);
+        
+        // Path to test models
+        std::filesystem::path modelsPath = "E:/common_content/models";
+        
+        // List of GLTF models to test - these actually exist in the directory
+        std::vector<std::string> testModels = {
+            "DamagedHelmet/glTF/DamagedHelmet.gltf",
+            "FlightHelmet/glTF/FlightHelmet.gltf",
+            "BarramundiFish/glTF/BarramundiFish.gltf",
+            "BoomBox/glTF/BoomBox.gltf",
+            "SciFiHelmet/glTF/SciFiHelmet.gltf"
+        };
+        
+        // Track statistics
+        int modelsLoaded = 0;
+        int modelsFailed = 0;
+        size_t totalSurfaces = 0;
+        size_t totalGeometryInstances = 0;
+        
+        for (const auto& modelFile : testModels) {
+            std::filesystem::path fullPath = modelsPath / modelFile;
+            
+            // Skip if file doesn't exist
+            if (!std::filesystem::exists(fullPath)) {
+                LOG(DBUG) << "Skipping non-existent model: " << fullPath.string();
+                continue;
+            }
+            
+            LOG(DBUG) << "Testing GLTF model: " << modelFile;
+            
+            // Load GLTF
+            GLTFImporter gltf;
+            auto [cgModel, animations] = gltf.importModel(fullPath.generic_string());
+            
+            if (!cgModel) {
+                LOG(WARNING) << "Failed to load GLTF: " << fullPath.string();
+                modelsFailed++;
+                continue;
+            }
+            
+            // Create RenderableNode
+            sabi::RenderableNode node = sabi::WorldItem::create();
+            node->setName(modelFile);
+            node->setModel(cgModel);
+            node->getState().state |= sabi::PRenderableState::Visible;
+            
+            // Set model path for texture loading
+            sabi::RenderableDesc desc = node->description();
+            desc.modelPath = fullPath;
+            node->setDescription(desc);
+            
+            // Update surface vertex counts
+            for (auto& s : cgModel->S) {
+                s.vertexCount = cgModel->vertexCount();
+            }
+            
+            // Process through ShockerModelHandler
+            ShockerModelPtr model = handler.processRenderableNode(node);
+            
+            if (model) {
+                modelsLoaded++;
+                
+                // Verify model was created correctly
+                CHECK(model->getGeometryType() == ShockerGeometryType::Triangle);
+                CHECK(model->getGeometryGroup() != nullptr);
+                
+                // Check geometry instances
+                const auto& geomInstances = model->getGeometryInstances();
+                CHECK(!geomInstances.empty());
+                CHECK(geomInstances.size() == cgModel->S.size()); // One per surface
+                
+                // Track statistics
+                totalSurfaces += cgModel->S.size();
+                totalGeometryInstances += geomInstances.size();
+                
+                // Verify AABB is valid
+                const AABB& aabb = model->getAABB();
+                CHECK(std::isfinite(aabb.minP.x));
+                CHECK(std::isfinite(aabb.maxP.x));
+                CHECK(aabb.minP.x <= aabb.maxP.x);
+                
+                // Log model info
+                LOG(DBUG) << "  - Vertices: " << cgModel->vertexCount();
+                LOG(DBUG) << "  - Surfaces: " << cgModel->S.size();
+                LOG(DBUG) << "  - GeometryInstances: " << geomInstances.size();
+                LOG(DBUG) << "  - AABB: (" << aabb.minP.x << ", " << aabb.minP.y << ", " << aabb.minP.z 
+                         << ") to (" << aabb.maxP.x << ", " << aabb.maxP.y << ", " << aabb.maxP.z << ")";
+            } else {
+                modelsFailed++;
+                LOG(WARNING) << "Failed to process model: " << modelFile;
+            }
+        }
+        
+        // Summary
+        LOG(INFO) << "===== GLTF Test Summary =====";
+        LOG(INFO) << "Models loaded: " << modelsLoaded;
+        LOG(INFO) << "Models failed: " << modelsFailed;
+        LOG(INFO) << "Total surfaces: " << totalSurfaces;
+        LOG(INFO) << "Total geometry instances: " << totalGeometryInstances;
+        LOG(INFO) << "Models in handler: " << handler.getAllModels().size();
+        
+        // Basic assertions
+        CHECK(modelsLoaded > 0); // At least one model should load
+        CHECK(handler.getAllModels().size() == modelsLoaded);
+    }
+    
+    SUBCASE("Test Complex Model with Multiple Surfaces")
+    {
+        ShockerModelHandler handler;
+        handler.initialize(nullptr);
+        
+        // Try to load a complex model like bmw_bike which has many surfaces
+        std::filesystem::path complexPath = "E:/common_content/models/bmw_bike/scene.gltf";
+        
+        if (std::filesystem::exists(complexPath)) {
+            GLTFImporter gltf;
+            auto [cgModel, animations] = gltf.importModel(complexPath.generic_string());
+            
+            if (cgModel) {
+                LOG(INFO) << "Testing BMW bike model with " << cgModel->S.size() << " surfaces";
+                
+                sabi::RenderableNode node = sabi::WorldItem::create();
+                node->setName("BMW_Bike");
+                node->setModel(cgModel);
+                
+                for (auto& s : cgModel->S) {
+                    s.vertexCount = cgModel->vertexCount();
+                }
+                
+                ShockerModelPtr model = handler.processRenderableNode(node);
+                CHECK(model != nullptr);
+                
+                // BMW bike has many surfaces
+                CHECK(model->getGeometryInstances().size() == cgModel->S.size());
+                CHECK(model->getGeometryInstances().size() > 1); // Should have multiple surfaces
+                
+                // Each geometry instance should have valid data
+                for (const auto& geomInst : model->getGeometryInstances()) {
+                    CHECK(geomInst != nullptr);
+                    CHECK(geomInst->geomInstSlot != SlotFinder::InvalidSlotIndex);
+                    CHECK(std::holds_alternative<TriangleGeometry>(geomInst->geometry));
+                    
+                    // Check AABB is valid
+                    CHECK(std::isfinite(geomInst->aabb.minP.x));
+                    CHECK(std::isfinite(geomInst->aabb.maxP.x));
+                }
+            }
+        } else {
+            LOG(INFO) << "BMW bike model not found, skipping complex model test";
+        }
+    }
+    
+    SUBCASE("Memory and Performance Test")
+    {
+        ShockerModelHandler handler;
+        handler.initialize(nullptr);
+        
+        // Load multiple instances of the same model
+        std::filesystem::path modelPath = "E:/common_content/models/DamagedHelmet/glTF/DamagedHelmet.gltf";
+        
+        if (std::filesystem::exists(modelPath)) {
+            GLTFImporter gltf;
+            auto [cgModel, animations] = gltf.importModel(modelPath.generic_string());
+            
+            if (cgModel) {
+                const int numInstances = 10;
+                auto startTime = std::chrono::high_resolution_clock::now();
+                
+                for (int i = 0; i < numInstances; ++i) {
+                    sabi::RenderableNode node = sabi::WorldItem::create();
+                    node->setName("DamagedHelmet_" + std::to_string(i));
+                    node->setModel(cgModel);
+                    
+                    for (auto& s : cgModel->S) {
+                        s.vertexCount = cgModel->vertexCount();
+                    }
+                    
+                    ShockerModelPtr model = handler.processRenderableNode(node);
+                    CHECK(model != nullptr);
+                }
+                
+                auto endTime = std::chrono::high_resolution_clock::now();
+                auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+                
+                LOG(INFO) << "Created " << numInstances << " model instances in " << duration.count() << "ms";
+                CHECK(handler.getAllModels().size() == numInstances);
+                
+                // Clear and check cleanup
+                handler.clear();
+                CHECK(handler.getAllModels().empty());
+            }
+        }
     }
 }
