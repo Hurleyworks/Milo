@@ -103,7 +103,19 @@ void AreaLightHandler::onMaterialAssigned(shocker::ShockerSurface* surface,
     if (wasEmissive != isEmissive)
     {
         // Emissive status changed
-        areaLightState_.dirtySurfaces.insert(surface);
+        if (isEmissive)
+        {
+            // Surface became emissive - track it immediately
+            areaLightState_.emissiveSurfaces.insert(surface);
+            areaLightState_.dirtySurfaces.insert(surface);
+        }
+        else
+        {
+            // Surface no longer emissive
+            areaLightState_.emissiveSurfaces.erase(surface);
+            areaLightState_.dirtySurfaces.erase(surface);
+            cleanupAreaLight(surface);
+        }
         
         // Find parent node and mark it dirty too
         if (auto* node = findNodeForSurface(surface))
@@ -131,6 +143,8 @@ void AreaLightHandler::onSurfaceAdded(shocker::ShockerSurface* surface)
         return;
     }
 
+    // Track as emissive surface immediately
+    areaLightState_.emissiveSurfaces.insert(surface);
     areaLightState_.dirtySurfaces.insert(surface);
     areaLightState_.sceneDistDirty = true;
     
@@ -311,6 +325,8 @@ uint32_t AreaLightHandler::getNumAreaLights() const
 
 uint32_t AreaLightHandler::getNumEmissiveTriangles() const
 {
+    // This is calculated during updateAreaLightDistributions
+    // For testing, we'll need to accept this is 0 until update is called
     return areaLightState_.totalEmissiveTriangles;
 }
 
@@ -549,12 +565,18 @@ void AreaLightHandler::launchComputeInstanceImportanceKernel(CUstream stream)
 {
     // TODO: Implement GPU kernel dispatch
     // For now, use CPU fallback
-    std::vector<float> importances(maxInstances_, 0.0f);
+    uint32_t numActiveInstances = static_cast<uint32_t>(areaLightState_.nodesWithAreaLights.size());
+    if (numActiveInstances == 0)
+    {
+        return;
+    }
+    
+    std::vector<float> importances(numActiveInstances, 0.0f);
     
     uint32_t idx = 0;
     for (auto* node : areaLightState_.nodesWithAreaLights)
     {
-        if (idx >= maxInstances_)
+        if (idx >= numActiveInstances)
         {
             break;
         }
@@ -566,7 +588,8 @@ void AreaLightHandler::launchComputeInstanceImportanceKernel(CUstream stream)
         idx++;
     }
     
-    sceneAreaLightDist_.setWeights(importances.data(), maxInstances_, stream);
+    // Only pass the actual number of active instances, not the maximum capacity
+    sceneAreaLightDist_.setWeights(importances.data(), numActiveInstances, stream);
 }
 
 void AreaLightHandler::launchBuildProbabilityTextureKernel(engine::LightDistribution& dist, CUstream stream)

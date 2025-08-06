@@ -27,4 +27,5 @@ end
 	include "tests/HelloTest"
 	include "tests/GeometryTest"
 	include "tests/ShockerModelTest"
+	include "tests/AreaLightHandlerTest"
 	

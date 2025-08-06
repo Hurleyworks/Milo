@@ -14,7 +14,8 @@
       "Bash(claude --version)",
       "Bash(\"C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe\" builds/VisualStudio2022/UnitTests.sln /p:Configuration=Debug /p:Platform=x64 /t:ShockerModelTest)",
       "WebFetch(domain:docs.anthropic.com)",
-      "Bash(b.bat)"
+      "Bash(b.bat)",
+      "Bash(mv:*)"
     ],
     "deny": []
   }
