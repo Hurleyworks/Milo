@@ -2,6 +2,7 @@
 // Implementation of material handling for ShockerModels
 
 #include "ShockerMaterialHandler.h"
+#include "AreaLightHandler.h"
 #include "../model/ShockerModel.h"
 #include "TextureHandler.h"
 #include "Handlers.h"
@@ -218,8 +219,13 @@ void ShockerMaterialHandler::assignMaterialToSurface(
         return;
     }
     
+    // Store old material for notification (const cast is safe here as we only read from it)
+    DisneyMaterial* oldMaterial = const_cast<DisneyMaterial*>(surface->mat);
+    
     // Direct assignment - no casting needed!
     surface->mat = material;
+    
+    // Note: AreaLightHandler notifications are handled at scene level
 }
 
 

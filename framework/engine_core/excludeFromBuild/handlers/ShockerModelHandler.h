@@ -15,8 +15,10 @@
 // Forward declarations
 class ShockerMaterialHandler;
 class ShockerTextureHandler;
+class AreaLightHandler;
 class RenderContext;
 using RenderContextPtr = std::shared_ptr<RenderContext>;
+using AreaLightHandlerPtr = std::shared_ptr<AreaLightHandler>;
 
 class ShockerModelHandler
 {
@@ -65,6 +67,9 @@ public:
     
     // Set texture handler (for future integration)
     void setTextureHandler(ShockerTextureHandler* handler) { textureHandler_ = handler; }
+    
+    // Set area light handler
+    void setAreaLightHandler(AreaLightHandlerPtr handler) { areaLightHandler_ = handler; }
     
 private:
     // Helper to determine geometry type from CgModel
@@ -127,6 +132,7 @@ private:
     RenderContextPtr renderContext_;
     ShockerMaterialHandler* materialHandler_ = nullptr;
     ShockerTextureHandler* textureHandler_ = nullptr;
+    AreaLightHandlerPtr areaLightHandler_ = nullptr;
     
     // Statistics
     size_t totalTriangles_ = 0;

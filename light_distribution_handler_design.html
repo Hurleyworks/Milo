@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LightDistributionHandler - Separated Architecture Design</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+        }
+        
+        h2 {
+            color: #34495e;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: linear-gradient(to right, #ecf0f1, transparent);
+            border-left: 4px solid #3498db;
+        }
+        
+        h3 {
+            color: #555;
+            margin-top: 25px;
+            margin-bottom: 15px;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .architecture-rationale {
+            background: #e8f5e9;
+            border: 2px solid #4caf50;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .architecture-rationale h3 {
+            color: #2e7d32;
+            margin-top: 0;
+        }
+        
+        .handler-box {
+            background: #f0f4f8;
+            border: 2px solid #2196f3;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .handler-box h3 {
+            color: #1976d2;
+            margin-top: 0;
+        }
+        
+        .responsibility-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        .responsibility-table th {
+            background: #3498db;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+        
+        .responsibility-table td {
+            border: 1px solid #ddd;
+            padding: 12px;
+        }
+        
+        .responsibility-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9em;
+            color: #d14;
+        }
+        
+        pre {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 14px;
+            line-height: 1.5;
+            box-shadow: inset 0 2px 10px rgba(0,0,0,0.3);
+        }
+        
+        pre code {
+            background: none;
+            color: inherit;
+            padding: 0;
+            font-size: inherit;
+        }
+        
+        .comment { color: #95a5a6; font-style: italic; }
+        .keyword { color: #3498db; font-weight: bold; }
+        .type { color: #e74c3c; }
+        .function { color: #f39c12; }
+        .string { color: #27ae60; }
+        .number { color: #9b59b6; }
+        
+        .collaboration-diagram {
+            background: white;
+            border: 2px solid #9c27b0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .collaboration-diagram h4 {
+            color: #7b1fa2;
+            margin-top: 0;
+        }
+        
+        .class-box {
+            display: inline-block;
+            background: #f3e5f5;
+            border: 2px solid #9c27b0;
+            border-radius: 5px;
+            padding: 10px 20px;
+            margin: 10px;
+            vertical-align: top;
+        }
+        
+        .arrow {
+            font-size: 20px;
+            color: #9c27b0;
+            margin: 0 10px;
+        }
+        
+        .benefits-list {
+            background: #fff3e0;
+            border: 2px solid #ff9800;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .benefits-list h3 {
+            color: #e65100;
+            margin-top: 0;
+        }
+        
+        .implementation-box {
+            background: #e8f4f8;
+            border: 2px solid #3498db;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 30px 0;
+        }
+        
+        .implementation-box h3 {
+            margin-top: 0;
+            color: #2980b9;
+        }
+        
+        ul {
+            margin: 15px 0;
+            padding-left: 30px;
+        }
+        
+        li {
+            margin: 8px 0;
+        }
+        
+        .interface-section {
+            background: #fce4ec;
+            border: 2px solid #e91e63;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .interface-section h3 {
+            color: #c2185b;
+            margin-top: 0;
+        }
+        
+        .flow-diagram {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .flow-step {
+            display: inline-block;
+            background: #ecf0f1;
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 5px;
+            border: 1px solid #bdc3c7;
+        }
+        
+        .important {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        
+        .important strong {
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔆 LightDistributionHandler - Separated Architecture Design</h1>
+        
+        <div class="architecture-rationale">
+            <h3>✅ Why Separate Light Distribution Management?</h3>
+            <ul>
+                <li><strong>Single Responsibility:</strong> Each handler has one clear purpose</li>
+                <li><strong>Testability:</strong> Light distribution logic can be tested independently</li>
+                <li><strong>Maintainability:</strong> Easier to understand and modify</li>
+                <li><strong>Reusability:</strong> Could be used with different scene managers</li>
+                <li><strong>Performance:</strong> Can optimize light sampling independently</li>
+            </ul>
+        </div>
+
+        <h2>📊 Responsibility Separation</h2>
+
+        <table class="responsibility-table">
+            <tr>
+                <th>Handler</th>
+                <th>Primary Responsibilities</th>
+                <th>What It Manages</th>
+            </tr>
+            <tr>
+                <td><strong>ShockerSceneHandler</strong></td>
+                <td>
+                    • Scene graph management<br>
+                    • Instance creation/deletion<br>
+                    • Acceleration structure updates<br>
+                    • Transform hierarchies
+                </td>
+                <td>
+                    • ShockerNodes<br>
+                    • Scene traversal<br>
+                    • OptiX IAS
+                </td>
+            </tr>
+            <tr>
+                <td><strong>ShockerModelHandler</strong></td>
+                <td>
+                    • Geometry creation<br>
+                    • Surface management<br>
+                    • Model loading<br>
+                    • Geometry groups
+                </td>
+                <td>
+                    • ShockerSurfaces<br>
+                    • ShockerSurfaceGroups<br>
+                    • Geometry data
+                </td>
+            </tr>
+            <tr>
+                <td><strong>ShockerMaterialHandler</strong></td>
+                <td>
+                    • Material creation<br>
+                    • Material assignment<br>
+                    • Texture management<br>
+                    • Material properties
+                </td>
+                <td>
+                    • DisneyMaterials<br>
+                    • Textures<br>
+                    • Material parameters
+                </td>
+            </tr>
+            <tr style="background: #e8f5e9;">
+                <td><strong>LightDistributionHandler</strong> (NEW)</td>
+                <td>
+                    • Light importance computation<br>
+                    • Distribution building<br>
+                    • Dirty tracking for lights<br>
+                    • GPU kernel dispatch
+                </td>
+                <td>
+                    • LightDistributions<br>
+                    • Importance values<br>
+                    • Probability textures
+                </td>
+            </tr>
+        </table>
+
+        <h2>🏗️ LightDistributionHandler Design</h2>
+
+        <div class="handler-box">
+            <h3>Core Class Structure</h3>
+            <pre><code><span class="keyword">class</span> <span class="type">LightDistributionHandler</span> {
+<span class="keyword">private</span>:
+    <span class="comment">// Dependencies (injected, not owned)</span>
+    <span class="type">ShockerSceneHandler*</span> sceneHandler_;
+    <span class="type">ShockerModelHandler*</span> modelHandler_;
+    <span class="type">ShockerMaterialHandler*</span> materialHandler_;
+    
+    <span class="comment">// Scene-wide light distribution</span>
+    <span class="type">LightDistribution</span> lightInstDist_;
+    
+    <span class="comment">// Dirty tracking specific to lighting</span>
+    <span class="keyword">struct</span> <span class="type">LightDirtyState</span> {
+        <span class="type">bool</span> sceneDistDirty = <span class="keyword">true</span>;
+        <span class="type">std::set</span>&lt;<span class="type">ShockerNode*</span>&gt; dirtyNodes;
+        <span class="type">std::set</span>&lt;<span class="type">ShockerSurface*</span>&gt; dirtySurfaces;
+        
+        <span class="type">bool</span> <span class="function">isDirty</span>() <span class="keyword">const</span> {
+            <span class="keyword">return</span> sceneDistDirty || !dirtyNodes.<span class="function">empty</span>() || !dirtySurfaces.<span class="function">empty</span>();
+        }
+    } dirtyState_;
+    
+    <span class="comment">// GPU resources</span>
+    <span class="type">CUcontext</span> cuContext_;
+    <span class="type">ComputeKernels</span> computeKernels_;
+    <span class="type">cudau::Buffer</span> scratchBuffer_;
+    
+<span class="keyword">public</span>:
+    <span class="comment">// Initialization</span>
+    <span class="type">void</span> <span class="function">initialize</span>(<span class="type">CUcontext</span> context, <span class="type">uint32_t</span> maxInstances);
+    <span class="type">void</span> <span class="function">setDependencies</span>(<span class="type">ShockerSceneHandler*</span> scene,
+                           <span class="type">ShockerModelHandler*</span> model,
+                           <span class="type">ShockerMaterialHandler*</span> material);
+    
+    <span class="comment">// Main update function (called before rendering)</span>
+    <span class="type">void</span> <span class="function">updateDistributionsIfNeeded</span>(<span class="type">CUstream</span> stream);
+    
+    <span class="comment">// Dirty marking (called by other handlers)</span>
+    <span class="type">void</span> <span class="function">onMaterialChanged</span>(<span class="type">ShockerSurface*</span> surface, 
+                           <span class="type">DisneyMaterial*</span> oldMat, 
+                           <span class="type">DisneyMaterial*</span> newMat);
+    <span class="type">void</span> <span class="function">onNodeAdded</span>(<span class="type">ShockerNode*</span> node);
+    <span class="type">void</span> <span class="function">onNodeRemoved</span>(<span class="type">ShockerNode*</span> node);
+    <span class="type">void</span> <span class="function">onNodeTransformChanged</span>(<span class="type">ShockerNode*</span> node);
+    <span class="type">void</span> <span class="function">onSurfaceGeometryChanged</span>(<span class="type">ShockerSurface*</span> surface);
+    
+    <span class="comment">// Query methods</span>
+    <span class="type">bool</span> <span class="function">hasEmissiveGeometry</span>() <span class="keyword">const</span>;
+    <span class="type">const</span> <span class="type">LightDistribution</span>& <span class="function">getSceneLightDistribution</span>() <span class="keyword">const</span>;
+    
+    <span class="comment">// Statistics</span>
+    <span class="type">uint32_t</span> <span class="function">getNumEmissiveSurfaces</span>() <span class="keyword">const</span>;
+    <span class="type">uint32_t</span> <span class="function">getNumEmissiveNodes</span>() <span class="keyword">const</span>;
+    <span class="type">float</span> <span class="function">getTotalSceneEmittance</span>() <span class="keyword">const</span>;
+};</code></pre>
+        </div>
+
+        <h2>🔄 Collaboration Pattern</h2>
+
+        <div class="collaboration-diagram">
+            <h4>Handler Interactions</h4>
+            <div>
+                <div class="class-box">
+                    <strong>ShockerMaterialHandler</strong><br>
+                    <small>Material changes</small>
+                </div>
+                <span class="arrow">→</span>
+                <div class="class-box" style="background: #e8f5e9; border-color: #4caf50;">
+                    <strong>LightDistributionHandler</strong><br>
+                    <small>Track & update lights</small>
+                </div>
+                <span class="arrow">←</span>
+                <div class="class-box">
+                    <strong>ShockerSceneHandler</strong><br>
+                    <small>Node changes</small>
+                </div>
+            </div>
+            <div style="margin-top: 20px;">
+                <div class="class-box" style="background: #e8f5e9; border-color: #4caf50;">
+                    <strong>LightDistributionHandler</strong>
+                </div>
+                <span class="arrow">↓</span>
+                <div class="class-box">
+                    <strong>Renderer</strong><br>
+                    <small>Uses distributions</small>
+                </div>
+            </div>
+        </div>
+
+        <h2>💡 Implementation Details</h2>
+
+        <div class="implementation-box">
+            <h3>1. Observer Pattern for Changes</h3>
+            <pre><code><span class="comment">// ShockerMaterialHandler notifies about material changes</span>
+<span class="keyword">class</span> <span class="type">ShockerMaterialHandler</span> {
+    <span class="type">LightDistributionHandler*</span> lightDistHandler_ = <span class="keyword">nullptr</span>;
+    
+<span class="keyword">public</span>:
+    <span class="type">void</span> <span class="function">setLightDistributionHandler</span>(<span class="type">LightDistributionHandler*</span> handler) {
+        lightDistHandler_ = handler;
+    }
+    
+    <span class="type">void</span> <span class="function">assignMaterial</span>(<span class="type">ShockerSurface*</span> surface, <span class="type">DisneyMaterial*</span> material) {
+        <span class="type">DisneyMaterial*</span> oldMaterial = surface->mat;
+        surface->mat = material;
+        
+        <span class="comment">// Notify light distribution handler</span>
+        <span class="keyword">if</span> (lightDistHandler_) {
+            lightDistHandler_-><span class="function">onMaterialChanged</span>(surface, oldMaterial, material);
+        }
+    }
+};</code></pre>
+        </div>
+
+        <div class="implementation-box">
+            <h3>2. Lazy Distribution Management</h3>
+            <pre><code><span class="type">void</span> <span class="type">LightDistributionHandler</span>::<span class="function">onMaterialChanged</span>(
+    <span class="type">ShockerSurface*</span> surface,
+    <span class="type">DisneyMaterial*</span> oldMat,
+    <span class="type">DisneyMaterial*</span> newMat) 
+{
+    <span class="type">bool</span> wasEmissive = oldMat && oldMat-><span class="function">hasEmittance</span>();
+    <span class="type">bool</span> isEmissive = newMat && newMat-><span class="function">hasEmittance</span>();
+    
+    <span class="keyword">if</span> (wasEmissive != isEmissive) {
+        <span class="comment">// Emissive status changed</span>
+        dirtyState_.dirtySurfaces.<span class="function">insert</span>(surface);
+        
+        <span class="comment">// Find parent node and mark it dirty too</span>
+        <span class="keyword">if</span> (<span class="keyword">auto</span>* node = <span class="function">findNodeForSurface</span>(surface)) {
+            dirtyState_.dirtyNodes.<span class="function">insert</span>(node);
+        }
+        
+        dirtyState_.sceneDistDirty = <span class="keyword">true</span>;
+    }
+    <span class="keyword">else</span> <span class="keyword">if</span> (isEmissive) {
+        <span class="comment">// Still emissive but values might have changed</span>
+        dirtyState_.dirtySurfaces.<span class="function">insert</span>(surface);
+    }
+}</code></pre>
+        </div>
+
+        <div class="implementation-box">
+            <h3>3. Deferred Update Implementation</h3>
+            <pre><code><span class="type">void</span> <span class="type">LightDistributionHandler</span>::<span class="function">updateDistributionsIfNeeded</span>(<span class="type">CUstream</span> stream) {
+    <span class="keyword">if</span> (!dirtyState_.<span class="function">isDirty</span>()) {
+        <span class="keyword">return</span>; <span class="comment">// Nothing to update</span>
+    }
+    
+    <span class="comment">// Level 1: Update primitive distributions in surfaces</span>
+    <span class="keyword">for</span> (<span class="keyword">auto</span>* surface : dirtyState_.dirtySurfaces) {
+        <span class="function">updateSurfacePrimitiveDistribution</span>(surface, stream);
+    }
+    
+    <span class="comment">// Level 2: Update geometry instance distributions in nodes</span>
+    <span class="keyword">for</span> (<span class="keyword">auto</span>* node : dirtyState_.dirtyNodes) {
+        <span class="function">updateNodeGeometryDistribution</span>(node, stream);
+    }
+    
+    <span class="comment">// Level 3: Update scene-wide instance distribution</span>
+    <span class="keyword">if</span> (dirtyState_.sceneDistDirty) {
+        <span class="function">updateSceneInstanceDistribution</span>(stream);
+    }
+    
+    <span class="comment">// Clear dirty flags</span>
+    dirtyState_ = {};
+}
+
+<span class="keyword">private</span>:
+<span class="type">void</span> <span class="function">updateSurfacePrimitiveDistribution</span>(<span class="type">ShockerSurface*</span> surface, <span class="type">CUstream</span> stream) {
+    <span class="keyword">if</span> (<span class="keyword">auto</span>* triGeom = <span class="function">std::get_if</span>&lt;<span class="type">TriangleGeometry</span>&gt;(&surface->geometry)) {
+        <span class="type">bool</span> needsDist = surface->mat && surface->mat-><span class="function">hasEmittance</span>();
+        
+        <span class="keyword">if</span> (needsDist && !triGeom->emitterPrimDist.<span class="function">isInitialized</span>()) {
+            <span class="comment">// Initialize and compute</span>
+            triGeom->emitterPrimDist.<span class="function">initialize</span>(cuContext_, 
+                                                triGeom->triangleBuffer.<span class="function">numElements</span>());
+            <span class="function">launchComputeTriangleImportanceKernel</span>(surface, stream);
+        }
+        <span class="keyword">else</span> <span class="keyword">if</span> (!needsDist && triGeom->emitterPrimDist.<span class="function">isInitialized</span>()) {
+            <span class="comment">// Clean up</span>
+            triGeom->emitterPrimDist.<span class="function">finalize</span>();
+        }
+    }
+}</code></pre>
+        </div>
+
+        <h2>🔌 Integration Points</h2>
+
+        <div class="interface-section">
+            <h3>Clean Interfaces Between Handlers</h3>
+            <pre><code><span class="comment">// In ShockerSceneHandler</span>
+<span class="keyword">class</span> <span class="type">ShockerSceneHandler</span> {
+    <span class="type">LightDistributionHandler*</span> lightDistHandler_ = <span class="keyword">nullptr</span>;
+    
+<span class="keyword">public</span>:
+    <span class="type">void</span> <span class="function">setLightDistributionHandler</span>(<span class="type">LightDistributionHandler*</span> handler) {
+        lightDistHandler_ = handler;
+    }
+    
+    <span class="type">ShockerNode*</span> <span class="function">createShockerNode</span>(...) {
+        <span class="type">ShockerNode*</span> node = <span class="comment">/* create node */</span>;
+        
+        <span class="comment">// Notify light handler about new node</span>
+        <span class="keyword">if</span> (lightDistHandler_) {
+            lightDistHandler_-><span class="function">onNodeAdded</span>(node);
+        }
+        
+        <span class="keyword">return</span> node;
+    }
+    
+    <span class="type">void</span> <span class="function">removeNode</span>(<span class="type">ShockerNode*</span> node) {
+        <span class="comment">// Notify before removal</span>
+        <span class="keyword">if</span> (lightDistHandler_) {
+            lightDistHandler_-><span class="function">onNodeRemoved</span>(node);
+        }
+        
+        <span class="comment">/* remove node */</span>
+    }
+};</code></pre>
+        </div>
+
+        <h2>✨ Benefits of Separation</h2>
+
+        <div class="benefits-list">
+            <h3>Architectural Benefits</h3>
+            <ul>
+                <li><strong>Modular Testing:</strong> Can test light distribution logic without full scene setup</li>
+                <li><strong>Clear Dependencies:</strong> Light handler depends on scene/model/material, not vice versa</li>
+                <li><strong>Easier Debugging:</strong> Light distribution issues isolated to one handler</li>
+                <li><strong>Performance Profiling:</strong> Can measure light update cost separately</li>
+                <li><strong>Future Extensions:</strong> Easy to add features like light caching, LOD, etc.</li>
+            </ul>
+        </div>
+
+        <h2>🎯 Usage Example</h2>
+
+        <div class="implementation-box">
+            <h3>Initialization and Wiring</h3>
+            <pre><code><span class="comment">// During application setup</span>
+<span class="type">void</span> <span class="function">initializeHandlers</span>() {
+    <span class="comment">// Create handlers</span>
+    <span class="keyword">auto</span> sceneHandler = <span class="type">std::make_shared</span>&lt;<span class="type">ShockerSceneHandler</span>&gt;(context);
+    <span class="keyword">auto</span> modelHandler = <span class="type">std::make_shared</span>&lt;<span class="type">ShockerModelHandler</span>&gt;();
+    <span class="keyword">auto</span> materialHandler = <span class="type">std::make_shared</span>&lt;<span class="type">ShockerMaterialHandler</span>&gt;();
+    <span class="keyword">auto</span> lightDistHandler = <span class="type">std::make_shared</span>&lt;<span class="type">LightDistributionHandler</span>&gt;();
+    
+    <span class="comment">// Initialize</span>
+    lightDistHandler-><span class="function">initialize</span>(cuContext, maxInstances);
+    
+    <span class="comment">// Wire up dependencies</span>
+    lightDistHandler-><span class="function">setDependencies</span>(sceneHandler.<span class="function">get</span>(),
+                                      modelHandler.<span class="function">get</span>(),
+                                      materialHandler.<span class="function">get</span>());
+    
+    <span class="comment">// Register light handler with other handlers</span>
+    sceneHandler-><span class="function">setLightDistributionHandler</span>(lightDistHandler.<span class="function">get</span>());
+    materialHandler-><span class="function">setLightDistributionHandler</span>(lightDistHandler.<span class="function">get</span>());
+    modelHandler-><span class="function">setLightDistributionHandler</span>(lightDistHandler.<span class="function">get</span>());
+}
+
+<span class="comment">// In render loop</span>
+<span class="type">void</span> <span class="function">renderFrame</span>() {
+    <span class="comment">// Update light distributions before rendering</span>
+    lightDistHandler-><span class="function">updateDistributionsIfNeeded</span>(renderStream);
+    
+    <span class="comment">// Pass distributions to renderer</span>
+    renderer-><span class="function">setLightDistribution</span>(lightDistHandler-><span class="function">getSceneLightDistribution</span>());
+    
+    <span class="comment">// Render</span>
+    renderer-><span class="function">pathTrace</span>();
+}</code></pre>
+        </div>
+
+        <h2>📁 File Organization</h2>
+
+        <div class="handler-box">
+            <h3>Suggested File Structure</h3>
+            <pre><code>framework/engine_core/excludeFromBuild/handlers/
+├── ShockerSceneHandler.h/cpp       <span class="comment">// Scene management</span>
+├── ShockerModelHandler.h/cpp       <span class="comment">// Geometry management</span>
+├── ShockerMaterialHandler.h/cpp    <span class="comment">// Material management</span>
+└── <strong>LightDistributionHandler.h/cpp</strong>  <span class="comment">// NEW: Light sampling</span>
+
+framework/engine_core/excludeFromBuild/lighting/
+├── LightDistribution.h             <span class="comment">// Core distribution types</span>
+├── LightImportance.h/cpp           <span class="comment">// Importance computation</span>
+└── gpu_kernels/
+    └── compute_light_probs.cu      <span class="comment">// GPU kernels</span></code></pre>
+        </div>
+
+        <div class="important" style="margin-top: 40px;">
+            <strong>Conclusion:</strong> Separating light distribution management into its own handler follows the 
+            Single Responsibility Principle and creates a cleaner, more maintainable architecture. Each handler 
+            focuses on its core responsibility, making the system easier to understand, test, and extend.
+        </div>
+    </div>
+</body>
+</html>

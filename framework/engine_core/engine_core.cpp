@@ -31,7 +31,7 @@
 #include "excludeFromBuild/handlers/MiloRenderHandler.cpp"
 #include "excludeFromBuild/handlers/TextureHandler.cpp"
 #include "excludeFromBuild/handlers/MiloDenoiserHandler.cpp"
-
+#include "excludeFromBuild/handlers/AreaLightHandler.cpp"
 // shocker
 #include "excludeFromBuild/handlers/ShockerModelHandler.cpp"
 #include "excludeFromBuild/handlers/ShockerMaterialHandler.cpp"

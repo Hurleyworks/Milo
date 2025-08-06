@@ -4,6 +4,7 @@
 #include "ShockerSceneHandler.h"
 #include "ShockerModelHandler.h"
 #include "ShockerMaterialHandler.h"
+#include "AreaLightHandler.h"
 #include "../model/ShockerModel.h"
 #include "../model/ShockerCore.h"
 
@@ -80,6 +81,8 @@ shocker::ShockerNode* ShockerSceneHandler::createShockerNode(RenderableWeakRef& 
     // Map node to renderable node
     nodeMap_[shockerNode->instSlot] = weakNode;
     
+    // Note: AreaLightHandler notifications will be handled separately
+    
     // Successfully created node (no logging needed for routine operations)
     
     return shockerNode;
@@ -124,6 +127,8 @@ void ShockerSceneHandler::processRenderableNode(RenderableNode& node)
 
 void ShockerSceneHandler::clear()
 {
+    // Note: AreaLightHandler notifications will be handled separately
+    
     // Clear nodes (they're owned by model handler)
     nodes_.clear();
     
@@ -221,4 +226,19 @@ size_t ShockerSceneHandler::getMaterialCount() const
         return 0;
     }
     return materialHandler_->getAllMaterials().size();
+}
+
+shocker::ShockerNode* ShockerSceneHandler::findNodeForSurface(shocker::ShockerSurface* surface) const
+{
+    if (!surface) {
+        return nullptr;
+    }
+    
+    // Search through all nodes to find the one containing this surface
+    // Note: ShockerSurfaceGroupInstance doesn't directly contain surfaces
+    // We need to find the model that contains this surface and then find the node
+    // For now, return nullptr as we need a different approach
+    // TODO: Implement proper surface-to-node mapping
+    
+    return nullptr;
 }

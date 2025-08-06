@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AreaLightHandler - Architecture Design</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+        }
+        
+        h2 {
+            color: #34495e;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: linear-gradient(to right, #ecf0f1, transparent);
+            border-left: 4px solid #3498db;
+        }
+        
+        h3 {
+            color: #555;
+            margin-top: 25px;
+            margin-bottom: 15px;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .naming-rationale {
+            background: #e8f5e9;
+            border: 2px solid #4caf50;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .naming-rationale h3 {
+            color: #2e7d32;
+            margin-top: 0;
+        }
+        
+        .handler-box {
+            background: #f0f4f8;
+            border: 2px solid #2196f3;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .handler-box h3 {
+            color: #1976d2;
+            margin-top: 0;
+        }
+        
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9em;
+            color: #d14;
+        }
+        
+        pre {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 14px;
+            line-height: 1.5;
+            box-shadow: inset 0 2px 10px rgba(0,0,0,0.3);
+        }
+        
+        pre code {
+            background: none;
+            color: inherit;
+            padding: 0;
+            font-size: inherit;
+        }
+        
+        .comment { color: #95a5a6; font-style: italic; }
+        .keyword { color: #3498db; font-weight: bold; }
+        .type { color: #e74c3c; }
+        .function { color: #f39c12; }
+        .string { color: #27ae60; }
+        .number { color: #9b59b6; }
+        
+        .architecture-overview {
+            background: #fff3e0;
+            border: 2px solid #ff9800;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .architecture-overview h3 {
+            color: #e65100;
+            margin-top: 0;
+        }
+        
+        .implementation-box {
+            background: #e8f4f8;
+            border: 2px solid #3498db;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 30px 0;
+        }
+        
+        .implementation-box h3 {
+            margin-top: 0;
+            color: #2980b9;
+        }
+        
+        ul {
+            margin: 15px 0;
+            padding-left: 30px;
+        }
+        
+        li {
+            margin: 8px 0;
+        }
+        
+        .responsibility-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        .responsibility-table th {
+            background: #3498db;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+        
+        .responsibility-table td {
+            border: 1px solid #ddd;
+            padding: 12px;
+        }
+        
+        .responsibility-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        
+        .highlight-row {
+            background: #e8f5e9 !important;
+            font-weight: bold;
+        }
+        
+        .api-section {
+            background: #fce4ec;
+            border: 2px solid #e91e63;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .api-section h3 {
+            color: #c2185b;
+            margin-top: 0;
+        }
+        
+        .important {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        
+        .important strong {
+            color: #856404;
+        }
+        
+        .scope-box {
+            background: #f3e5f5;
+            border: 2px solid #9c27b0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .scope-box h3 {
+            color: #7b1fa2;
+            margin-top: 0;
+        }
+        
+        .in-scope {
+            color: #2e7d32;
+        }
+        
+        .out-scope {
+            color: #c62828;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>💡 AreaLightHandler - Architecture Design</h1>
+        
+        <div class="naming-rationale">
+            <h3>📝 Why "AreaLightHandler"?</h3>
+            <ul>
+                <li><strong>Specific Purpose:</strong> Clearly indicates this handles area lights (emissive geometry) not point/directional lights</li>
+                <li><strong>Industry Standard:</strong> "Area light" is the common term for mesh-based emitters in rendering</li>
+                <li><strong>Future Clarity:</strong> Leaves room for other light handlers (PointLightHandler, EnvLightHandler, etc.)</li>
+                <li><strong>Self-Documenting:</strong> Name immediately tells you what kind of lighting it manages</li>
+            </ul>
+        </div>
+
+        <h2>🎯 Core Responsibility</h2>
+        
+        <div class="architecture-overview">
+            <h3>AreaLightHandler's Single Purpose</h3>
+            <p><strong>Manage importance sampling distributions for mesh-based area lights in the scene.</strong></p>
+            <p>This includes:</p>
+            <ul>
+                <li>Tracking which geometry is emissive</li>
+                <li>Computing importance values for emissive primitives</li>
+                <li>Building hierarchical sampling distributions</li>
+                <li>Updating distributions when materials or geometry change</li>
+                <li>Providing efficient GPU-ready data structures for path tracing</li>
+            </ul>
+        </div>
+
+        <h2>🏗️ Class Design</h2>
+
+        <div class="handler-box">
+            <h3>AreaLightHandler Interface</h3>
+            <pre><code><span class="keyword">class</span> <span class="type">AreaLightHandler</span> {
+<span class="keyword">public</span>:
+    <span class="comment">// Initialization</span>
+    <span class="type">void</span> <span class="function">initialize</span>(<span class="type">CUcontext</span> context, <span class="type">uint32_t</span> maxInstances);
+    <span class="type">void</span> <span class="function">finalize</span>();
+    
+    <span class="comment">// Dependencies (set after construction)</span>
+    <span class="type">void</span> <span class="function">setSceneHandler</span>(<span class="type">ShockerSceneHandler*</span> sceneHandler);
+    <span class="type">void</span> <span class="function">setModelHandler</span>(<span class="type">ShockerModelHandler*</span> modelHandler);
+    <span class="type">void</span> <span class="function">setMaterialHandler</span>(<span class="type">ShockerMaterialHandler*</span> materialHandler);
+    
+    <span class="comment">// === Area Light Management ===</span>
+    
+    <span class="comment">// Called when materials change</span>
+    <span class="type">void</span> <span class="function">onMaterialAssigned</span>(<span class="type">ShockerSurface*</span> surface, 
+                             <span class="type">DisneyMaterial*</span> oldMaterial,
+                             <span class="type">DisneyMaterial*</span> newMaterial);
+    
+    <span class="comment">// Called when geometry changes</span>
+    <span class="type">void</span> <span class="function">onSurfaceAdded</span>(<span class="type">ShockerSurface*</span> surface);
+    <span class="type">void</span> <span class="function">onSurfaceRemoved</span>(<span class="type">ShockerSurface*</span> surface);
+    <span class="type">void</span> <span class="function">onSurfaceGeometryChanged</span>(<span class="type">ShockerSurface*</span> surface);
+    
+    <span class="comment">// Called when instances change</span>
+    <span class="type">void</span> <span class="function">onNodeAdded</span>(<span class="type">ShockerNode*</span> node);
+    <span class="type">void</span> <span class="function">onNodeRemoved</span>(<span class="type">ShockerNode*</span> node);
+    <span class="type">void</span> <span class="function">onNodeTransformChanged</span>(<span class="type">ShockerNode*</span> node);
+    
+    <span class="comment">// === Distribution Updates ===</span>
+    
+    <span class="comment">// Main update - called before rendering</span>
+    <span class="type">void</span> <span class="function">updateAreaLightDistributions</span>(<span class="type">CUstream</span> stream);
+    
+    <span class="comment">// Force immediate update (for debugging/profiling)</span>
+    <span class="type">void</span> <span class="function">forceUpdateAll</span>(<span class="type">CUstream</span> stream);
+    
+    <span class="comment">// === Queries ===</span>
+    
+    <span class="comment">// Check if scene has any area lights</span>
+    <span class="type">bool</span> <span class="function">hasAreaLights</span>() <span class="keyword">const</span>;
+    
+    <span class="comment">// Get the scene-wide area light distribution</span>
+    <span class="keyword">const</span> <span class="type">LightDistribution</span>& <span class="function">getSceneAreaLightDistribution</span>() <span class="keyword">const</span>;
+    
+    <span class="comment">// Statistics</span>
+    <span class="type">uint32_t</span> <span class="function">getNumAreaLights</span>() <span class="keyword">const</span>;        <span class="comment">// Number of emissive surfaces</span>
+    <span class="type">uint32_t</span> <span class="function">getNumEmissiveTriangles</span>() <span class="keyword">const</span>;  <span class="comment">// Total emissive primitives</span>
+    <span class="type">float</span> <span class="function">getTotalAreaLightPower</span>() <span class="keyword">const</span>;      <span class="comment">// Total emitted power</span>
+    
+    <span class="comment">// Debug/Profiling</span>
+    <span class="type">float</span> <span class="function">getLastUpdateTimeMs</span>() <span class="keyword">const</span>;
+    <span class="type">bool</span> <span class="function">isDirty</span>() <span class="keyword">const</span>;
+    
+<span class="keyword">private</span>:
+    <span class="comment">// Internal implementation...</span>
+};</code></pre>
+        </div>
+
+        <h2>📋 What's In and Out of Scope</h2>
+
+        <div class="scope-box">
+            <h3>Scope Definition for AreaLightHandler</h3>
+            
+            <h4 class="in-scope">✅ IN SCOPE (Area Lights)</h4>
+            <ul>
+                <li>Emissive geometry (triangles, curves)</li>
+                <li>Mesh lights with texture-based emission</li>
+                <li>Importance sampling distributions</li>
+                <li>Hierarchical light selection</li>
+                <li>Dynamic enable/disable of area lights</li>
+            </ul>
+            
+            <h4 class="out-scope">❌ OUT OF SCOPE (Other Light Types)</h4>
+            <ul>
+                <li>Point lights</li>
+                <li>Directional lights</li>
+                <li>Spot lights</li>
+                <li>Environment/IBL lighting</li>
+                <li>IES profile lights</li>
+            </ul>
+            
+            <p><strong>Note:</strong> These other light types would be handled by separate, specialized handlers in the future.</p>
+        </div>
+
+        <h2>🔄 Integration Pattern</h2>
+
+        <div class="implementation-box">
+            <h3>Clean Integration with Other Handlers</h3>
+            <pre><code><span class="comment">// ShockerMaterialHandler integration</span>
+<span class="keyword">class</span> <span class="type">ShockerMaterialHandler</span> {
+    <span class="type">AreaLightHandler*</span> areaLightHandler_ = <span class="keyword">nullptr</span>;
+    
+<span class="keyword">public</span>:
+    <span class="type">void</span> <span class="function">setAreaLightHandler</span>(<span class="type">AreaLightHandler*</span> handler) {
+        areaLightHandler_ = handler;
+    }
+    
+    <span class="type">void</span> <span class="function">assignMaterialToSurface</span>(<span class="type">ShockerSurface*</span> surface, <span class="type">DisneyMaterial*</span> material) {
+        <span class="type">DisneyMaterial*</span> oldMaterial = surface->mat;
+        surface->mat = material;
+        
+        <span class="comment">// Notify area light handler about potential area light change</span>
+        <span class="keyword">if</span> (areaLightHandler_) {
+            areaLightHandler_-><span class="function">onMaterialAssigned</span>(surface, oldMaterial, material);
+        }
+    }
+};</code></pre>
+        </div>
+
+        <div class="implementation-box">
+            <h3>Internal Implementation</h3>
+            <pre><code><span class="keyword">class</span> <span class="type">AreaLightHandler</span> {
+<span class="keyword">private</span>:
+    <span class="comment">// Scene-wide distribution for all area lights</span>
+    <span class="type">LightDistribution</span> sceneAreaLightDist_;
+    
+    <span class="comment">// Tracking area lights</span>
+    <span class="keyword">struct</span> <span class="type">AreaLightState</span> {
+        <span class="comment">// Dirty tracking</span>
+        <span class="type">bool</span> sceneDistDirty = <span class="keyword">true</span>;
+        <span class="type">std::set</span>&lt;<span class="type">ShockerNode*</span>&gt; dirtyNodes;
+        <span class="type">std::set</span>&lt;<span class="type">ShockerSurface*</span>&gt; dirtySurfaces;
+        
+        <span class="comment">// Active area lights</span>
+        <span class="type">std::set</span>&lt;<span class="type">ShockerSurface*</span>&gt; emissiveSurfaces;
+        <span class="type">std::set</span>&lt;<span class="type">ShockerNode*</span>&gt; nodesWithAreaLights;
+        
+        <span class="comment">// Statistics</span>
+        <span class="type">uint32_t</span> totalEmissiveTriangles = <span class="number">0</span>;
+        <span class="type">float</span> totalPower = <span class="number">0.0f</span>;
+    } areaLightState_;
+    
+    <span class="comment">// GPU compute kernels for area light importance</span>
+    <span class="keyword">struct</span> <span class="type">AreaLightKernels</span> {
+        <span class="type">CUfunction</span> computeTriangleImportance;
+        <span class="type">CUfunction</span> computeGeomInstImportance;
+        <span class="type">CUfunction</span> computeInstanceImportance;
+        <span class="type">CUfunction</span> buildProbabilityTexture;
+    } kernels_;
+    
+<span class="keyword">private</span>:
+    <span class="type">void</span> <span class="function">updateSurfaceAreaLights</span>(<span class="type">CUstream</span> stream) {
+        <span class="keyword">for</span> (<span class="keyword">auto</span>* surface : areaLightState_.dirtySurfaces) {
+            <span class="keyword">if</span> (<span class="function">isAreaLight</span>(surface)) {
+                <span class="function">initializeOrUpdateAreaLight</span>(surface, stream);
+                areaLightState_.emissiveSurfaces.<span class="function">insert</span>(surface);
+            } <span class="keyword">else</span> {
+                <span class="function">cleanupAreaLight</span>(surface);
+                areaLightState_.emissiveSurfaces.<span class="function">erase</span>(surface);
+            }
+        }
+    }
+    
+    <span class="type">bool</span> <span class="function">isAreaLight</span>(<span class="type">ShockerSurface*</span> surface) <span class="keyword">const</span> {
+        <span class="keyword">return</span> surface->mat && surface->mat-><span class="function">hasEmittance</span>();
+    }
+};</code></pre>
+        </div>
+
+        <h2>🎮 Usage Example</h2>
+
+        <div class="api-section">
+            <h3>Typical Usage in Render Loop</h3>
+            <pre><code><span class="keyword">class</span> <span class="type">Renderer</span> {
+    <span class="type">std::unique_ptr</span>&lt;<span class="type">AreaLightHandler</span>&gt; areaLightHandler_;
+    
+    <span class="type">void</span> <span class="function">renderFrame</span>() {
+        <span class="comment">// Update area light distributions if needed</span>
+        areaLightHandler_-><span class="function">updateAreaLightDistributions</span>(renderStream_);
+        
+        <span class="comment">// Check if we have area lights to sample</span>
+        <span class="keyword">if</span> (areaLightHandler_-><span class="function">hasAreaLights</span>()) {
+            <span class="comment">// Get distribution for GPU path tracer</span>
+            <span class="keyword">const</span> <span class="keyword">auto</span>& areaLightDist = areaLightHandler_-><span class="function">getSceneAreaLightDistribution</span>();
+            
+            <span class="comment">// Pass to path tracing kernel</span>
+            pathTracer_-><span class="function">setAreaLightDistribution</span>(areaLightDist);
+            
+            <span class="comment">// Optional: Log statistics</span>
+            <span class="keyword">if</span> (enableStats_) {
+                <span class="function">LOG</span>(INFO) << <span class="string">"Area lights: "</span> << areaLightHandler_-><span class="function">getNumAreaLights</span>()
+                         << <span class="string">" surfaces, "</span> << areaLightHandler_-><span class="function">getNumEmissiveTriangles</span>()
+                         << <span class="string">" triangles, power: "</span> << areaLightHandler_-><span class="function">getTotalAreaLightPower</span>();
+            }
+        }
+        
+        <span class="comment">// Render with area light sampling</span>
+        pathTracer_-><span class="function">trace</span>();
+    }
+};</code></pre>
+        </div>
+
+        <h2>📊 Handler Comparison</h2>
+
+        <table class="responsibility-table">
+            <tr>
+                <th>Handler</th>
+                <th>Primary Focus</th>
+                <th>Key Data Structures</th>
+            </tr>
+            <tr>
+                <td><strong>ShockerSceneHandler</strong></td>
+                <td>Scene graph & spatial structure</td>
+                <td>Nodes, transforms, acceleration structures</td>
+            </tr>
+            <tr>
+                <td><strong>ShockerModelHandler</strong></td>
+                <td>Geometry & surfaces</td>
+                <td>Vertices, triangles, surface groups</td>
+            </tr>
+            <tr>
+                <td><strong>ShockerMaterialHandler</strong></td>
+                <td>Material properties</td>
+                <td>Disney materials, textures</td>
+            </tr>
+            <tr class="highlight-row">
+                <td><strong>AreaLightHandler</strong></td>
+                <td>Mesh-based emitters</td>
+                <td>Area light distributions, importance values</td>
+            </tr>
+            <tr>
+                <td><em>Future: PointLightHandler</em></td>
+                <td>Point/spot lights</td>
+                <td>Point light arrays, shadow maps</td>
+            </tr>
+            <tr>
+                <td><em>Future: EnvLightHandler</em></td>
+                <td>Environment lighting</td>
+                <td>IBL maps, importance sampling</td>
+            </tr>
+        </table>
+
+        <div class="important" style="margin-top: 40px;">
+            <strong>Key Design Principle:</strong> The AreaLightHandler focuses exclusively on mesh-based area lights. 
+            This clear scope makes it easier to optimize for the specific requirements of area light sampling while 
+            keeping the interface clean and understandable. Other light types will have their own specialized handlers 
+            with interfaces tailored to their specific needs.
+        </div>
+    </div>
+</body>
+</html>

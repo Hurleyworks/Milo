@@ -3,6 +3,7 @@
 #include "../RenderContext.h"
 #include "../model/ShockerCore.h"
 
+
 void ShockerModelHandler::initialize(RenderContextPtr context)
 {
     renderContext_ = context;
@@ -114,9 +115,14 @@ shocker::ShockerSurface* ShockerModelHandler::createShockerSurface(ShockerModel*
         return nullptr;
     }
     
-    // Return the first surface from the model
+    // Get the first surface from the model
     // Note: The model already owns the surfaces, we just return a pointer
-    return modelSurfaces[0].get();
+    shocker::ShockerSurface* surface = modelSurfaces[0].get();
+    
+    // Notify area light handler about the new surface
+    // Note: AreaLightHandler notifications are handled at scene level
+    
+    return surface;
 }
 
 shocker::ShockerSurfaceGroup* ShockerModelHandler::createShockerSurfaceGroup(const std::vector<shocker::ShockerSurface*>& surfaces)
@@ -216,6 +222,8 @@ bool ShockerModelHandler::hasModel(const std::string& name) const
 
 void ShockerModelHandler::clear()
 {
+    // Note: AreaLightHandler notifications are handled at scene level
+    
     models_.clear();
     surfaces_.clear();
     surfaceGroups_.clear();

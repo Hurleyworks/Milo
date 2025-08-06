@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mesh-Based Lighting Architecture Analysis (Corrected)</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+        }
+        
+        h2 {
+            color: #34495e;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: linear-gradient(to right, #ecf0f1, transparent);
+            border-left: 4px solid #3498db;
+        }
+        
+        h3 {
+            color: #555;
+            margin-top: 25px;
+            margin-bottom: 15px;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .correction-note {
+            background: #ffebee;
+            border: 2px solid #f44336;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .correction-note h3 {
+            color: #c62828;
+            margin-top: 0;
+        }
+        
+        .hierarchy-level {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 20px;
+            margin: 20px 0;
+            position: relative;
+        }
+        
+        .hierarchy-level h3 {
+            color: #fff;
+            background: #3498db;
+            padding: 10px 15px;
+            margin: -20px -20px 20px -20px;
+            border-radius: 5px 5px 0 0;
+        }
+        
+        .level-1 h3 { background: #e74c3c; }
+        .level-2 h3 { background: #f39c12; }
+        .level-3 h3 { background: #27ae60; }
+        
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9em;
+            color: #d14;
+        }
+        
+        pre {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 14px;
+            line-height: 1.5;
+            box-shadow: inset 0 2px 10px rgba(0,0,0,0.3);
+        }
+        
+        pre code {
+            background: none;
+            color: inherit;
+            padding: 0;
+            font-size: inherit;
+        }
+        
+        .comment { color: #95a5a6; font-style: italic; }
+        .keyword { color: #3498db; font-weight: bold; }
+        .type { color: #e74c3c; }
+        .function { color: #f39c12; }
+        .string { color: #27ae60; }
+        .number { color: #9b59b6; }
+        
+        ul {
+            margin: 15px 0;
+            padding-left: 30px;
+        }
+        
+        li {
+            margin: 8px 0;
+        }
+        
+        .implementation-box {
+            background: #e8f4f8;
+            border: 2px solid #3498db;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 30px 0;
+        }
+        
+        .implementation-box h3 {
+            margin-top: 0;
+            color: #2980b9;
+        }
+        
+        .flow-diagram {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .arrow {
+            font-size: 24px;
+            color: #3498db;
+            margin: 10px 0;
+        }
+        
+        .box {
+            display: inline-block;
+            background: #ecf0f1;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            border: 2px solid #bdc3c7;
+        }
+        
+        .important {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        
+        .important strong {
+            color: #856404;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        
+        th {
+            background: #3498db;
+            color: white;
+            font-weight: bold;
+        }
+        
+        tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        
+        .struct-diagram {
+            background: #f0f4f8;
+            border: 2px solid #2196f3;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .struct-diagram h4 {
+            color: #1976d2;
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔦 Mesh-Based Lighting Architecture Analysis (Corrected)</h1>
+        
+        <div class="correction-note">
+            <h3>⚠️ Important Correction</h3>
+            <p><strong>Previous Error:</strong> I incorrectly stated that <code>emitterPrimDist</code> should be added to <code>GeometryInstance</code>.</p>
+            <p><strong>Actual Architecture:</strong> The <code>emitterPrimDist</code> is stored within the geometry variant types (e.g., <code>TriangleGeometry</code>), NOT in <code>GeometryInstance</code> itself. This is a cleaner design that properly encapsulates geometry-specific data.</p>
+        </div>
+
+        <h2>📊 Actual Data Structure Organization</h2>
+
+        <div class="struct-diagram">
+            <h4>Host-Side Structures</h4>
+            <pre><code><span class="comment">// GeometryInstance is a clean wrapper</span>
+<span class="keyword">struct</span> <span class="type">GeometryInstance</span> {
+    <span class="keyword">const</span> <span class="type">Material*</span> mat;
+    <span class="type">uint32_t</span> geomInstSlot;
+    <span class="type">optixu::GeometryInstance</span> optixGeomInst;
+    <span class="type">std::variant</span>&lt;<span class="type">TriangleGeometry</span>, <span class="type">CurveGeometry</span>, ...&gt; geometry;  <span class="comment">// Variant holds the actual geometry</span>
+    <span class="type">AABB</span> aabb;
+};
+
+<span class="comment">// TriangleGeometry contains the emitter distribution</span>
+<span class="keyword">struct</span> <span class="type">TriangleGeometry</span> {
+    <span class="type">glu::Buffer</span> gfxVertexBuffer;
+    <span class="type">glu::Buffer</span> gfxTriangleBuffer;
+    <span class="type">cudau::TypedBuffer</span>&lt;<span class="type">Vertex</span>&gt; vertexBuffer;
+    <span class="type">cudau::TypedBuffer</span>&lt;<span class="type">Triangle</span>&gt; triangleBuffer;
+    <span class="type">LightDistribution</span> emitterPrimDist;  <span class="comment">// ← Light distribution lives HERE!</span>
+};
+
+<span class="comment">// Instance contains distribution over geometry instances</span>
+<span class="keyword">struct</span> <span class="type">Instance</span> {
+    <span class="type">Mesh::GeometryGroupInstance</span> geomGroupInst;
+    <span class="type">cudau::TypedBuffer</span>&lt;<span class="type">uint32_t</span>&gt; geomInstSlots;
+    <span class="type">LightDistribution</span> lightGeomInstDist;  <span class="comment">// Distribution over geometry instances</span>
+    <span class="type">uint32_t</span> instSlot;
+    <span class="type">optixu::Instance</span> optixInst;
+};</code></pre>
+        </div>
+
+        <div class="struct-diagram">
+            <h4>GPU-Side Structures (shared namespace)</h4>
+            <pre><code><span class="comment">// GPU-side geometry instance data</span>
+<span class="keyword">struct</span> <span class="type">GeometryInstanceData</span> {
+    <span class="type">ROBuffer</span>&lt;<span class="type">Vertex</span>&gt; vertexBuffer;
+    <span class="type">ROBuffer</span>&lt;<span class="type">Triangle</span>&gt; triangleBuffer;
+    <span class="type">LightDistribution</span> emitterPrimDist;  <span class="comment">// Copied from host TriangleGeometry</span>
+    <span class="type">uint32_t</span> materialSlot;
+    <span class="type">uint32_t</span> geomInstSlot;
+};
+
+<span class="comment">// GPU-side instance data</span>
+<span class="keyword">struct</span> <span class="type">InstanceData</span> {
+    <span class="type">Matrix4x4</span> transform;
+    <span class="type">Matrix3x3</span> normalMatrix;
+    <span class="type">float</span> uniformScale;
+    <span class="type">ROBuffer</span>&lt;<span class="type">uint32_t</span>&gt; geomInstSlots;
+    <span class="type">LightDistribution</span> lightGeomInstDist;  <span class="comment">// Copied from host Instance</span>
+};</code></pre>
+        </div>
+
+        <h2>🏗️ Three-Level Hierarchy (Corrected)</h2>
+
+        <div class="flow-diagram">
+            <div class="box">Scene.lightInstDist</div>
+            <div class="arrow">↓</div>
+            <div class="box">Instance.lightGeomInstDist</div>
+            <div class="arrow">↓</div>
+            <div class="box">TriangleGeometry.emitterPrimDist</div>
+        </div>
+
+        <div class="hierarchy-level level-1">
+            <h3>Level 1: Primitive Distribution (Within Geometry Variant)</h3>
+            <ul>
+                <li><strong>Location:</strong> <code>TriangleGeometry.emitterPrimDist</code> (or other geometry variant)</li>
+                <li><strong>GPU Copy:</strong> <code>GeometryInstanceData.emitterPrimDist</code></li>
+                <li><strong>Purpose:</strong> Distribution over emissive primitives within a single geometry</li>
+                <li><strong>Initialization:</strong> Only if material has emissive texture</li>
+            </ul>
+            
+            <pre><code><span class="comment">// Host-side initialization in createGeometryInstance()</span>
+<span class="keyword">if</span> (mat->texEmittance.cudaArray) {
+    <span class="comment">// Initialize the distribution in the TriangleGeometry</span>
+    geom.emitterPrimDist.<span class="function">initialize</span>(cuContext, triangles.<span class="function">size</span>());
+}
+
+<span class="comment">// Copy to GPU structure</span>
+geom.emitterPrimDist.<span class="function">getDeviceType</span>(&geomInstData.emitterPrimDist);</code></pre>
+        </div>
+
+        <div class="hierarchy-level level-2">
+            <h3>Level 2: GeometryInstance Distribution (Within Instance)</h3>
+            <ul>
+                <li><strong>Location:</strong> <code>Instance.lightGeomInstDist</code></li>
+                <li><strong>GPU Copy:</strong> <code>InstanceData.lightGeomInstDist</code></li>
+                <li><strong>Purpose:</strong> Distribution over geometry instances within an instance</li>
+                <li><strong>Initialization:</strong> Only if instance contains emissive geometry</li>
+            </ul>
+            
+            <pre><code><span class="comment">// Host-side initialization in createInstance()</span>
+<span class="type">bool</span> hasEmitterGeomInsts = <span class="keyword">false</span>;
+<span class="keyword">for</span> (<span class="keyword">auto</span> it = geomGroup->geomInsts.<span class="function">cbegin</span>(); it != geomGroup->geomInsts.<span class="function">cend</span>(); ++it) {
+    <span class="keyword">const</span> <span class="type">GeometryInstance*</span> geomInst = *it;
+    <span class="keyword">if</span> (geomInst->mat->texEmittance.cudaArray) {
+        hasEmitterGeomInsts = <span class="keyword">true</span>;
+        <span class="keyword">break</span>;
+    }
+}
+
+<span class="keyword">if</span> (hasEmitterGeomInsts) {
+    inst->lightGeomInstDist.<span class="function">initialize</span>(cuContext, geomInstSlots.<span class="function">size</span>());
+}</code></pre>
+        </div>
+
+        <div class="hierarchy-level level-3">
+            <h3>Level 3: Instance Distribution (Scene-wide)</h3>
+            <ul>
+                <li><strong>Location:</strong> <code>Scene.lightInstDist</code></li>
+                <li><strong>GPU Access:</strong> <code>StaticPipelineLaunchParameters.lightInstDist</code></li>
+                <li><strong>Purpose:</strong> Distribution over all instances in the scene</li>
+                <li><strong>Initialization:</strong> Always initialized at scene level</li>
+            </ul>
+            
+            <pre><code><span class="comment">// Scene-level initialization</span>
+scene->lightInstDist.<span class="function">initialize</span>(cuContext, maxNumInstances);</code></pre>
+        </div>
+
+        <h2>💡 Key Architecture Insights</h2>
+
+        <div class="important">
+            <strong>Why the variant pattern?</strong> The geometry-specific data (like <code>emitterPrimDist</code>) is stored in the variant types rather than the wrapper. This allows:
+            <ul>
+                <li>Different geometry types to have different light sampling strategies</li>
+                <li>Clean separation of concerns - only triangle geometry needs primitive distributions</li>
+                <li>Type-safe access to geometry-specific features</li>
+            </ul>
+        </div>
+
+        <h2>🛠️ Correct Updates for ShockerCore Implementation</h2>
+
+        <div class="implementation-box">
+            <h3>1. Keep ShockerSurface Clean</h3>
+            <pre><code><span class="comment">// ShockerSurface remains a clean wrapper - NO emitterPrimDist here</span>
+<span class="keyword">struct</span> <span class="type">ShockerSurface</span> {
+    <span class="keyword">const</span> <span class="type">::DisneyMaterial*</span> mat;
+    <span class="type">uint32_t</span> geomInstSlot;
+    <span class="type">optixu::GeometryInstance</span> optixGeomInst;
+    <span class="type">std::variant</span>&lt;<span class="type">TriangleGeometry</span>, <span class="type">CurveGeometry</span>, ...&gt; geometry;
+    <span class="type">AABB</span> aabb;
+    <span class="comment">// No emitterPrimDist here!</span>
+};</code></pre>
+        </div>
+
+        <div class="implementation-box">
+            <h3>2. Add Light Distribution to Geometry Variants</h3>
+            <pre><code><span class="comment">// Update the TriangleGeometry variant</span>
+<span class="keyword">struct</span> <span class="type">TriangleGeometry</span> {
+    <span class="type">cudau::TypedBuffer</span>&lt;<span class="type">shared::Vertex</span>&gt; vertexBuffer;
+    <span class="type">cudau::TypedBuffer</span>&lt;<span class="type">shared::Triangle</span>&gt; triangleBuffer;
+    
+    <span class="comment">// ADD: Light distribution for emissive triangles</span>
+    <span class="type">LightDistribution</span> emitterPrimDist;
+    
+    <span class="comment">// Helper to check if initialized</span>
+    <span class="type">bool</span> <span class="function">hasEmitterDistribution</span>() <span class="keyword">const</span> {
+        <span class="keyword">return</span> emitterPrimDist.<span class="function">isInitialized</span>();
+    }
+};
+
+<span class="comment">// Similar for CurveGeometry if needed</span>
+<span class="keyword">struct</span> <span class="type">CurveGeometry</span> {
+    <span class="type">cudau::TypedBuffer</span>&lt;<span class="type">shared::CurveVertex</span>&gt; curveVertexBuffer;
+    <span class="type">cudau::TypedBuffer</span>&lt;<span class="type">uint32_t</span>&gt; segmentIndexBuffer;
+    
+    <span class="comment">// Could have its own emitter distribution if curves can emit</span>
+    <span class="comment">// LightDistribution emitterPrimDist;</span>
+};</code></pre>
+        </div>
+
+        <div class="implementation-box">
+            <h3>3. Update ShockerNode for Instance-Level Distribution</h3>
+            <pre><code><span class="keyword">struct</span> <span class="type">ShockerNode</span> {
+    <span class="type">uint32_t</span> instSlot;
+    <span class="type">optixu::Instance</span> optixInst;
+    <span class="type">ShockerMesh::ShockerSurfaceGroupInstance</span> geomGroupInst;
+    <span class="type">Matrix4x4</span> matM2W;
+    <span class="type">Matrix3x3</span> nMatM2W;
+    <span class="type">Matrix4x4</span> prevMatM2W;
+    
+    <span class="comment">// ADD: For mesh lighting</span>
+    <span class="type">cudau::TypedBuffer</span>&lt;<span class="type">uint32_t</span>&gt; geomInstSlots;
+    <span class="type">LightDistribution</span> lightGeomInstDist;
+};</code></pre>
+        </div>
+
+        <div class="implementation-box">
+            <h3>4. Access Pattern for Light Distributions</h3>
+            <pre><code><span class="comment">// To access emitterPrimDist from a ShockerSurface:</span>
+<span class="type">ShockerSurface*</span> surface = ...;
+<span class="keyword">if</span> (<span class="function">std::holds_alternative</span>&lt;<span class="type">TriangleGeometry</span>&gt;(surface->geometry)) {
+    <span class="keyword">auto</span>& triGeom = <span class="function">std::get</span>&lt;<span class="type">TriangleGeometry</span>&gt;(surface->geometry);
+    <span class="keyword">if</span> (triGeom.<span class="function">hasEmitterDistribution</span>()) {
+        <span class="comment">// Use triGeom.emitterPrimDist</span>
+    }
+}</code></pre>
+        </div>
+
+        <h2>📈 Why This Architecture is Better</h2>
+
+        <table>
+            <tr>
+                <th>Aspect</th>
+                <th>Benefit</th>
+                <th>Explanation</th>
+            </tr>
+            <tr>
+                <td>Type Safety</td>
+                <td>✅ High</td>
+                <td>Only geometry types that can emit light have the distribution</td>
+            </tr>
+            <tr>
+                <td>Memory Efficiency</td>
+                <td>✅ Optimal</td>
+                <td>No wasted space for non-emissive or non-triangle geometry</td>
+            </tr>
+            <tr>
+                <td>Extensibility</td>
+                <td>✅ Easy</td>
+                <td>Each geometry type can implement its own light sampling strategy</td>
+            </tr>
+            <tr>
+                <td>Code Clarity</td>
+                <td>✅ Clear</td>
+                <td>Separation of concerns - geometry-specific data stays with geometry</td>
+            </tr>
+        </table>
+
+        <h2>🎯 Implementation Strategy</h2>
+
+        <ol>
+            <li><strong>DO NOT</strong> add <code>emitterPrimDist</code> to <code>ShockerSurface</code></li>
+            <li><strong>DO</strong> add <code>emitterPrimDist</code> to the geometry variant types (TriangleGeometry, etc.)</li>
+            <li><strong>DO</strong> add <code>lightGeomInstDist</code> to <code>ShockerNode</code> for instance-level distribution</li>
+            <li><strong>DO</strong> add <code>lightInstDist</code> to the scene handler for scene-wide distribution</li>
+            <li>Initialize distributions conditionally based on material emittance</li>
+            <li>Use std::variant visitor pattern or std::holds_alternative to access geometry-specific features</li>
+        </ol>
+
+        <div class="important" style="margin-top: 40px;">
+            <strong>Lesson Learned:</strong> The original architecture is cleaner than initially thought. By storing 
+            light distributions in the geometry variants rather than the wrapper, it maintains better separation of 
+            concerns and type safety. This design pattern should be preserved in the ShockerCore implementation.
+        </div>
+    </div>
+</body>
+</html>

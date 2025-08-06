@@ -15,9 +15,11 @@ using sabi::WeakRenderableList;
 // Forward declarations
 class ShockerModelHandler;
 class ShockerMaterialHandler;
+class AreaLightHandler;
 using ShockerSceneHandlerPtr = std::shared_ptr<class ShockerSceneHandler>;
 using ShockerModelHandlerPtr = std::shared_ptr<ShockerModelHandler>;
 using ShockerMaterialHandlerPtr = std::shared_ptr<ShockerMaterialHandler>;
+using AreaLightHandlerPtr = std::shared_ptr<AreaLightHandler>;
 
 class ShockerSceneHandler
 {
@@ -46,10 +48,14 @@ public:
     
     // Set the material handler (must be called before using material operations)  
     void setMaterialHandler(ShockerMaterialHandlerPtr materialHandler) { materialHandler_ = materialHandler; }
+    
+    // Set the area light handler
+    void setAreaLightHandler(AreaLightHandlerPtr areaLightHandler) { areaLightHandler_ = areaLightHandler; }
 
     // Get handlers
     ShockerModelHandlerPtr getModelHandler() const { return modelHandler_; }
     ShockerMaterialHandlerPtr getMaterialHandler() const { return materialHandler_; }
+    AreaLightHandlerPtr getAreaLightHandler() const { return areaLightHandler_; }
 
     // Creates a node from a renderable node (replaces createInstance)
     shocker::ShockerNode* createShockerNode(RenderableWeakRef& weakNode);
@@ -77,6 +83,9 @@ public:
 
     // Update acceleration structures
     void updateAccelerationStructures();
+    
+    // Find node that contains a given surface
+    shocker::ShockerNode* findNodeForSurface(shocker::ShockerSurface* surface) const;
 
     // Get statistics
     size_t getNodeCount() const { return nodes_.size(); }
@@ -90,6 +99,7 @@ private:
     // Handlers
     ShockerModelHandlerPtr modelHandler_;
     ShockerMaterialHandlerPtr materialHandler_;
+    AreaLightHandlerPtr areaLightHandler_;
     
     // Scene data
     std::vector<shocker::ShockerNode*> nodes_;

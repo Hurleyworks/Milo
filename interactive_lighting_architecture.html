@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Mesh Lighting Architecture for Shocker</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+        }
+        
+        h2 {
+            color: #34495e;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: linear-gradient(to right, #ecf0f1, transparent);
+            border-left: 4px solid #3498db;
+        }
+        
+        h3 {
+            color: #555;
+            margin-top: 25px;
+            margin-bottom: 15px;
+        }
+        
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .critical-difference {
+            background: #fff3e0;
+            border: 2px solid #ff9800;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .critical-difference h3 {
+            color: #e65100;
+            margin-top: 0;
+        }
+        
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        .comparison-table th {
+            background: #3498db;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+        
+        .comparison-table td {
+            border: 1px solid #ddd;
+            padding: 12px;
+        }
+        
+        .comparison-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        
+        .static-approach {
+            background: #e3f2fd;
+        }
+        
+        .interactive-approach {
+            background: #e8f5e9;
+        }
+        
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9em;
+            color: #d14;
+        }
+        
+        pre {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 14px;
+            line-height: 1.5;
+            box-shadow: inset 0 2px 10px rgba(0,0,0,0.3);
+        }
+        
+        pre code {
+            background: none;
+            color: inherit;
+            padding: 0;
+            font-size: inherit;
+        }
+        
+        .comment { color: #95a5a6; font-style: italic; }
+        .keyword { color: #3498db; font-weight: bold; }
+        .type { color: #e74c3c; }
+        .function { color: #f39c12; }
+        .string { color: #27ae60; }
+        .number { color: #9b59b6; }
+        
+        .architecture-box {
+            background: #f0f4f8;
+            border: 2px solid #2196f3;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 30px 0;
+        }
+        
+        .architecture-box h3 {
+            color: #1976d2;
+            margin-top: 0;
+        }
+        
+        .flow-diagram {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            text-align: center;
+        }
+        
+        .arrow {
+            font-size: 24px;
+            color: #3498db;
+            margin: 10px 0;
+        }
+        
+        .box {
+            display: inline-block;
+            background: #ecf0f1;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            border: 2px solid #bdc3c7;
+        }
+        
+        .dirty-box {
+            background: #ffecb3;
+            border-color: #ffa000;
+        }
+        
+        .clean-box {
+            background: #c8e6c9;
+            border-color: #4caf50;
+        }
+        
+        .important {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        
+        .important strong {
+            color: #856404;
+        }
+        
+        .event-flow {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .event-flow h4 {
+            color: #2c3e50;
+            margin-top: 0;
+        }
+        
+        .event-step {
+            background: white;
+            border-left: 3px solid #3498db;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        
+        .implementation-section {
+            background: #e8f4f8;
+            border: 2px solid #3498db;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 30px 0;
+        }
+        
+        .implementation-section h3 {
+            margin-top: 0;
+            color: #2980b9;
+        }
+        
+        ul {
+            margin: 15px 0;
+            padding-left: 30px;
+        }
+        
+        li {
+            margin: 8px 0;
+        }
+        
+        .pros-cons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .pros {
+            background: #e8f5e9;
+            border: 2px solid #4caf50;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        
+        .cons {
+            background: #ffebee;
+            border: 2px solid #f44336;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        
+        .pros h4 {
+            color: #2e7d32;
+            margin-top: 0;
+        }
+        
+        .cons h4 {
+            color: #c62828;
+            margin-top: 0;
+        }
+        
+        .state-diagram {
+            background: white;
+            border: 2px solid #673ab7;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .state-diagram h4 {
+            color: #512da8;
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 Interactive Mesh Lighting Architecture for Shocker</h1>
+        
+        <div class="critical-difference">
+            <h3>⚠️ Critical Architectural Difference</h3>
+            <p><strong>Static Scene (Sample Code):</strong> All geometry is known upfront. Light distributions are computed once during scene loading.</p>
+            <p><strong>Interactive Scene (Our Shocker):</strong> Users build scenes dynamically. Objects are added, removed, and modified during runtime. Light distributions must be managed incrementally.</p>
+        </div>
+
+        <h2>📊 Static vs Interactive Comparison</h2>
+
+        <table class="comparison-table">
+            <tr>
+                <th>Aspect</th>
+                <th class="static-approach">Static Scene (Sample)</th>
+                <th class="interactive-approach">Interactive Scene (Shocker)</th>
+            </tr>
+            <tr>
+                <td><strong>Scene Creation</strong></td>
+                <td class="static-approach">Load once from file</td>
+                <td class="interactive-approach">Build incrementally via user actions</td>
+            </tr>
+            <tr>
+                <td><strong>Distribution Computation</strong></td>
+                <td class="static-approach">Immediate during load</td>
+                <td class="interactive-approach">Deferred until render</td>
+            </tr>
+            <tr>
+                <td><strong>Material Changes</strong></td>
+                <td class="static-approach">Never change after load</td>
+                <td class="interactive-approach">Can change any time</td>
+            </tr>
+            <tr>
+                <td><strong>Geometry Updates</strong></td>
+                <td class="static-approach">Static after load</td>
+                <td class="interactive-approach">Add/remove/modify dynamically</td>
+            </tr>
+            <tr>
+                <td><strong>Memory Management</strong></td>
+                <td class="static-approach">Allocate once</td>
+                <td class="interactive-approach">Dynamic allocation/deallocation</td>
+            </tr>
+            <tr>
+                <td><strong>Performance Focus</strong></td>
+                <td class="static-approach">Optimize for rendering</td>
+                <td class="interactive-approach">Balance editing and rendering</td>
+            </tr>
+        </table>
+
+        <h2>🏗️ Proposed Interactive Architecture</h2>
+
+        <div class="architecture-box">
+            <h3>Core Concepts</h3>
+            <ul>
+                <li><strong>Lazy Initialization:</strong> Light distributions are only created when needed</li>
+                <li><strong>Dirty Tracking:</strong> Mark which distributions need updating</li>
+                <li><strong>Deferred Computation:</strong> Rebuild distributions just before rendering</li>
+                <li><strong>Incremental Updates:</strong> Only update what changed</li>
+            </ul>
+        </div>
+
+        <div class="flow-diagram">
+            <h4>Update Flow</h4>
+            <div class="box dirty-box">User Action</div>
+            <div class="arrow">↓</div>
+            <div class="box dirty-box">Mark Dirty</div>
+            <div class="arrow">↓</div>
+            <div class="box">Continue Editing</div>
+            <div class="arrow">↓</div>
+            <div class="box">Render Request</div>
+            <div class="arrow">↓</div>
+            <div class="box clean-box">Update Distributions</div>
+            <div class="arrow">↓</div>
+            <div class="box clean-box">Path Trace</div>
+        </div>
+
+        <h2>💻 Implementation Design</h2>
+
+        <div class="implementation-section">
+            <h3>1. Dirty Flag System</h3>
+            <pre><code><span class="keyword">class</span> <span class="type">ShockerSceneHandler</span> {
+<span class="keyword">private</span>:
+    <span class="comment">// Scene-wide light distribution</span>
+    <span class="type">LightDistribution</span> lightInstDist;
+    
+    <span class="comment">// Dirty tracking at multiple levels</span>
+    <span class="keyword">struct</span> <span class="type">DirtyState</span> {
+        <span class="type">bool</span> sceneDistributionDirty = <span class="keyword">true</span>;
+        <span class="type">std::set</span>&lt;<span class="type">ShockerNode*</span>&gt; dirtyNodes;
+        <span class="type">std::set</span>&lt;<span class="type">ShockerSurface*</span>&gt; dirtySurfaces;
+        
+        <span class="comment">// Granular tracking for optimization</span>
+        <span class="type">bool</span> geometryAdded = <span class="keyword">false</span>;
+        <span class="type">bool</span> geometryRemoved = <span class="keyword">false</span>;
+        <span class="type">bool</span> materialChanged = <span class="keyword">false</span>;
+        <span class="type">bool</span> transformChanged = <span class="keyword">false</span>;
+    } dirtyState;
+    
+<span class="keyword">public</span>:
+    <span class="comment">// Called when scene changes</span>
+    <span class="type">void</span> <span class="function">markSurfaceDirty</span>(<span class="type">ShockerSurface*</span> surface) {
+        dirtyState.dirtySurfaces.<span class="function">insert</span>(surface);
+        <span class="keyword">if</span> (<span class="keyword">auto</span>* node = <span class="function">getNodeForSurface</span>(surface)) {
+            <span class="function">markNodeDirty</span>(node);
+        }
+    }
+    
+    <span class="type">void</span> <span class="function">markNodeDirty</span>(<span class="type">ShockerNode*</span> node) {
+        dirtyState.dirtyNodes.<span class="function">insert</span>(node);
+        dirtyState.sceneDistributionDirty = <span class="keyword">true</span>;
+    }
+    
+    <span class="type">void</span> <span class="function">markSceneDirty</span>() {
+        dirtyState.sceneDistributionDirty = <span class="keyword">true</span>;
+    }
+};</code></pre>
+        </div>
+
+        <div class="implementation-section">
+            <h3>2. Deferred Update System</h3>
+            <pre><code><span class="keyword">class</span> <span class="type">ShockerSceneHandler</span> {
+<span class="keyword">public</span>:
+    <span class="comment">// Called before rendering - updates only if needed</span>
+    <span class="type">void</span> <span class="function">updateLightDistributionsIfNeeded</span>(<span class="type">CUstream</span> stream) {
+        <span class="keyword">if</span> (!<span class="function">hasAnyDirtyDistributions</span>()) {
+            <span class="keyword">return</span>; <span class="comment">// Nothing to update</span>
+        }
+        
+        <span class="comment">// Step 1: Update surface-level distributions (primitives)</span>
+        <span class="keyword">if</span> (!dirtyState.dirtySurfaces.<span class="function">empty</span>()) {
+            <span class="function">updateSurfaceEmitterDistributions</span>(stream);
+        }
+        
+        <span class="comment">// Step 2: Update node-level distributions (geometry instances)</span>
+        <span class="keyword">if</span> (!dirtyState.dirtyNodes.<span class="function">empty</span>()) {
+            <span class="function">updateNodeLightDistributions</span>(stream);
+        }
+        
+        <span class="comment">// Step 3: Update scene-level distribution (instances)</span>
+        <span class="keyword">if</span> (dirtyState.sceneDistributionDirty) {
+            <span class="function">updateSceneLightDistribution</span>(stream);
+        }
+        
+        <span class="comment">// Clear dirty flags</span>
+        <span class="function">clearDirtyState</span>();
+    }
+    
+<span class="keyword">private</span>:
+    <span class="type">void</span> <span class="function">updateSurfaceEmitterDistributions</span>(<span class="type">CUstream</span> stream) {
+        <span class="keyword">for</span> (<span class="keyword">auto</span>* surface : dirtyState.dirtySurfaces) {
+            <span class="keyword">if</span> (<span class="keyword">auto</span>* triGeom = <span class="function">std::get_if</span>&lt;<span class="type">TriangleGeometry</span>&gt;(&surface->geometry)) {
+                <span class="type">bool</span> needsEmitterDist = surface->mat && surface->mat-><span class="function">hasEmittance</span>();
+                <span class="type">bool</span> hasEmitterDist = triGeom->emitterPrimDist.<span class="function">isInitialized</span>();
+                
+                <span class="keyword">if</span> (needsEmitterDist && !hasEmitterDist) {
+                    <span class="comment">// Initialize new distribution</span>
+                    <span class="type">uint32_t</span> numTriangles = triGeom->triangleBuffer.<span class="function">numElements</span>();
+                    triGeom->emitterPrimDist.<span class="function">initialize</span>(cuContext, numTriangles);
+                    <span class="function">computeTriangleImportances</span>(surface, stream);
+                    
+                } <span class="keyword">else if</span> (!needsEmitterDist && hasEmitterDist) {
+                    <span class="comment">// Destroy unneeded distribution</span>
+                    triGeom->emitterPrimDist.<span class="function">finalize</span>();
+                    
+                } <span class="keyword">else if</span> (needsEmitterDist && hasEmitterDist) {
+                    <span class="comment">// Update existing distribution</span>
+                    <span class="function">computeTriangleImportances</span>(surface, stream);
+                }
+            }
+        }
+    }
+};</code></pre>
+        </div>
+
+        <h2>🎯 Event Handling Patterns</h2>
+
+        <div class="event-flow">
+            <h4>Material Assignment Change</h4>
+            <div class="event-step">
+                <strong>1. User Action:</strong> Assign new material to surface
+            </div>
+            <div class="event-step">
+                <strong>2. Handler Action:</strong>
+                <pre><code><span class="type">void</span> <span class="function">assignMaterial</span>(<span class="type">ShockerSurface*</span> surface, <span class="type">DisneyMaterial*</span> newMat) {
+    <span class="type">DisneyMaterial*</span> oldMat = surface->mat;
+    surface->mat = newMat;
+    
+    <span class="comment">// Check if emissive status changed</span>
+    <span class="type">bool</span> wasEmissive = oldMat && oldMat-><span class="function">hasEmittance</span>();
+    <span class="type">bool</span> isEmissive = newMat && newMat-><span class="function">hasEmittance</span>();
+    
+    <span class="keyword">if</span> (wasEmissive != isEmissive) {
+        sceneHandler-><span class="function">markSurfaceDirty</span>(surface);
+        sceneHandler-><span class="function">onEmissiveStatusChanged</span>();
+    }
+}</code></pre>
+            </div>
+            <div class="event-step">
+                <strong>3. Deferred Update:</strong> Distributions updated before next render
+            </div>
+        </div>
+
+        <div class="event-flow">
+            <h4>Add New Geometry</h4>
+            <div class="event-step">
+                <strong>1. User Action:</strong> Import new model
+            </div>
+            <div class="event-step">
+                <strong>2. Handler Action:</strong>
+                <pre><code><span class="type">ShockerNode*</span> <span class="function">createNode</span>(<span class="type">RenderableNode</span>& renderNode) {
+    <span class="comment">// Create surfaces and node</span>
+    <span class="type">ShockerNode*</span> node = modelHandler-><span class="function">createShockerNode</span>(...);
+    
+    <span class="comment">// Don't initialize distributions yet!</span>
+    <span class="comment">// Just mark as dirty</span>
+    sceneHandler-><span class="function">markNodeDirty</span>(node);
+    sceneHandler-><span class="function">markSceneDirty</span>();
+    
+    <span class="keyword">return</span> node;
+}</code></pre>
+            </div>
+            <div class="event-step">
+                <strong>3. Deferred Update:</strong> Distributions created/updated before render
+            </div>
+        </div>
+
+        <div class="event-flow">
+            <h4>Transform Change</h4>
+            <div class="event-step">
+                <strong>1. User Action:</strong> Move/rotate/scale object
+            </div>
+            <div class="event-step">
+                <strong>2. Handler Action:</strong>
+                <pre><code><span class="type">void</span> <span class="function">updateTransform</span>(<span class="type">ShockerNode*</span> node, <span class="keyword">const</span> <span class="type">Matrix4x4</span>& transform) {
+    node->matM2W = transform;
+    
+    <span class="comment">// Transform affects instance-level importance (scale²)</span>
+    sceneHandler-><span class="function">markSceneDirty</span>();
+    
+    <span class="comment">// No need to mark node or surfaces dirty</span>
+    <span class="comment">// Only scene-level distribution needs update</span>
+}</code></pre>
+            </div>
+        </div>
+
+        <h2>🔄 Incremental Update Strategies</h2>
+
+        <div class="architecture-box">
+            <h3>Optimization Techniques</h3>
+            
+            <h4>1. Batch Updates</h4>
+            <pre><code><span class="comment">// Collect all changes during frame</span>
+<span class="type">std::vector</span>&lt;<span class="type">SceneChange</span>&gt; pendingChanges;
+
+<span class="comment">// Process all at once before render</span>
+<span class="type">void</span> <span class="function">flushPendingChanges</span>() {
+    <span class="keyword">for</span> (<span class="keyword">const</span> <span class="keyword">auto</span>& change : pendingChanges) {
+        <span class="function">applyChange</span>(change);
+    }
+    pendingChanges.<span class="function">clear</span>();
+    <span class="function">updateLightDistributionsIfNeeded</span>(stream);
+}</code></pre>
+
+            <h4>2. Partial Updates</h4>
+            <pre><code><span class="comment">// Only update the changed portion of distribution</span>
+<span class="type">void</span> <span class="function">updatePartialDistribution</span>(<span class="type">LightDistribution</span>& dist, 
+                                 <span class="type">uint32_t</span> startIdx, <span class="type">uint32_t</span> endIdx) {
+    <span class="comment">// Recompute weights only for changed range</span>
+    <span class="keyword">for</span> (<span class="type">uint32_t</span> i = startIdx; i < endIdx; ++i) {
+        <span class="type">float</span> importance = <span class="function">computeImportance</span>(i);
+        dist.<span class="function">setWeightAt</span>(i, importance);
+    }
+    
+    <span class="comment">// Rebuild CDF from updated weights</span>
+    dist.<span class="function">rebuildCDF</span>();
+}</code></pre>
+
+            <h4>3. Hierarchical Caching</h4>
+            <pre><code><span class="keyword">struct</span> <span class="type">DistributionCache</span> {
+    <span class="comment">// Cache computed importances</span>
+    <span class="type">std::unordered_map</span>&lt;<span class="type">ShockerSurface*</span>, <span class="type">float</span>&gt; surfaceImportances;
+    <span class="type">std::unordered_map</span>&lt;<span class="type">ShockerNode*</span>, <span class="type">float</span>&gt; nodeImportances;
+    
+    <span class="type">void</span> <span class="function">invalidateSurface</span>(<span class="type">ShockerSurface*</span> surface) {
+        surfaceImportances.<span class="function">erase</span>(surface);
+        <span class="comment">// Also invalidate parent node</span>
+    }
+};</code></pre>
+        </div>
+
+        <h2>⚡ Performance Considerations</h2>
+
+        <div class="pros-cons">
+            <div class="pros">
+                <h4>✅ Advantages</h4>
+                <ul>
+                    <li>Fast interactive editing (no immediate computation)</li>
+                    <li>Batched GPU operations</li>
+                    <li>Memory efficient (only allocate when needed)</li>
+                    <li>Scales well with scene complexity</li>
+                    <li>Supports undo/redo efficiently</li>
+                </ul>
+            </div>
+            <div class="cons">
+                <h4>⚠️ Challenges</h4>
+                <ul>
+                    <li>First render after changes may stall</li>
+                    <li>Complex state management</li>
+                    <li>Need careful synchronization</li>
+                    <li>Memory fragmentation over time</li>
+                    <li>Debugging is more complex</li>
+                </ul>
+            </div>
+        </div>
+
+        <h2>🎮 Render Loop Integration</h2>
+
+        <div class="implementation-section">
+            <h3>Main Render Loop</h3>
+            <pre><code><span class="type">void</span> <span class="function">renderFrame</span>(<span class="type">RenderParams</span>& params) {
+    <span class="comment">// 1. Process any pending scene modifications</span>
+    <span class="keyword">if</span> (sceneHandler-><span class="function">hasPendingChanges</span>()) {
+        sceneHandler-><span class="function">processPendingChanges</span>();
+    }
+    
+    <span class="comment">// 2. Update light distributions if needed</span>
+    <span class="comment">//    This is where all deferred computation happens</span>
+    <span class="keyword">auto</span> updateStart = <span class="function">std::chrono::high_resolution_clock::now</span>();
+    sceneHandler-><span class="function">updateLightDistributionsIfNeeded</span>(stream);
+    <span class="keyword">auto</span> updateEnd = <span class="function">std::chrono::high_resolution_clock::now</span>();
+    
+    <span class="comment">// 3. Log update time for performance monitoring</span>
+    <span class="keyword">if</span> (updateEnd - updateStart > <span class="function">std::chrono::milliseconds</span>(<span class="number">16</span>)) {
+        <span class="function">LOG</span>(WARNING) << <span class="string">"Light distribution update took "</span> 
+                     << <span class="function">std::chrono::duration_cast</span>&lt;<span class="type">std::chrono::milliseconds</span>&gt;(updateEnd - updateStart).<span class="function">count</span>()
+                     << <span class="string">"ms"</span>;
+    }
+    
+    <span class="comment">// 4. Now distributions are ready - perform path tracing</span>
+    pathTracer-><span class="function">trace</span>(params);
+    
+    <span class="comment">// 5. Present results</span>
+    swapChain-><span class="function">present</span>();
+}</code></pre>
+        </div>
+
+        <h2>📊 State Management</h2>
+
+        <div class="state-diagram">
+            <h4>Distribution State Machine</h4>
+            <pre><code><span class="keyword">enum class</span> <span class="type">DistributionState</span> {
+    <span class="comment">// Never initialized</span>
+    Uninitialized,
+    
+    <span class="comment">// Initialized but needs update</span>
+    Dirty,
+    
+    <span class="comment">// Up to date and ready for use</span>
+    Clean,
+    
+    <span class="comment">// Marked for deletion</span>
+    PendingDestroy
+};
+
+<span class="keyword">class</span> <span class="type">DistributionManager</span> {
+    <span class="type">std::map</span>&lt;<span class="type">void*</span>, <span class="type">DistributionState</span>&gt; states;
+    
+    <span class="type">void</span> <span class="function">transitionState</span>(<span class="type">void*</span> dist, <span class="type">DistributionState</span> newState) {
+        <span class="type">DistributionState</span> oldState = states[dist];
+        
+        <span class="comment">// Validate state transition</span>
+        <span class="keyword">if</span> (!<span class="function">isValidTransition</span>(oldState, newState)) {
+            <span class="function">LOG</span>(ERROR) << <span class="string">"Invalid state transition"</span>;
+            <span class="keyword">return</span>;
+        }
+        
+        states[dist] = newState;
+        <span class="function">onStateChanged</span>(dist, oldState, newState);
+    }
+};</code></pre>
+        </div>
+
+        <h2>🚀 Implementation Roadmap</h2>
+
+        <div class="architecture-box">
+            <h3>Phase 1: Basic Dirty Flag System</h3>
+            <ul>
+                <li>Implement simple dirty flags at scene level</li>
+                <li>Rebuild all distributions when any change occurs</li>
+                <li>Test with small scenes</li>
+            </ul>
+
+            <h3>Phase 2: Granular Tracking</h3>
+            <ul>
+                <li>Add per-surface and per-node dirty tracking</li>
+                <li>Only update affected distributions</li>
+                <li>Implement lazy initialization</li>
+            </ul>
+
+            <h3>Phase 3: Optimization</h3>
+            <ul>
+                <li>Add importance caching</li>
+                <li>Implement partial updates</li>
+                <li>Profile and optimize GPU kernels</li>
+            </ul>
+
+            <h3>Phase 4: Advanced Features</h3>
+            <ul>
+                <li>Async distribution updates</li>
+                <li>Progressive refinement</li>
+                <li>LOD for distant lights</li>
+            </ul>
+        </div>
+
+        <div class="important" style="margin-top: 40px;">
+            <strong>Key Takeaway:</strong> The interactive nature of Shocker requires a fundamentally different approach 
+            to light distribution management compared to the static sample code. By using dirty flags, deferred computation, 
+            and incremental updates, we can maintain interactive performance while supporting dynamic scene editing with 
+            mesh-based lighting.
+        </div>
+    </div>
+</body>
+</html>

@@ -18,7 +18,9 @@ using sabi::CgMaterial;
 using sabi::CgTextureInfo;
 
 class ShockerMaterialHandler;
+class AreaLightHandler;
 using ShockerMaterialHandlerPtr = std::shared_ptr<ShockerMaterialHandler>;
+using AreaLightHandlerPtr = std::shared_ptr<AreaLightHandler>;
 
 class ShockerMaterialHandler
 {
@@ -34,6 +36,11 @@ public:
     
     // Initialize the material handler
     void initialize(RenderContext* ctx);
+    
+    // Set the area light handler for notifications
+    void setAreaLightHandler(AreaLightHandlerPtr areaLightHandler) { 
+        areaLightHandler_ = areaLightHandler; 
+    }
     
     // Clear all materials
     void clear();
@@ -133,6 +140,9 @@ private:
 private:
     // Render context (may be null for testing)
     RenderContext* ctx_ = nullptr;
+    
+    // Area light handler for notifications
+    AreaLightHandlerPtr areaLightHandler_ = nullptr;
     
     // Collection of all created materials
     std::vector<std::unique_ptr<DisneyMaterial>> materials_;
