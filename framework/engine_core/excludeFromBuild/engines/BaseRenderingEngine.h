@@ -14,7 +14,6 @@
 // Forward declarations
 class RenderContext;
 class PTXManager;
-class DenoiserHandler;
 class SkyDomeHandler;
 namespace optixu {
     class Context;
@@ -177,6 +176,5 @@ protected:
     optixu::Material defaultMaterial_;
     
     // Common handlers
-    std::shared_ptr<DenoiserHandler> denoiserHandler_;
     std::shared_ptr<SkyDomeHandler> skyDomeHandler_;
 };

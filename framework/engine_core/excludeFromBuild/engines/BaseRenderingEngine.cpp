@@ -24,7 +24,6 @@ BaseRenderingEngine::BaseRenderingEngine() :
     pipelinePtr_(nullptr),
     scene_(),
     defaultMaterial_(),
-    denoiserHandler_(nullptr),
     skyDomeHandler_(nullptr)
 {
 }

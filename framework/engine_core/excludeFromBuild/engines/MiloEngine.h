@@ -63,9 +63,6 @@ private:
     // Camera update methods
     void updateCameraBody(const mace::InputEvent& input);
     void updateCameraSensor();
-
-    // Scene components
-    optixu::Scene scene_;
     
     // Pipeline
     std::shared_ptr<engine_core::RenderPipeline<engine_core::PathTracingEntryPoint>> pathTracePipeline_;
