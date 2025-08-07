@@ -1,5 +1,6 @@
 #include "RenderEngineManager.h"
 #include "BaseRenderingEngine.h"
+#include "ShockerEngine.h"
 #include "../RenderContext.h"
 
 RenderEngineManager::RenderEngineManager() :
@@ -257,4 +258,32 @@ void RenderEngineManager::onEnvironmentChanged()
     
     activeEngine_->onEnvironmentChanged();
     LOG(DBUG) << "Notified active engine about environment change";
+}
+
+void RenderEngineManager::setShockerRenderMode(int mode)
+{
+    if (!activeEngine_)
+    {
+        LOG(WARNING) << "No active engine to set render mode";
+        return;
+    }
+    
+    // Check if it's the ShockerEngine
+    if (currentEngineName_ == "shocker")
+    {
+        // Cast to ShockerEngine and set render mode
+        if (auto shockerEngine = dynamic_cast<ShockerEngine*>(activeEngine_.get()))
+        {
+            shockerEngine->setRenderMode(static_cast<ShockerEngine::RenderMode>(mode));
+            LOG(INFO) << "Set Shocker render mode to: " << mode;
+        }
+        else
+        {
+            LOG(WARNING) << "Failed to cast to ShockerEngine";
+        }
+    }
+    else
+    {
+        LOG(WARNING) << "Shocker render mode can only be set when ShockerEngine is active. Current engine: " << currentEngineName_;
+    }
 }

@@ -89,7 +89,12 @@ void ActiveRender::waitingForMessages()
         .handle<QMS::setEngine> ([&] (QMS::setEngine const& msg)
                                  {
                                      engineName = msg.engineName;
-                                     state = &ActiveRender::setEngine; });
+                                     state = &ActiveRender::setEngine; })
+        
+        .handle<QMS::setShockerRenderMode> ([&] (QMS::setShockerRenderMode const& msg)
+                                            {
+                                                shockerRenderMode = msg.mode;
+                                                state = &ActiveRender::setShockerRenderMode; });
 }
 
 // init
@@ -233,6 +238,28 @@ void ActiveRender::setEngine()
         done();
         LOG (DBUG) << "Caught unknown exception!";
         messengers.dreamer.send (QMS::onError ("Caught unknown exception!"));
+    }
+    state = &ActiveRender::waitingForMessages;
+}
+
+void ActiveRender::setShockerRenderMode()
+{
+    try
+    {
+        impl->setShockerRenderMode(shockerRenderMode);
+        LOG(DBUG) << "Set Shocker render mode to: " << shockerRenderMode;
+    }
+    catch (std::exception& e)
+    {
+        done();
+        LOG(DBUG) << e.what();
+        messengers.dreamer.send(QMS::onError(e.what() + std::string(" ActiveRender thread is shutting down")));
+    }
+    catch (...)
+    {
+        done();
+        LOG(DBUG) << "Caught unknown exception!";
+        messengers.dreamer.send(QMS::onError("Caught unknown exception!"));
     }
     state = &ActiveRender::waitingForMessages;
 }

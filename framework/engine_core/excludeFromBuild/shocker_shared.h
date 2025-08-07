@@ -78,6 +78,8 @@ enum class RenderMode {
 // Device-side structures and helper functions
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
 
+#include "common/deviceCommon.h"
+
 namespace shocker_shared {
 
 // Hit group SBT record data

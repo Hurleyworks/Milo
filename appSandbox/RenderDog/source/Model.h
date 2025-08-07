@@ -211,6 +211,11 @@ class Model : public Observer
     {
         framework.render.getMessenger().send (QMS::setEngine (engineName));
     }
+    
+    void setShockerRenderMode (int mode)
+    {
+        framework.render.getMessenger().send (QMS::setShockerRenderMode (mode));
+    }
 
     // load the icon images for the gui
     void loadIcons (const std::string& iconFolder)

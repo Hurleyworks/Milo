@@ -10,6 +10,7 @@
 //#include "ShockerRenderEngine.h"
 //#include "RiPREngine.h"
 #include "MiloEngine.h"
+#include "ShockerEngine.h"
 
 // Register all built-in rendering engines
 inline void registerBuiltInEngines(RenderEngineManager& manager)
@@ -62,6 +63,14 @@ inline void registerBuiltInEngines(RenderEngineManager& manager)
                           "High-performance path tracing engine based on RiPR architecture",
                           []() -> std::unique_ptr<IRenderingEngine> {
                               return std::make_unique<MiloEngine>();
+                          });
+    
+    // Register Shocker engine
+    manager.registerEngine("shocker",
+                          "Shocker Engine",
+                          "Dual-pipeline ray tracing engine with G-buffer and path tracing modes",
+                          []() -> std::unique_ptr<IRenderingEngine> {
+                              return std::make_unique<ShockerEngine>();
                           });
     
     // TODO: Register more engines as they are implemented

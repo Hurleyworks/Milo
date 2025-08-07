@@ -22,7 +22,9 @@
       "WebFetch(domain:docs.anthropic.com)",
       "Bash(b.bat)",
       "Bash(mv:*)",
-      "Bash(./b.bat)"
+      "Bash(./b.bat)",
+      "Bash(cp:*)",
+      "Bash(diff:*)"
     ],
     "deny": []
   },

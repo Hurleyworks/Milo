@@ -45,6 +45,9 @@ class Application : public Jahley::App
         view->onAreaLightIntensityChange.connect<Controller, &Controller::onAreaLightIntensityChange> (&controller);
         view->onAreaLightEnable.connect<Controller, &Controller::onAreaLightEnable> (&controller);
         
+        // view to model connection for Shocker render mode changes
+        view->onShockerRenderModeChange.connect<Model, &Model::setShockerRenderMode> (&model);
+        
         // model to view connection for HDR loading
         model.hdrLoadedEmitter.connect<Application, &Application::onHDRLoaded>(this);
 

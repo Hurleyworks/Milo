@@ -475,3 +475,15 @@ std::vector<std::string> Renderer::getAvailableEngines() const
     }
     return {};
 }
+
+void Renderer::setShockerRenderMode(int mode)
+{
+    if (!engineManager_)
+    {
+        LOG(WARNING) << "Cannot set Shocker render mode: Engine manager not initialized";
+        return;
+    }
+    
+    // Delegate to the engine manager
+    engineManager_->setShockerRenderMode(mode);
+}

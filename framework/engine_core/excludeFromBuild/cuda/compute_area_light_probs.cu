@@ -1,6 +1,8 @@
 // compute_area_light_probs.cu
 // GPU kernels for computing area light importance sampling distributions
 
+#if 0
+
 #define PURE_CUDA
 #include "../common/common_device.cuh"
 #include "../common/common_shared.h"
@@ -201,3 +203,5 @@ extern "C" {
         computeInstanceImportances(geomInstIntegrals, instanceScales, numInstances, instanceImportances);
     }
 }
+
+#endif

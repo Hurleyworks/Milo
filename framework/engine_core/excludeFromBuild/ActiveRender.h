@@ -40,6 +40,7 @@ class ActiveRender
     RenderableWeakRef weakNode;
     std::string pipelineName;
     std::string engineName;
+    int shockerRenderMode = 0;
 
     // state functions
     std::thread stateThread;
@@ -51,6 +52,7 @@ class ActiveRender
     void addSkydomeHDR();
     void addWeakNode();
     void setEngine();
+    void setShockerRenderMode();
 
     // state thread function
     void executeState();

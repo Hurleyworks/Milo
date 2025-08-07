@@ -103,30 +103,27 @@ View::View (const DesktopWindowSettings& settings) :
     // Engine selection combo box
     new Label (engineWindow, "Render Engine:", "sans-bold");
     m_engineCombo = new ComboBox (engineWindow,
-                                  {"Milo Engine", "Environment Renderer", "Shocker Engine", "RiPR Engine", "Basic PathTracer", "Test Engine"});
-    m_engineCombo->set_selected_index (0); // Default to Basic Path Tracer
+                                  {"Milo Engine", "Shocker Engine"});
+    m_engineCombo->set_selected_index (0); // Default to Milo Engine
     m_engineCombo->set_tooltip ("Select the rendering engine to use");
     m_engineCombo->set_callback ([this] (int index)
                                  {
         const std::vector<std::string> engineNames = {
             "milo",
-            "environment_renderer",
-            "shocker",
-            "ripr",
-            "basic_pathtracer",
-            "test"
+            "shocker"
         };
         const std::vector<std::string> engineDescriptions = {
-            "Basic path tracing with OptiX",
-            "Specialized engine for HDR environment and sky rendering",
-            "Shocker-based path tracing with optimized scene management",
-            "ReSTIR Path Tracing with adaptive sampling and improved convergence",
             "High-performance path tracing engine based on RiPR architecture",
-            "Simple test engine for debugging"
+            "Dual-pipeline ray tracing engine with G-buffer and path tracing modes"
         };
         if (index >= 0 && index < engineNames.size()) {
             LOG(INFO) << "Switching to engine: " << engineNames[index];
             onEngineChange.fire(engineNames[index]);
+            
+            // Show/hide Shocker-specific controls
+            if (m_shockerWindow) {
+                m_shockerWindow->set_visible(engineNames[index] == "shocker");
+            }
             
             // Update the info label
             auto children = m_engineCombo->parent()->children();
@@ -144,12 +141,33 @@ View::View (const DesktopWindowSettings& settings) :
 
     // Engine info label
     new Label (engineWindow, "Engine Info:", "sans-bold");
-    Label* engineInfoLabel = new Label (engineWindow, "Basic path tracing with OptiX");
+    Label* engineInfoLabel = new Label (engineWindow, "High-performance path tracing engine based on RiPR architecture");
     engineInfoLabel->set_font_size (14);
+
+    // Create Shocker Engine controls window (initially hidden, shown when Shocker is selected)
+    Window* shockerWindow = new Window (this, "Shocker Engine Controls");
+    shockerWindow->set_position (Vector2i (15, 190)); // Position below engine window
+    shockerWindow->set_layout (new GroupLayout());
+    shockerWindow->set_visible(false); // Hidden by default
+    
+    // Render mode selection for Shocker Engine
+    new Label (shockerWindow, "Render Mode:", "sans-bold");
+    ComboBox* renderModeCombo = new ComboBox (shockerWindow,
+                                              {"Path Tracing", "G-Buffer Preview", "Debug Normals", 
+                                               "Debug Albedo", "Debug Depth", "Debug Motion"});
+    renderModeCombo->set_selected_index (0); // Default to Path Tracing
+    renderModeCombo->set_tooltip ("Select the render mode for Shocker Engine");
+    renderModeCombo->set_callback ([this] (int index)
+                                   {
+        // Fire event for render mode change
+        onShockerRenderModeChange.fire(index); });
+    
+    // Store reference to Shocker window for visibility control
+    m_shockerWindow = shockerWindow;
 
     // Create environment controls window
     Window* envWindow = new Window (this, "Environment Controls");
-    envWindow->set_position (Vector2i (15, 250)); // Position below engine window
+    envWindow->set_position (Vector2i (15, 300)); // Position below Shocker controls
     envWindow->set_layout (new GroupLayout());
 
     // Environment intensity label and slider

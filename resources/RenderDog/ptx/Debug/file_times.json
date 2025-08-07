@@ -1,7 +1,11 @@
 {
-    "E:\\1Milo\\Milo\\framework\\engine_core\\excludeFromBuild\\cuda\\compute_light_probs.cu": 133988126912252326,
+    "E:\\1Milo\\Milo\\framework\\engine_core\\excludeFromBuild\\cuda\\compute_area_light_probs.cu": 133990513794023846,
+    "E:\\1Milo\\Milo\\framework\\engine_core\\excludeFromBuild\\cuda\\compute_light_probs.cu": 133990551437205011,
     "E:\\1Milo\\Milo\\framework\\engine_core\\excludeFromBuild\\cuda\\optix_deform_kernels.cu": 133988126912252326,
     "E:\\1Milo\\Milo\\framework\\engine_core\\excludeFromBuild\\cuda\\optix_milo_copybuffers.cu": 133988126912357004,
     "E:\\1Milo\\Milo\\framework\\engine_core\\excludeFromBuild\\cuda\\optix_milo_kernels.cu": 133988126912357004,
+    "E:\\1Milo\\Milo\\framework\\engine_core\\excludeFromBuild\\cuda\\optix_shocker_copybuffers.cu": 133990509659655924,
+    "E:\\1Milo\\Milo\\framework\\engine_core\\excludeFromBuild\\cuda\\optix_shocker_gbuffer.cu": 133990509570615810,
+    "E:\\1Milo\\Milo\\framework\\engine_core\\excludeFromBuild\\cuda\\optix_shocker_kernels.cu": 133990551437205011,
     "buildMode": "Debug"
 }

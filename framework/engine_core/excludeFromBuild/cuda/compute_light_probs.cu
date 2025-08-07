@@ -2,6 +2,7 @@
 #include "../common/common_device.cuh"
 #include "../material/DeviceDisneyMaterial.h"
 
+#if 1
 using namespace shared;
 
 CUDA_DEVICE_KERNEL void computeProbabilityTextureFirstMip(
@@ -224,3 +225,5 @@ CUDA_DEVICE_KERNEL void testProbabilityTexture(
     atomicAdd(&histogram[sampledIndex], 1u);
     rngs[linearIndex] = rng;
 }
+
+#endif 

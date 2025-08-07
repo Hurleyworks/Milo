@@ -83,6 +83,9 @@ public:
     // Check if an engine is currently active
     bool hasActiveEngine() const { return activeEngine_ != nullptr; }
     
+    // Engine-specific controls
+    void setShockerRenderMode(int mode);
+    
 private:
     // The currently active rendering engine (only one at a time)
     std::unique_ptr<IRenderingEngine> activeEngine_;

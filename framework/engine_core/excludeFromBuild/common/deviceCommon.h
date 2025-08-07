@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-#include "../common/common_shared.h"
+#include "common_shared.h"
 
 // Mathematical constants
 static constexpr float Pi = 3.14159265358979323846f; // Pi value for circular/spherical calculations

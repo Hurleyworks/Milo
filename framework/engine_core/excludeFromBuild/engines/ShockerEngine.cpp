@@ -264,8 +264,10 @@ void ShockerEngine::createGBufferPipeline()
 {
     LOG(DBUG, "Creating G-buffer pipeline");
     
-    // TODO: Implementation will be added when we have PTX files
-    // For now, this is a stub
+    if (!ptxManager_ || !gbufferPipeline_) {
+        LOG(WARNING) << "PTXManager or G-buffer pipeline not ready";
+        return;
+    }
     
     // Pipeline configuration
     engine_core::PipelineConfig config;
@@ -273,17 +275,48 @@ void ShockerEngine::createGBufferPipeline()
     config.numPayloadDwords = 8;  // For G-buffer payload
     config.numAttributeDwords = 2;
     
-    if (gbufferPipeline_) {
-        gbufferPipeline_->initialize(context_.get(), config);
+    // Initialize pipeline
+    gbufferPipeline_->initialize(context_.get(), config);
+    
+    // Load PTX for G-buffer kernels
+    std::vector<char> gbufferPtxData = ptxManager_->getPTXData("optix_shocker_gbuffer");
+    if (gbufferPtxData.empty()) {
+        LOG(WARNING) << "Failed to load PTX for optix_shocker_gbuffer";
+        return;
     }
+    
+    // Create module from PTX
+    std::string gbufferPtxString(gbufferPtxData.begin(), gbufferPtxData.end());
+    gbufferPipeline_->optixModule = gbufferPipeline_->optixPipeline.createModuleFromPTXString(
+        gbufferPtxString,
+        OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+        DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+        DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+    
+    // Create program groups
+    gbufferPipeline_->raygenPG = gbufferPipeline_->optixPipeline.createRayGenProgram(
+        gbufferPipeline_->optixModule, "__raygen__setupGBuffers");
+    
+    gbufferPipeline_->missPG = gbufferPipeline_->optixPipeline.createMissProgram(
+        gbufferPipeline_->optixModule, "__miss__setupGBuffers");
+    
+    // Create hit group for G-buffer generation
+    gbufferPipeline_->hitGroupPGs.push_back(
+        gbufferPipeline_->optixPipeline.createHitProgramGroupForTriangleIS(
+            gbufferPipeline_->optixModule, "__closesthit__setupGBuffers",
+            optixu::Module(), nullptr));
+    
+    LOG(DBUG) << "G-buffer pipeline created successfully";
 }
 
 void ShockerEngine::createPathTracingPipeline()
 {
     LOG(DBUG, "Creating path tracing pipeline");
     
-    // TODO: Implementation will be added when we have PTX files
-    // For now, this is a stub
+    if (!ptxManager_ || !pathTracePipeline_) {
+        LOG(WARNING) << "PTXManager or path tracing pipeline not ready";
+        return;
+    }
     
     // Pipeline configuration
     engine_core::PipelineConfig config;
@@ -291,32 +324,162 @@ void ShockerEngine::createPathTracingPipeline()
     config.numPayloadDwords = 16;  // For path trace payload
     config.numAttributeDwords = 2;
     
-    if (pathTracePipeline_) {
-        pathTracePipeline_->initialize(context_.get(), config);
+    // Initialize pipeline
+    pathTracePipeline_->initialize(context_.get(), config);
+    
+    // Load PTX for path tracing kernels
+    std::vector<char> pathTracePtxData = ptxManager_->getPTXData("optix_shocker_kernels");
+    if (pathTracePtxData.empty()) {
+        LOG(WARNING) << "Failed to load PTX for optix_shocker_kernels";
+        return;
     }
+    
+    // Create module from PTX
+    std::string pathTracePtxString(pathTracePtxData.begin(), pathTracePtxData.end());
+    pathTracePipeline_->optixModule = pathTracePipeline_->optixPipeline.createModuleFromPTXString(
+        pathTracePtxString,
+        OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+        DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+        DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+    
+    // Create program groups
+    pathTracePipeline_->raygenPG = pathTracePipeline_->optixPipeline.createRayGenProgram(
+        pathTracePipeline_->optixModule, "__raygen__pathTrace");
+    
+    pathTracePipeline_->missPG = pathTracePipeline_->optixPipeline.createMissProgram(
+        pathTracePipeline_->optixModule, "__miss__pathTrace");
+    
+    // Create hit groups for path tracing
+    pathTracePipeline_->hitGroupPGs.push_back(
+        pathTracePipeline_->optixPipeline.createHitProgramGroupForTriangleIS(
+            pathTracePipeline_->optixModule, "__closesthit__pathTrace",
+            optixu::Module(), nullptr));
+    
+    // Shadow hit group for shadow rays  
+    pathTracePipeline_->hitGroupPGs.push_back(
+        pathTracePipeline_->optixPipeline.createHitProgramGroupForTriangleIS(
+            optixu::Module(), nullptr,
+            pathTracePipeline_->optixModule, "__anyhit__shadow"));
+    
+    LOG(DBUG) << "Path tracing pipeline created successfully";
 }
 
 void ShockerEngine::createSBTs()
 {
     LOG(DBUG, "Creating shader binding tables");
     
-    // TODO: Create SBTs for both pipelines
-    // This will be implemented when we have the programs created
+    if (!gbufferPipeline_ || !pathTracePipeline_) {
+        LOG(WARNING) << "Pipelines not ready for SBT creation";
+        return;
+    }
+    
+    // Create SBT for G-buffer pipeline
+    if (gbufferPipeline_->raygenPG && gbufferPipeline_->missPG) {
+        size_t rayGenRecordSize = gbufferPipeline_->raygenPG.calcSBTRecordSize();
+        gbufferPipeline_->sbt.initialize(
+            1, rayGenRecordSize,
+            1, gbufferPipeline_->missPG.calcSBTRecordSize(),
+            gbufferPipeline_->hitGroupPGs.size(), gbufferPipeline_->hitGroupPGs[0].calcSBTRecordSize(),
+            0, 0, // No callable programs
+            OPTIX_SBT_RECORD_ALIGNMENT);
+        
+        // Set raygen record
+        gbufferPipeline_->sbt.setRayGenProgram(gbufferPipeline_->raygenPG);
+        
+        // Set miss record
+        gbufferPipeline_->sbt.setMissProgram(0, gbufferPipeline_->missPG);
+        
+        // Set hit group records
+        for (size_t i = 0; i < gbufferPipeline_->hitGroupPGs.size(); ++i) {
+            gbufferPipeline_->sbt.setHitGroupProgram(i, gbufferPipeline_->hitGroupPGs[i]);
+        }
+    }
+    
+    // Create SBT for path tracing pipeline
+    if (pathTracePipeline_->raygenPG && pathTracePipeline_->missPG) {
+        size_t rayGenRecordSize = pathTracePipeline_->raygenPG.calcSBTRecordSize();
+        pathTracePipeline_->sbt.initialize(
+            1, rayGenRecordSize,
+            1, pathTracePipeline_->missPG.calcSBTRecordSize(),
+            pathTracePipeline_->hitGroupPGs.size(), pathTracePipeline_->hitGroupPGs[0].calcSBTRecordSize(),
+            0, 0, // No callable programs
+            OPTIX_SBT_RECORD_ALIGNMENT);
+        
+        // Set raygen record
+        pathTracePipeline_->sbt.setRayGenProgram(pathTracePipeline_->raygenPG);
+        
+        // Set miss record
+        pathTracePipeline_->sbt.setMissProgram(0, pathTracePipeline_->missPG);
+        
+        // Set hit group records
+        for (size_t i = 0; i < pathTracePipeline_->hitGroupPGs.size(); ++i) {
+            pathTracePipeline_->sbt.setHitGroupProgram(i, pathTracePipeline_->hitGroupPGs[i]);
+        }
+    }
+    
+    LOG(DBUG) << "Shader binding tables created successfully";
 }
 
 void ShockerEngine::updateSBTs()
 {
     LOG(DBUG, "Updating shader binding tables");
     
-    // TODO: Update SBTs after scene changes
+    // Update SBT records with new material data if needed
+    // This is typically called after scene changes or material updates
+    if (gbufferPipeline_ && gbufferPipeline_->sbt.isInitialized()) {
+        // Update hit group records with material data
+        for (size_t i = 0; i < gbufferPipeline_->hitGroupPGs.size(); ++i) {
+            // Material data will be set through the hit group's SBT data
+            // This will be handled by the material handler when materials are assigned
+        }
+    }
+    
+    if (pathTracePipeline_ && pathTracePipeline_->sbt.isInitialized()) {
+        // Update hit group records with material data
+        for (size_t i = 0; i < pathTracePipeline_->hitGroupPGs.size(); ++i) {
+            // Material data will be set through the hit group's SBT data
+            // This will be handled by the material handler when materials are assigned
+        }
+    }
 }
 
 void ShockerEngine::linkPipelines()
 {
     LOG(DBUG, "Linking pipelines");
     
-    // TODO: Link OptiX pipelines and calculate stack sizes
-    // This will be implemented when pipelines are fully created
+    // Link G-buffer pipeline
+    if (gbufferPipeline_ && gbufferPipeline_->optixPipeline) {
+        constexpr uint32_t maxTraceDepth = 1;
+        gbufferPipeline_->optixPipeline.link(maxTraceDepth);
+        
+        // Set stack sizes
+        size_t ccStackSize = 0;
+        gbufferPipeline_->optixPipeline.calcStackSize(
+            maxTraceDepth,
+            0, // maxCCDepth
+            0, // maxDCDepth
+            &ccStackSize, nullptr);
+        gbufferPipeline_->optixPipeline.setStackSize(ccStackSize, 0, 2048, maxTraceDepth);
+        
+        LOG(DBUG) << "G-buffer pipeline linked with CC stack size: " << ccStackSize;
+    }
+    
+    // Link path tracing pipeline
+    if (pathTracePipeline_ && pathTracePipeline_->optixPipeline) {
+        constexpr uint32_t maxTraceDepth = 8;
+        pathTracePipeline_->optixPipeline.link(maxTraceDepth);
+        
+        // Set stack sizes
+        size_t ccStackSize = 0;
+        pathTracePipeline_->optixPipeline.calcStackSize(
+            maxTraceDepth,
+            0, // maxCCDepth
+            0, // maxDCDepth
+            &ccStackSize, nullptr);
+        pathTracePipeline_->optixPipeline.setStackSize(ccStackSize, 0, 4096, maxTraceDepth);
+        
+        LOG(DBUG) << "Path tracing pipeline linked with CC stack size: " << ccStackSize;
+    }
 }
 
 void ShockerEngine::updateMaterialHitGroups(ShockerModelPtr model)
