@@ -43,7 +43,7 @@
 #include "excludeFromBuild/engines/BaseRenderingEngine.cpp"
 #include "excludeFromBuild/engines/RenderEngineManager.cpp"
 #include "excludeFromBuild/engines/MiloEngine.cpp"
-#include "excludeFromBuild/engines/ShockerEngineStub.cpp"
+#include "excludeFromBuild/engines/ShockerEngine.cpp"
 
 // models
 #include "excludeFromBuild/model/MiloModel.cpp"

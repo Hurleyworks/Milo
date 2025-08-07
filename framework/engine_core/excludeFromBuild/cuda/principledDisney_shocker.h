@@ -29,10 +29,10 @@ class DisneyPrincipled
         const shared::DisneyData& matData,
         const Point2D& texCoord,
         float mipLevel,
-        int allGlass,
-        float globalIOR,
-        float transmittanceDist,
-        int globalGlasstype,
+        int allGlass = 0,
+        float globalIOR = 0.0f,
+        float transmittanceDist = 0.0f,
+        int globalGlasstype = 0,
         shared::BSDFFlags flags = shared::BSDFFlags::None)
     {
         float4 baseColorValue = tex2DLod<float4> (matData.baseColor, texCoord.x, texCoord.y, mipLevel);

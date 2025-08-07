@@ -94,9 +94,9 @@ private:
     std::shared_ptr<class AreaLightHandler> areaLightHandler_;
     
     // Launch parameters (split into static and per-frame)
-    shocker::ShockerStaticPipelineLaunchParameters staticPlp_;
-    shocker::ShockerPerFramePipelineLaunchParameters perFramePlp_;
-    shocker::ShockerPipelineLaunchParameters plp_;
+    shocker_shared::StaticPipelineLaunchParameters staticPlp_;
+    shocker_shared::PerFramePipelineLaunchParameters perFramePlp_;
+    shocker_shared::PipelineLaunchParameters plp_;
     
     // Device pointers for launch parameters
     cudau::Buffer staticPlpBuffer_;
