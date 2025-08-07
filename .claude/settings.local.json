@@ -1,7 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Bash(./b.bat)",
       "Bash(cmd.exe /c b.bat)",
       "Bash(mkdir:*)",
       "Bash(ls:*)",
@@ -10,13 +9,35 @@
       "Bash(find:*)",
       "Bash(rg:*)",
       "Bash(b)",
+	  "Bash(tree:*)",
+	  "Bash(ruff:*)",
+      "Bash(touch:*)",
+      "Bash(chmod:*)",
+	  "Bash(cat:*)",
+      "Bash(ruff check:*)",
       "Bash(msbuild:*)",
       "Bash(claude --version)",
+	  "WebFetch(domain:*)",
       "Bash(\"C:/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Current/Bin/MSBuild.exe\" builds/VisualStudio2022/UnitTests.sln /p:Configuration=Debug /p:Platform=x64 /t:ShockerModelTest)",
       "WebFetch(domain:docs.anthropic.com)",
       "Bash(b.bat)",
       "Bash(mv:*)"
     ],
     "deny": []
+  },
+  "mcpServers": {
+    "serena": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "--context",
+        "ide-assistant",
+        "--project",
+        "/mnt/e/1Milo/Milo"
+      ]
+    }
   }
 }

@@ -46,6 +46,7 @@ builds\bin\Debug-windows-x86_64\ShockerModelTest\ShockerModelTest.exe
 - HelloTest
 - GeometryTest  
 - ShockerModelTest
+- AreaLightHandlerTest
 
 ### Code Formatting
 The project uses clang-format. Format files with:
@@ -162,7 +163,6 @@ engine_core (CUDA/OptiX rendering)
 - **Upstream access**: Each module has access to all upstream module types
 - **Amalgamated pattern**: Each module's main .cpp includes all implementation files from `excludeFromBuild/`
 
-
 ## Critical Reminders
 
 ### Never Include These Headers
@@ -183,52 +183,19 @@ These headers are not part of this codebase and will cause compilation errors.
 
 ## Development Principles
 
-- **Always Study APIs Thoroughly**
-  - Never make assumptions about an API. Study the API first so you get it right the first time!!!
-  
-  Please keep the following guidelines in mind throughout our interaction:
+### Code Standards
+- Use `.h` extension for headers, never `.hpp`
+- Always use `#pragma once` instead of include guards
+- Use single-line comments with `//` style
+- Don't add decorative comments or separators
+- Maintain minimal spacing between functions
 
+### Testing
+- Tests are located in `unittest/tests/` directory
+- Each test project follows the pattern: `[Component]Test`
+- Use doctest framework for unit testing
 
-# Development Guidelines
-
-## 1. Communication Style
-- Use clear and simple language in your explanations.
-- If you lack information or knowledge, ask for clarification instead of guessing.
-- Balance comprehensive explanations with concise code examples.
-
-## 2. Code Standards
-- Write well-commented, simple, elegant, and production-ready code.
-- Avoid overly complicated constructs.
-- Only include headers that are part of the project.
-- Always use `#pragma once` instead of include guards.
-- Use `.h` extension for headers, never `.hpp`.
-
-## 3. Documentation Standards
-
-### a. Code Comments
-- Use only single-line comments with `//` style.
-- Place comments above each function/method, explaining its purpose.
-- Keep comments concise but informative.
-- Don't comment obvious member variables or add decorative comments/separators.
-- Maintain minimal spacing between functions.
-
-### b. Class Documentation
-- For each class, provide a detailed summary in `//` comments at the top of the header file.
-
-## 4. Specific Requirements
-- Implement appropriate safety and error checks.
-
-## 5. Testing Requirements
-- Use C++ doctest for unit testing.
-- Tests are located in `unittest/tests/` directory.
-- Each test project follows the pattern: `[Component]Test`.
-
-## 6. Error Handling and Logging
-- Use g3log for logging.
-- Use DBUG level for debug information (not DEBUG).
-- Use WARNING level for non-fatal issues (instead of ERROR or CRITICAL).
-
-## 7. Development Process
-- Thoroughly verify your knowledge before responding.
-- Ensure all code is suitable for production environments.
-- Consider common edge cases and provide appropriate error handling.
+### Logging
+- Use g3log for logging
+- Use DBUG level for debug information (not DEBUG)
+- Use WARNING level for non-fatal issues
