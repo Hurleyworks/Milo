@@ -13,8 +13,8 @@ ShockerDenoiserHandler::ShockerDenoiserHandler(RenderContextPtr renderContext) :
 {
     if (renderContext_)
     {
-        optixContext_ = renderContext_->ctx.getOptiXContext();
-        cudaContext_ = renderContext_->ctx.getCudaContext();
+        optixContext_ = renderContext_->getOptiXContext();
+        cudaContext_ = renderContext_->getCudaContext();
     }
 }
 

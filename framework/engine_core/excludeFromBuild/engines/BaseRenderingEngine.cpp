@@ -18,6 +18,9 @@ BaseRenderingEngine::BaseRenderingEngine() :
     buffersInitialized_(false),
     needsRebuild_(false),
     needsDimensionCheck_(false),
+    restartRender_(true),
+    cameraChanged_(false),
+    environmentDirty_(false),
     pipelinePtr_(nullptr),
     scene_(),
     defaultMaterial_(),
@@ -60,6 +63,13 @@ void BaseRenderingEngine::initialize(RenderContext* ctx)
     // Set engine name based on derived class
     engineName_ = getName();
     
+    // Initialize render dimensions from camera
+    initializeRenderDimensions();
+    
+    // Create OptiX scene
+    scene_ = context_->createScene();
+    LOG(INFO) << engineName_ << " OptiX scene created";
+    
     // Reset frame counters and state
     frameCounter_ = 0;
     numAccumFrames_ = 0;
@@ -74,6 +84,24 @@ void BaseRenderingEngine::initialize(RenderContext* ctx)
     LOG(INFO) << "Initialized StreamChain with " << NUM_STREAM_BUFFERS << " streams";
     
     isInitialized_ = true;
+}
+
+void BaseRenderingEngine::initializeRenderDimensions()
+{
+    // Get initial render dimensions from camera
+    if (renderContext_ && renderContext_->getCamera())
+    {
+        renderWidth_ = renderContext_->getCamera()->getChangedSensorPixelRes().x();
+        renderHeight_ = renderContext_->getCamera()->getChangedSensorPixelRes().y();
+        LOG(INFO) << engineName_ << " render dimensions from camera: " << renderWidth_ << "x" << renderHeight_;
+    }
+    else
+    {
+        // Use default dimensions if no camera available
+        renderWidth_ = DEFAULT_RENDER_WIDTH;
+        renderHeight_ = DEFAULT_RENDER_HEIGHT;
+        LOG(WARNING) << engineName_ << " no camera available, using default dimensions: " << renderWidth_ << "x" << renderHeight_;
+    }
 }
 
 void BaseRenderingEngine::cleanup()

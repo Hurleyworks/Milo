@@ -36,11 +36,14 @@
 #include "excludeFromBuild/handlers/ShockerModelHandler.cpp"
 #include "excludeFromBuild/handlers/ShockerMaterialHandler.cpp"
 #include "excludeFromBuild/handlers/ShockerSceneHandler.cpp"
+#include "excludeFromBuild/handlers/ShockerRenderHandler.cpp"
+#include "excludeFromBuild/handlers/ShockerDenoiserHandler.cpp"
 
 // engines
 #include "excludeFromBuild/engines/BaseRenderingEngine.cpp"
 #include "excludeFromBuild/engines/RenderEngineManager.cpp"
 #include "excludeFromBuild/engines/MiloEngine.cpp"
+#include "excludeFromBuild/engines/ShockerEngineStub.cpp"
 
 // models
 #include "excludeFromBuild/model/MiloModel.cpp"

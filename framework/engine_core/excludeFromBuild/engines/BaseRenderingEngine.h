@@ -53,6 +53,35 @@ protected:
     void reportTimings(uint32_t frameCount, uint32_t reportInterval = 100);
     
 protected:
+    // Common initialization helpers
+    void initializeRenderDimensions();
+    
+    // Helper to initialize handlers with current dimensions
+    template<typename HandlerPtr>
+    bool initializeHandlerWithDimensions(HandlerPtr& handler, const char* handlerName)
+    {
+        if (handler && renderWidth_ > 0 && renderHeight_ > 0)
+        {
+            if (handler->initialize(renderWidth_, renderHeight_))
+            {
+                LOG(INFO) << engineName_ << " " << handlerName << " initialized with " 
+                          << renderWidth_ << "x" << renderHeight_;
+                return true;
+            }
+            else
+            {
+                LOG(WARNING) << engineName_ << " failed to initialize " << handlerName;
+                return false;
+            }
+        }
+        return false;
+    }
+    
+    // Default render dimensions when no camera is available
+    static constexpr uint32_t DEFAULT_RENDER_WIDTH = 1920;
+    static constexpr uint32_t DEFAULT_RENDER_HEIGHT = 1080;
+    
+protected:
     // Helper method to create pipeline with engine-specific entry point type
     template<typename EntryPointType>
     engine_core::RenderPipeline<EntryPointType>* createPipeline() {
@@ -129,6 +158,11 @@ protected:
     bool buffersInitialized_;
     bool needsRebuild_;
     bool needsDimensionCheck_;  // Set when window might have resized
+    
+    // Common render state flags
+    bool restartRender_;        // True when accumulation needs to restart
+    bool cameraChanged_;        // True when camera has moved
+    bool environmentDirty_;     // True when environment light changed
     
     // Type-erased pipeline pointer (managed by derived class)
     // We use void* because OptiX resources aren't copyable/moveable

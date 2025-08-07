@@ -23,6 +23,7 @@ void MiloEngine::initialize(RenderContext* ctx)
     LOG(INFO) << "MiloEngine::initialize()";
     
     // Call base class initialization
+    // This will set up renderContext_, context_, ptxManager_ and initialize dimensions
     BaseRenderingEngine::initialize(ctx);
     
     if (!isInitialized_)
@@ -30,22 +31,6 @@ void MiloEngine::initialize(RenderContext* ctx)
         LOG(WARNING) << "Base class initialization failed";
         return;
     }
-    
-    // Get initial render dimensions from camera
-    if (ctx->getCamera())
-    {
-        renderWidth_ = ctx->getCamera()->getChangedSensorPixelRes().x();
-        renderHeight_ = ctx->getCamera()->getChangedSensorPixelRes().y();
-        LOG(INFO) << "Initial render dimensions from camera: " << renderWidth_ << "x" << renderHeight_;
-    }
-    else
-    {
-        LOG(WARNING) << "No camera available to get initial dimensions";
-    }
-    
-    // Create the scene
-    optixu::Context optixContext = ctx->getOptiXContext();
-    scene_ = optixContext.createScene();
     
     // Create handlers
     RenderContextPtr renderContext = ctx->shared_from_this();
@@ -79,10 +64,7 @@ void MiloEngine::initialize(RenderContext* ctx)
     
     // Create render handler
     renderHandler_ = MiloRenderHandler::create(renderContext);
-    if (renderHandler_ && renderWidth_ > 0 && renderHeight_ > 0)
-    {
-        renderHandler_->initialize(renderWidth_, renderHeight_);
-    }
+    initializeHandlerWithDimensions(renderHandler_, "RenderHandler");
     
     // Initialize Milo-specific denoiser handler
     denoiserHandler_ = MiloDenoiserHandler::create(ctx->shared_from_this());
