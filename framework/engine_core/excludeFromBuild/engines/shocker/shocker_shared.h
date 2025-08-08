@@ -267,7 +267,7 @@ CUDA_CONSTANT_MEM shocker_shared::PipelineLaunchParameters plp;
 RT_PIPELINE_LAUNCH_PARAMETERS shocker_shared::PipelineLaunchParameters plp;
 #endif
 
-#include "common/common_device.cuh"
+#include "../../common/common_device.cuh"
 
 namespace shocker_shared
 {

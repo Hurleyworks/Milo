@@ -145,7 +145,8 @@ void Renderer::initializeEngine (CameraHandle camera, ImageCacheHandlerPtr image
         // 4. Restore original condition and rebuild application
         // 5. Application will then use the embedded PTX files
 
-        bool compileCuda = false;
+        bool compileCuda = true;
+        std::string engineFilter = "all";  // Can be "all", "milo", or "shocker"
 
         if (compileCuda || (!softwareReleaseMode && !embeddedPTX))
         {
@@ -191,8 +192,8 @@ void Renderer::initializeEngine (CameraHandle camera, ImageCacheHandlerPtr image
                 LOG (DBUG) << "  - " << arch;
             }
 
-            // Compile for all target architectures
-            nvcc.compile (resourceFolder, repoFolder, targetArchitectures);
+            // Compile for all target architectures with engine filter
+            nvcc.compile (resourceFolder, repoFolder, targetArchitectures, engineFilter);
         }
 
         if(compileCuda)
