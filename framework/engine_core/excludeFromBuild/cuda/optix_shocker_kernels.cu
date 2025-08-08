@@ -7,6 +7,8 @@
 
 using namespace shocker_shared;
 
+
+
 CUDA_DEVICE_KERNEL void RT_AH_NAME (visibility)()
 {
     float visibility = 0.0f;

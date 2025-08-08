@@ -197,6 +197,9 @@ void CudaCompiler::compileForArchitecture (const std::filesystem::path& cudaFold
          if (fileName.rfind ("compute_light_probs", 0) == 0)
              ptx = true;
 
+          if (fileName.rfind ("compute_area_light_probs", 0) == 0)
+             ptx = true;
+
 
         // nvcc args
         std::vector<std::string> args;
