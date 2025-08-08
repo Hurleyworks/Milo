@@ -4,10 +4,10 @@
 // Manages ShockerModel lifecycle, geometry instances, and groups
 // Part of the ShockerEngine handler architecture
 
-#include "../model/ShockerModel.h"
-#include "../model/ShockerCore.h"
-#include "../common/common_host.h"
-#include "../milo_shared.h"
+#include "../models/ShockerModel.h"
+#include "../models/ShockerCore.h"
+#include "../../../common/common_host.h"
+#include "../../../milo_shared.h"
 #include <unordered_map>
 #include <memory>
 #include <vector>

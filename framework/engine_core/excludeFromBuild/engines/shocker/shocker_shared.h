@@ -4,8 +4,8 @@
 // Shared definitions between host and device code for ShockerEngine
 // Matches the pattern from sample code path_tracing_shared.h
 
-#include "common/common_shared.h"
-#include "model/ShockerDeviceCore.h"
+#include "../../common/common_shared.h"
+#include "models/ShockerDeviceCore.h"
 
 namespace shocker_shared
 {

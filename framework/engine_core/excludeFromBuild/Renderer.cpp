@@ -2,7 +2,7 @@
 #include "nvcc/CudaCompiler.h"
 #include "tools/PTXManager.h"
 #include "tools/GPUTimerManager.h"
-#include "engines/EngineRegistry.h"
+#include "engines/base/EngineRegistry.h"
 #include <OpenImageIO/imagebuf.h>
 
 #include <OpenImageIO/imageio.h>
@@ -145,7 +145,7 @@ void Renderer::initializeEngine (CameraHandle camera, ImageCacheHandlerPtr image
         // 4. Restore original condition and rebuild application
         // 5. Application will then use the embedded PTX files
 
-        bool compileCuda = true;
+        bool compileCuda = false;
 
         if (compileCuda || (!softwareReleaseMode && !embeddedPTX))
         {

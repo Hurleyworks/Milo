@@ -5,8 +5,8 @@
 #include "ShockerModelHandler.h"
 #include "ShockerMaterialHandler.h"
 #include "AreaLightHandler.h"
-#include "../model/ShockerModel.h"
-#include "../model/ShockerCore.h"
+#include "../models/ShockerModel.h"
+#include "../models/ShockerCore.h"
 
 ShockerSceneHandler::ShockerSceneHandler(RenderContextPtr ctx)
     : ctx_(ctx)

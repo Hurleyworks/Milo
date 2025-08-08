@@ -4,9 +4,9 @@
 // Shocker-specific versions of geometry structures that use DisneyMaterial directly
 // These are exact copies of the structures from common_host.h but with DisneyMaterial
 
-#include "../../engine_core.h"
-#include "../material/HostDisneyMaterial.h"
-#include "../common/common_host.h"
+#include "../../../../engine_core.h"
+#include "../../../material/HostDisneyMaterial.h"
+#include "../../../common/common_host.h"
 
 namespace shocker {
 

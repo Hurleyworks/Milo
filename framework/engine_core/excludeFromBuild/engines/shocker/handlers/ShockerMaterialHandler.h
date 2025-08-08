@@ -4,12 +4,12 @@
 // Manages material creation and assignment for ShockerModels
 // Converts CgMaterials to DisneyMaterials and assigns them to GeometryInstances
 
-#include "../RenderContext.h"
-#include "../common/common_host.h"
-#include "../material/HostDisneyMaterial.h"
-#include "../material/DeviceDisneyMaterial.h"
-#include "../model/ShockerModel.h"
-#include "../model/ShockerCore.h"
+#include "../../../RenderContext.h"
+#include "../../../common/common_host.h"
+#include "../../../material/HostDisneyMaterial.h"
+#include "../../../material/DeviceDisneyMaterial.h"
+#include "../models/ShockerModel.h"
+#include "../models/ShockerCore.h"
 
 #include <sabi_core/sabi_core.h>
 

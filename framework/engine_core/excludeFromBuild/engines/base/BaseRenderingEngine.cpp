@@ -1,6 +1,6 @@
 #include "BaseRenderingEngine.h"
-#include "../RenderContext.h"
-#include "../tools/PTXManager.h"
+#include "../../RenderContext.h"
+#include "../../tools/PTXManager.h"
 #include "RenderPipeline.h"
 
 BaseRenderingEngine::BaseRenderingEngine() :

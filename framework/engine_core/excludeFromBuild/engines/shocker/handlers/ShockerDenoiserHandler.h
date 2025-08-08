@@ -4,8 +4,8 @@
 // Based on the sample DenoiserManager implementation, provides temporal and HDR denoising modes.
 // Handles denoiser state setup, buffer management, and task configuration for the Shocker pipeline.
 
-#include "../common/common_host.h"
-#include "../GPUContext.h"
+#include "../../../common/common_host.h"
+#include "../../../GPUContext.h"
 #include <memory>
 
 class RenderContext;

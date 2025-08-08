@@ -4,7 +4,7 @@
 // Manages accumulation buffers and rendering outputs for Shocker's advanced rendering pipeline
 // Provides support for beauty, albedo, normal, and motion vector buffers with denoising integration
 
-#include "../common/common_host.h"
+#include "../../../common/common_host.h"
 
 class RenderContext;
 using RenderContextPtr = std::shared_ptr<RenderContext>;

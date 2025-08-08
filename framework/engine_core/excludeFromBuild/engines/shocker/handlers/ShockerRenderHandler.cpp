@@ -1,7 +1,7 @@
 #include "ShockerRenderHandler.h"
-#include "../RenderContext.h"
-#include "../tools/PTXManager.h"
-#include "../tools/GPUTimerManager.h"
+#include "../../../RenderContext.h"
+#include "../../../tools/PTXManager.h"
+#include "../../../tools/GPUTimerManager.h"
 #include "ShockerDenoiserHandler.h"
 
 ShockerRenderHandler::ShockerRenderHandler(RenderContextPtr ctx)

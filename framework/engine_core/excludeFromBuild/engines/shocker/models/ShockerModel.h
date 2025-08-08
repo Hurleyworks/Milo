@@ -6,9 +6,9 @@
 // - Creates a ShockerSurfaceGroup containing all ShockerSurfaces
 // - Does NOT own ShockerNode - Nodes are created separately
 
-#include "../RenderContext.h"
-#include "../common/common_host.h"
-#include "../milo_shared.h"
+#include "../../../RenderContext.h"
+#include "../../../common/common_host.h"
+#include "../../../milo_shared.h"
 #include "ShockerCore.h"
 
 #include <sabi_core/sabi_core.h>

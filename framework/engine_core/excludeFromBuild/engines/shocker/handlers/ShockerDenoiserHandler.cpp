@@ -1,5 +1,5 @@
 #include "ShockerDenoiserHandler.h"
-#include "../RenderContext.h"
+#include "../../../RenderContext.h"
 
 // Factory method
 ShockerDenoiserHandlerPtr ShockerDenoiserHandler::create(RenderContextPtr renderContext)

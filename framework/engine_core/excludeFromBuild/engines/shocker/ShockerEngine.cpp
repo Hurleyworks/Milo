@@ -1,12 +1,12 @@
 #include "ShockerEngine.h"
-#include "../handlers/ShockerSceneHandler.h"
-#include "../handlers/ShockerMaterialHandler.h"
-#include "../handlers/ShockerModelHandler.h"
-#include "../handlers/ShockerRenderHandler.h"
-#include "../handlers/ShockerDenoiserHandler.h"
-#include "../handlers/AreaLightHandler.h"
-#include "../model/ShockerModel.h"
-#include "../tools/PTXManager.h"
+#include "handlers/ShockerSceneHandler.h"
+#include "handlers/ShockerMaterialHandler.h"
+#include "handlers/ShockerModelHandler.h"
+#include "handlers/ShockerRenderHandler.h"
+#include "handlers/ShockerDenoiserHandler.h"
+#include "handlers/AreaLightHandler.h"
+#include "models/ShockerModel.h"
+#include "../../tools/PTXManager.h"
 
 ShockerEngine::ShockerEngine()
 {

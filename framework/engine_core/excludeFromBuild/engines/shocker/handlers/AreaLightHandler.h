@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../../engine_core.h"
-#include "../common/LightDistribution.h"
+#include "../../../../engine_core.h"
+#include "../../../common/LightDistribution.h"
 
 class ShockerSceneHandler;
 class ShockerModelHandler;

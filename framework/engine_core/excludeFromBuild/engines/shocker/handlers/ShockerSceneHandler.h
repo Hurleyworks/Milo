@@ -4,9 +4,9 @@
 // Manages the scene graph for the Shocker rendering system
 // Coordinates between ShockerModelHandler and ShockerMaterialHandler
 
-#include "../RenderContext.h"
-#include "../common/common_host.h"
-#include "../model/ShockerCore.h"
+#include "../../../RenderContext.h"
+#include "../../../common/common_host.h"
+#include "../models/ShockerCore.h"
 
 using sabi::RenderableNode;
 using sabi::RenderableWeakRef;

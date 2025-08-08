@@ -1,7 +1,7 @@
 #include "ShockerModelHandler.h"
 #include "ShockerMaterialHandler.h"
-#include "../RenderContext.h"
-#include "../model/ShockerCore.h"
+#include "../../../RenderContext.h"
+#include "../models/ShockerCore.h"
 
 
 void ShockerModelHandler::initialize(RenderContextPtr context)

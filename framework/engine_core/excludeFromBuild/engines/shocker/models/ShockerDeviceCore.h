@@ -4,8 +4,8 @@
 // Device-side Shocker-specific structures that correspond to the host-side ShockerCore.h
 // These are the device equivalents of ShockerSurface and ShockerNode
 
-#include "../common/common_shared.h"
-#include "../material/DeviceDisneyMaterial.h"
+#include "../../../common/common_shared.h"
+#include "../../../material/DeviceDisneyMaterial.h"
 
 namespace shocker {
 

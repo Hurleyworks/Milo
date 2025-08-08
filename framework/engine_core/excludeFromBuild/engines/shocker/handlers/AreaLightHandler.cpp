@@ -2,10 +2,10 @@
 #include "ShockerSceneHandler.h"
 #include "ShockerModelHandler.h"
 #include "ShockerMaterialHandler.h"
-#include "../model/ShockerCore.h"
-#include "../common/common_host.h"
-#include "../common/common_shared.h"
-#include "../tools/PTXManager.h"
+#include "../models/ShockerCore.h"
+#include "../../../common/common_host.h"
+#include "../../../common/common_shared.h"
+#include "../../../tools/PTXManager.h"
 
 
 AreaLightHandler::~AreaLightHandler()

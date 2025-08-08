@@ -23,7 +23,6 @@
 // commmon handlers
 #include "excludeFromBuild/handlers/SkyDomeHandler.cpp"
 #include "excludeFromBuild/handlers/TextureHandler.cpp"
-#include "excludeFromBuild/handlers/AreaLightHandler.cpp"
 
 // milo handlers
 #include "excludeFromBuild/handlers/MiloSceneHandler.cpp"
@@ -33,18 +32,19 @@
 #include "excludeFromBuild/handlers/MiloDenoiserHandler.cpp"
 
 // shocker handlers
-#include "excludeFromBuild/handlers/ShockerModelHandler.cpp"
-#include "excludeFromBuild/handlers/ShockerMaterialHandler.cpp"
-#include "excludeFromBuild/handlers/ShockerSceneHandler.cpp"
-#include "excludeFromBuild/handlers/ShockerRenderHandler.cpp"
-#include "excludeFromBuild/handlers/ShockerDenoiserHandler.cpp"
+#include "excludeFromBuild/engines/shocker/handlers/AreaLightHandler.cpp"
+#include "excludeFromBuild/engines/shocker/handlers/ShockerModelHandler.cpp"
+#include "excludeFromBuild/engines/shocker/handlers/ShockerMaterialHandler.cpp"
+#include "excludeFromBuild/engines/shocker/handlers/ShockerSceneHandler.cpp"
+#include "excludeFromBuild/engines/shocker/handlers/ShockerRenderHandler.cpp"
+#include "excludeFromBuild/engines/shocker/handlers/ShockerDenoiserHandler.cpp"
 
 // engines
-#include "excludeFromBuild/engines/BaseRenderingEngine.cpp"
+#include "excludeFromBuild/engines/base/BaseRenderingEngine.cpp"
 #include "excludeFromBuild/engines/RenderEngineManager.cpp"
 #include "excludeFromBuild/engines/MiloEngine.cpp"
-#include "excludeFromBuild/engines/ShockerEngine.cpp"
+#include "excludeFromBuild/engines/shocker/ShockerEngine.cpp"
 
 // models
 #include "excludeFromBuild/model/MiloModel.cpp"
-#include "excludeFromBuild/model/ShockerModel.cpp"
+#include "excludeFromBuild/engines/shocker/models/ShockerModel.cpp"

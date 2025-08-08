@@ -5,10 +5,10 @@
 // including GPU timer support and pipeline management.
 
 #include "IRenderingEngine.h"
-#include "../tools/GPUTimerManager.h"
+#include "../../tools/GPUTimerManager.h"
 #include "RenderPipeline.h"
 #include "EngineEntryPoints.h"
-#include "../common/common_host.h"
+#include "../../common/common_host.h"
 
 
 // Forward declarations

@@ -3,9 +3,9 @@
 
 #include "ShockerMaterialHandler.h"
 #include "AreaLightHandler.h"
-#include "../model/ShockerModel.h"
-#include "TextureHandler.h"
-#include "Handlers.h"
+#include "../models/ShockerModel.h"
+#include "../../../handlers/TextureHandler.h"
+#include "../../../handlers/Handlers.h"
 #include <mace_core/mace_core.h>
 
 ShockerMaterialHandler::ShockerMaterialHandler()

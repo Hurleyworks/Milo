@@ -3,14 +3,14 @@
 // EngineRegistry.h
 // Helper functions to register all available rendering engines
 
-#include "RenderEngineManager.h"
+#include "../RenderEngineManager.h"
 //#include "TestEngine.h"
 //#include "BasicPathTracingEngine.h"
 //#include "EnvironmentRenderEngine.h"
 //#include "ShockerRenderEngine.h"
 //#include "RiPREngine.h"
-#include "MiloEngine.h"
-#include "ShockerEngine.h"
+#include "../MiloEngine.h"
+#include "../shocker/ShockerEngine.h"
 
 // Register all built-in rendering engines
 inline void registerBuiltInEngines(RenderEngineManager& manager)

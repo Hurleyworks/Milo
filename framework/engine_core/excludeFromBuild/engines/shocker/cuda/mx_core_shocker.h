@@ -5,7 +5,7 @@
 // The functions here form the foundation for physically-based rendering calculations
 
 #include "../shocker_shared.h"
-#include "../material/DeviceDisneyMaterial.h"
+#include "../../../material/DeviceDisneyMaterial.h"
 
 
 using namespace shocker_shared;

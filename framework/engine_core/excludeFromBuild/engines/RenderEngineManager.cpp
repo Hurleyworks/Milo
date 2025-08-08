@@ -1,6 +1,6 @@
 #include "RenderEngineManager.h"
-#include "BaseRenderingEngine.h"
-#include "ShockerEngine.h"
+#include "base/BaseRenderingEngine.h"
+#include "shocker/ShockerEngine.h"
 #include "../RenderContext.h"
 
 RenderEngineManager::RenderEngineManager() :

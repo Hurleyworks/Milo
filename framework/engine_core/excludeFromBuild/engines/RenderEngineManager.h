@@ -4,7 +4,7 @@
 // Manages the lifecycle of rendering engines and handles switching between them.
 // Only one engine is active at a time to minimize resource usage.
 
-#include "IRenderingEngine.h"
+#include "base/IRenderingEngine.h"
 
 // Forward declarations
 class RenderContext;
