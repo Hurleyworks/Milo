@@ -1,7 +1,7 @@
 #include "MiloModelHandler.h"
 #include "MiloMaterialHandler.h"
 #include "MiloSceneHandler.h"
-#include "../model/MiloModel.h"
+#include "../models/MiloModel.h"
 
 // Constructor initializes the model handler with the render context
 MiloModelHandler::MiloModelHandler(RenderContextPtr ctx) :

@@ -4,10 +4,10 @@
 // Manages material creation, updating, and texture processing for the OptiX rendering system
 // Implements physically-based materials and specialized visualization materials
 
-#include "../RenderContext.h"
-#include "../common/common_host.h"
-#include "../material/HostDisneyMaterial.h"
-#include "../material/DeviceDisneyMaterial.h"
+#include "../../../RenderContext.h"
+#include "../../../common/common_host.h"
+#include "../../../material/HostDisneyMaterial.h"
+#include "../../../material/DeviceDisneyMaterial.h"
 
 using MiloMaterialHandlerPtr = std::shared_ptr<class MiloMaterialHandler>;
 using sabi::CgModelPtr;

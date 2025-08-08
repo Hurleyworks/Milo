@@ -1,9 +1,9 @@
 #pragma once
 
-#include "BaseRenderingEngine.h"
-#include "RenderPipeline.h"
-#include "EngineEntryPoints.h"
-#include "../milo_shared.h"
+#include "../base/BaseRenderingEngine.h"
+#include "../base/RenderPipeline.h"
+#include "../base/EngineEntryPoints.h"
+#include "milo_shared.h"
 
 // Forward declarations
 using MiloModelPtr = std::shared_ptr<class MiloModel>;

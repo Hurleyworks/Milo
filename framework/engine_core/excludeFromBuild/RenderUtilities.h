@@ -1,6 +1,6 @@
 #pragma once
 
-#include "milo_shared.h"
+#include "engines/milo/milo_shared.h"
 
 constexpr int INVALID_RAY_TYPE = -1;
 

@@ -5,8 +5,8 @@
 // The functions here form the foundation for physically-based rendering calculations
 
 #include "../milo_shared.h"
-#include "../material/DeviceDisneyMaterial.h"
-#include "../common/deviceCommon.h"
+#include "../../../material/DeviceDisneyMaterial.h"
+#include "../../../common/deviceCommon.h"
 
 using namespace milo_shared;
 using namespace shared;

@@ -4,7 +4,7 @@
 // Responsible for managing Milo 3D models in the rendering system, providing
 // model creation, retrieval, and visibility control functionality
 
-#include "../model/MiloModel.h"
+#include "../models/MiloModel.h"
 
 using sabi::RenderableNode;
 using sabi::RenderableWeakRef;

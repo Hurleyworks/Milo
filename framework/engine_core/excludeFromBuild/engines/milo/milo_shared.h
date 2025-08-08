@@ -3,8 +3,8 @@
 // much taken from OptiX_Utility
 // https://github.com/shocker-0x15/OptiX_Utility/blob/master/LICENSE.md
 
-#include "common/common_shared.h"
-#include "material/DeviceDisneyMaterial.h"
+#include "../../common/common_shared.h"
+#include "../../material/DeviceDisneyMaterial.h"
 
 namespace milo_shared
 {

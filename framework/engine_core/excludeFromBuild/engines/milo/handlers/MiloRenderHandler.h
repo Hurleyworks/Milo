@@ -4,7 +4,7 @@
 // Manages accumulation buffers that Milo path tracer writes to
 // Based on ShockerRenderHandler but adapted for Milo's specific needs
 
-#include "../common/common_host.h"
+#include "../../../common/common_host.h"
 
 class RenderContext;
 using RenderContextPtr = std::shared_ptr<RenderContext>;

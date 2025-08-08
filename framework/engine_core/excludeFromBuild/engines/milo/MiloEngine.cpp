@@ -1,11 +1,11 @@
 #include "MiloEngine.h"
-#include "../RenderContext.h"
-#include "../handlers/MiloSceneHandler.h"
-#include "../handlers/MiloMaterialHandler.h"
-#include "../handlers/MiloModelHandler.h"
-#include "../handlers/MiloRenderHandler.h"
-#include "../handlers/MiloDenoiserHandler.h"
-#include "../model/MiloModel.h"
+#include "../../RenderContext.h"
+#include "handlers/MiloSceneHandler.h"
+#include "handlers/MiloMaterialHandler.h"
+#include "handlers/MiloModelHandler.h"
+#include "handlers/MiloRenderHandler.h"
+#include "handlers/MiloDenoiserHandler.h"
+#include "models/MiloModel.h"
 
 MiloEngine::MiloEngine()
 {

@@ -1,7 +1,7 @@
 #include "MiloSceneHandler.h"
-#include "Handlers.h"
+#include "../../../handlers/Handlers.h"
 #include "MiloModelHandler.h"
-#include "../model/MiloModel.h"
+#include "../models/MiloModel.h"
 
 using Eigen::Affine3f;
 using sabi::PRenderableState;

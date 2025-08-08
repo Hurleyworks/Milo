@@ -4,7 +4,7 @@
 // Manages the OptiX scene graph including instances, acceleration structures,
 // selection state, and traversal for ray tracing
 
-#include "../RenderContext.h"
+#include "../../../RenderContext.h"
 
 using sabi::RenderableNode;
 using sabi::RenderableWeakRef;

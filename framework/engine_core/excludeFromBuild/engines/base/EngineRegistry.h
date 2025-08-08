@@ -9,7 +9,7 @@
 //#include "EnvironmentRenderEngine.h"
 //#include "ShockerRenderEngine.h"
 //#include "RiPREngine.h"
-#include "../MiloEngine.h"
+#include "../milo/MiloEngine.h"
 #include "../shocker/ShockerEngine.h"
 
 // Register all built-in rendering engines

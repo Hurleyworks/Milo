@@ -25,11 +25,11 @@
 #include "excludeFromBuild/handlers/TextureHandler.cpp"
 
 // milo handlers
-#include "excludeFromBuild/handlers/MiloSceneHandler.cpp"
-#include "excludeFromBuild/handlers/MiloMaterialHandler.cpp"
-#include "excludeFromBuild/handlers/MiloModelHandler.cpp"
-#include "excludeFromBuild/handlers/MiloRenderHandler.cpp"
-#include "excludeFromBuild/handlers/MiloDenoiserHandler.cpp"
+#include "excludeFromBuild/engines/milo/handlers/MiloSceneHandler.cpp"
+#include "excludeFromBuild/engines/milo/handlers/MiloMaterialHandler.cpp"
+#include "excludeFromBuild/engines/milo/handlers/MiloModelHandler.cpp"
+#include "excludeFromBuild/engines/milo/handlers/MiloRenderHandler.cpp"
+#include "excludeFromBuild/engines/milo/handlers/MiloDenoiserHandler.cpp"
 
 // shocker handlers
 #include "excludeFromBuild/engines/shocker/handlers/AreaLightHandler.cpp"
@@ -42,9 +42,9 @@
 // engines
 #include "excludeFromBuild/engines/base/BaseRenderingEngine.cpp"
 #include "excludeFromBuild/engines/RenderEngineManager.cpp"
-#include "excludeFromBuild/engines/MiloEngine.cpp"
+#include "excludeFromBuild/engines/milo/MiloEngine.cpp"
 #include "excludeFromBuild/engines/shocker/ShockerEngine.cpp"
 
 // models
-#include "excludeFromBuild/model/MiloModel.cpp"
+#include "excludeFromBuild/engines/milo/models/MiloModel.cpp"
 #include "excludeFromBuild/engines/shocker/models/ShockerModel.cpp"

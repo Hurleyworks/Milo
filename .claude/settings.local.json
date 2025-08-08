@@ -43,7 +43,13 @@
       "Bash(then )",
       "Bash(do )",
       "Bash(then )",
-      "Bash(true)"
+      "Bash(true)",
+      "Bash(do )",
+      "Bash(then )",
+      "Bash(do )",
+      "Bash(then )",
+      "Bash(do )",
+      "Bash(then )"
     ],
     "deny": []
   },

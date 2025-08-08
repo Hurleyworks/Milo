@@ -4,8 +4,8 @@
 // Base class and hierarchy for Milo-specific model management
 // Preserves the OO design of OptiXModel while adapting to the new architecture
 
-#include "../RenderContext.h"
-#include "../common/common_host.h"
+#include "../../../RenderContext.h"
+#include "../../../common/common_host.h"
 #include "../milo_shared.h"
 
 using Eigen::AlignedBox3f;

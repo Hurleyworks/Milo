@@ -7,7 +7,7 @@
 #include "../models/ShockerModel.h"
 #include "../models/ShockerCore.h"
 #include "../../../common/common_host.h"
-#include "../../../milo_shared.h"
+#include "../../milo/milo_shared.h"
 #include <unordered_map>
 #include <memory>
 #include <vector>

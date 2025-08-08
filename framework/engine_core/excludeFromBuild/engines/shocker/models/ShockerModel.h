@@ -8,7 +8,7 @@
 
 #include "../../../RenderContext.h"
 #include "../../../common/common_host.h"
-#include "../../../milo_shared.h"
+#include "../../milo/milo_shared.h"
 #include "ShockerCore.h"
 
 #include <sabi_core/sabi_core.h>

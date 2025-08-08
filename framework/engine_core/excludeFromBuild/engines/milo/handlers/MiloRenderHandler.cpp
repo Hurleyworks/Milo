@@ -1,7 +1,7 @@
 #include "MiloRenderHandler.h"
-#include "../RenderContext.h"
-#include "../tools/PTXManager.h"
-#include "../tools/GPUTimerManager.h"
+#include "../../../RenderContext.h"
+#include "../../../tools/PTXManager.h"
+#include "../../../tools/GPUTimerManager.h"
 #include "../milo_shared.h"
 #include "MiloDenoiserHandler.h"
 

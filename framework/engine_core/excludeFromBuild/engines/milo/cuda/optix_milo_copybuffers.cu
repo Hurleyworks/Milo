@@ -1,4 +1,4 @@
-#include "../common/common_shared.h"
+#include "../../../common/common_shared.h"
 
 // Milo-specific buffer copy kernel
 // Optimized for Milo's rendering pipeline which includes flow buffers for temporal denoising

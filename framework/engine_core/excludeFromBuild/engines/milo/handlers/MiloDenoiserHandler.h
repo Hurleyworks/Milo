@@ -4,7 +4,7 @@
 // This is a dedicated denoiser handler for MiloEngine to avoid conflicts with other engines.
 // Supports both temporal and non-temporal denoising modes for real-time ray tracing.
 
-#include "../common/common_host.h"
+#include "../../../common/common_host.h"
 #include <memory>
 
 class RenderContext;
