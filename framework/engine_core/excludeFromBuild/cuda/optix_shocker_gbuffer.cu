@@ -67,7 +67,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(setupGBuffers)() {
     gb0Elems.qbcB = hitPointParams.qbcB;
     gb0Elems.qbcC = hitPointParams.qbcC;
     GBuffer1Elements gb1Elems = {};
-    gb1Elems.motionVector = make_float2(motionVector.x, motionVector.y);
+    gb1Elems.motionVector = motionVector;
 
     plp.s->GBuffer0[bufIdx].write (launchIndex, gb0Elems);
     plp.s->GBuffer1[bufIdx].write (launchIndex, gb1Elems);

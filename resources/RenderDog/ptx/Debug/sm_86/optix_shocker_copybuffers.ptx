@@ -156,14 +156,14 @@
 .visible .global .align 8 .u64 ptr_setupDiffuseAndSpecularBRDF = __direct_callable__setupDiffuseAndSpecularBRDF;
 .visible .global .align 8 .u64 ptr_setupSimplePBR_BRDF = __direct_callable__setupSimplePBR_BRDF;
 .const .align 1 .b8 __nv_static_50__958de214_28_optix_shocker_copybuffers_cu_8117c865__ZN59_INTERNAL_958de214_28_optix_shocker_copybuffers_cu_8117c8656shared16PermutationTableE[76] = {0, 10, 2, 7, 3, 5, 6, 4, 8, 1, 9, 5, 11, 6, 8, 1, 10, 12, 9, 3, 7, 0, 4, 2, 13, 10, 11, 5, 6, 9, 4, 3, 8, 7, 14, 2, 0, 1, 15, 12, 1, 13, 5, 14, 12, 3, 6, 16, 0, 8, 9, 2, 11, 4, 15, 7, 10, 10, 6, 5, 8, 15, 0, 17, 7, 14, 18, 13, 16, 2, 9, 12, 1, 11, 4, 3};
-.weak .global .align 4 .b8 _ZNK11LambertBRDF20getSurfaceParametersEP5RGB_TIfES2_Pf$215[12];
-.weak .global .align 4 .b8 _ZNK22DiffuseAndSpecularBRDF16sampleThroughputERK10Vector3D_TIfLb0EEffPS1_Pf$223[12] = {0, 0, 128, 63, 0, 0, 128, 63, 0, 0, 128, 63};
-.weak .global .align 4 .b8 _ZNK22DiffuseAndSpecularBRDF16sampleThroughputERK10Vector3D_TIfLb0EEffPS1_Pf$224[12];
-.weak .global .align 4 .b8 _ZNK22DiffuseAndSpecularBRDF8evaluateERK10Vector3D_TIfLb0EES3_$294[12] = {0, 0, 128, 63, 0, 0, 128, 63, 0, 0, 128, 63};
-.weak .global .align 4 .b8 _ZNK22DiffuseAndSpecularBRDF8evaluateERK10Vector3D_TIfLb0EES3_$295[12];
-.weak .global .align 4 .b8 _ZNK22DiffuseAndSpecularBRDF29evaluateDHReflectanceEstimateERK10Vector3D_TIfLb0EE$356[12] = {0, 0, 128, 63, 0, 0, 128, 63, 0, 0, 128, 63};
-.weak .global .align 4 .b8 _ZNK22DiffuseAndSpecularBRDF29evaluateDHReflectanceEstimateERK10Vector3D_TIfLb0EE$357[12] = {0, 0, 128, 63, 0, 0, 128, 63, 0, 0, 128, 63};
-.weak .global .align 4 .b8 _ZNK22DiffuseAndSpecularBRDF25GGXMicrofacetDistribution6sampleERK10Vector3D_TIfLb0EEffPS1_IfLb1EEPf$394[12] = {0, 0, 128, 63};
+.weak .global .align 4 .b8 _ZNK11LambertBRDF20getSurfaceParametersEP5RGB_TIfES2_Pf$260[12];
+.weak .global .align 4 .b8 _ZNK22DiffuseAndSpecularBRDF16sampleThroughputERK10Vector3D_TIfLb0EEffPS1_Pf$268[12] = {0, 0, 128, 63, 0, 0, 128, 63, 0, 0, 128, 63};
+.weak .global .align 4 .b8 _ZNK22DiffuseAndSpecularBRDF16sampleThroughputERK10Vector3D_TIfLb0EEffPS1_Pf$269[12];
+.weak .global .align 4 .b8 _ZNK22DiffuseAndSpecularBRDF8evaluateERK10Vector3D_TIfLb0EES3_$339[12] = {0, 0, 128, 63, 0, 0, 128, 63, 0, 0, 128, 63};
+.weak .global .align 4 .b8 _ZNK22DiffuseAndSpecularBRDF8evaluateERK10Vector3D_TIfLb0EES3_$340[12];
+.weak .global .align 4 .b8 _ZNK22DiffuseAndSpecularBRDF29evaluateDHReflectanceEstimateERK10Vector3D_TIfLb0EE$401[12] = {0, 0, 128, 63, 0, 0, 128, 63, 0, 0, 128, 63};
+.weak .global .align 4 .b8 _ZNK22DiffuseAndSpecularBRDF29evaluateDHReflectanceEstimateERK10Vector3D_TIfLb0EE$402[12] = {0, 0, 128, 63, 0, 0, 128, 63, 0, 0, 128, 63};
+.weak .global .align 4 .b8 _ZNK22DiffuseAndSpecularBRDF25GGXMicrofacetDistribution6sampleERK10Vector3D_TIfLb0EEffPS1_IfLb1EEPf$439[12] = {0, 0, 128, 63};
 
 .visible .func  (.param .align 4 .b8 func_retval0[12]) __direct_callable__readModifiedNormalFromNormalMap(
 	.param .b64 __direct_callable__readModifiedNormalFromNormalMap_param_0,
@@ -368,9 +368,9 @@
 	st.f32 	[%rd2+4], %f2;
 	st.f32 	[%rd2+8], %f3;
 	.loc	1 338 9, function_name $L__info_string19, inlined_at 1 845 40
-	ld.global.f32 	%f4, [_ZNK11LambertBRDF20getSurfaceParametersEP5RGB_TIfES2_Pf$215];
-	ld.global.f32 	%f5, [_ZNK11LambertBRDF20getSurfaceParametersEP5RGB_TIfES2_Pf$215+4];
-	ld.global.f32 	%f6, [_ZNK11LambertBRDF20getSurfaceParametersEP5RGB_TIfES2_Pf$215+8];
+	ld.global.f32 	%f4, [_ZNK11LambertBRDF20getSurfaceParametersEP5RGB_TIfES2_Pf$260];
+	ld.global.f32 	%f5, [_ZNK11LambertBRDF20getSurfaceParametersEP5RGB_TIfES2_Pf$260+4];
+	ld.global.f32 	%f6, [_ZNK11LambertBRDF20getSurfaceParametersEP5RGB_TIfES2_Pf$260+8];
 	st.f32 	[%rd3], %f4;
 	st.f32 	[%rd3+4], %f5;
 	st.f32 	[%rd3+8], %f6;
@@ -887,9 +887,9 @@ $L__BB9_7:
 	bra.uni 	$L__BB9_8;
 
 $L__BB9_6:
-	ld.global.f32 	%f371, [_ZNK22DiffuseAndSpecularBRDF25GGXMicrofacetDistribution6sampleERK10Vector3D_TIfLb0EEffPS1_IfLb1EEPf$394];
-	ld.global.f32 	%f372, [_ZNK22DiffuseAndSpecularBRDF25GGXMicrofacetDistribution6sampleERK10Vector3D_TIfLb0EEffPS1_IfLb1EEPf$394+4];
-	ld.global.f32 	%f373, [_ZNK22DiffuseAndSpecularBRDF25GGXMicrofacetDistribution6sampleERK10Vector3D_TIfLb0EEffPS1_IfLb1EEPf$394+8];
+	ld.global.f32 	%f371, [_ZNK22DiffuseAndSpecularBRDF25GGXMicrofacetDistribution6sampleERK10Vector3D_TIfLb0EEffPS1_IfLb1EEPf$439];
+	ld.global.f32 	%f372, [_ZNK22DiffuseAndSpecularBRDF25GGXMicrofacetDistribution6sampleERK10Vector3D_TIfLb0EEffPS1_IfLb1EEPf$439+4];
+	ld.global.f32 	%f373, [_ZNK22DiffuseAndSpecularBRDF25GGXMicrofacetDistribution6sampleERK10Vector3D_TIfLb0EEffPS1_IfLb1EEPf$439+8];
 
 $L__BB9_8:
 	.loc	1 474 13, function_name $L__info_string39, inlined_at 1 584 13
@@ -1390,9 +1390,9 @@ $L__BB9_33:
 	.loc	3 5161 9, function_name $L__info_string64, inlined_at 3 5267 5
 	mul.ftz.f32 	%f325, %f322, %f23;
 	.loc	1 608 9, function_name $L__info_string33, inlined_at 1 846 545
-	ld.global.f32 	%f326, [_ZNK22DiffuseAndSpecularBRDF16sampleThroughputERK10Vector3D_TIfLb0EEffPS1_Pf$223];
-	ld.global.f32 	%f327, [_ZNK22DiffuseAndSpecularBRDF16sampleThroughputERK10Vector3D_TIfLb0EEffPS1_Pf$223+4];
-	ld.global.f32 	%f328, [_ZNK22DiffuseAndSpecularBRDF16sampleThroughputERK10Vector3D_TIfLb0EEffPS1_Pf$223+8];
+	ld.global.f32 	%f326, [_ZNK22DiffuseAndSpecularBRDF16sampleThroughputERK10Vector3D_TIfLb0EEffPS1_Pf$268];
+	ld.global.f32 	%f327, [_ZNK22DiffuseAndSpecularBRDF16sampleThroughputERK10Vector3D_TIfLb0EEffPS1_Pf$268+4];
+	ld.global.f32 	%f328, [_ZNK22DiffuseAndSpecularBRDF16sampleThroughputERK10Vector3D_TIfLb0EEffPS1_Pf$268+8];
 	.loc	3 230 5, function_name $L__info_string62, inlined_at 1 608 9
 	.loc	3 5243 5, function_name $L__info_string65, inlined_at 3 230 5
 	.loc	3 5147 9, function_name $L__info_string66, inlined_at 3 5243 5
@@ -1418,15 +1418,15 @@ $L__BB9_33:
 	.loc	1 612 9, function_name $L__info_string33, inlined_at 1 846 545
 	setp.eq.ftz.f32 	%p21, %f321, 0f00000000;
 	.loc	1 613 13, function_name $L__info_string33, inlined_at 1 846 545
-	ld.global.f32 	%f339, [_ZNK22DiffuseAndSpecularBRDF16sampleThroughputERK10Vector3D_TIfLb0EEffPS1_Pf$224];
+	ld.global.f32 	%f339, [_ZNK22DiffuseAndSpecularBRDF16sampleThroughputERK10Vector3D_TIfLb0EEffPS1_Pf$269];
 	.loc	1 612 9, function_name $L__info_string33, inlined_at 1 846 545
 	selp.f32 	%f340, %f339, %f336, %p21;
 	.loc	1 613 13, function_name $L__info_string33, inlined_at 1 846 545
-	ld.global.f32 	%f341, [_ZNK22DiffuseAndSpecularBRDF16sampleThroughputERK10Vector3D_TIfLb0EEffPS1_Pf$224+4];
+	ld.global.f32 	%f341, [_ZNK22DiffuseAndSpecularBRDF16sampleThroughputERK10Vector3D_TIfLb0EEffPS1_Pf$269+4];
 	.loc	1 612 9, function_name $L__info_string33, inlined_at 1 846 545
 	selp.f32 	%f342, %f341, %f337, %p21;
 	.loc	1 613 13, function_name $L__info_string33, inlined_at 1 846 545
-	ld.global.f32 	%f343, [_ZNK22DiffuseAndSpecularBRDF16sampleThroughputERK10Vector3D_TIfLb0EEffPS1_Pf$224+8];
+	ld.global.f32 	%f343, [_ZNK22DiffuseAndSpecularBRDF16sampleThroughputERK10Vector3D_TIfLb0EEffPS1_Pf$269+8];
 	.loc	1 612 9, function_name $L__info_string33, inlined_at 1 846 545
 	selp.f32 	%f344, %f343, %f338, %p21;
 	.loc	1 615 9, function_name $L__info_string33, inlined_at 1 846 545
@@ -1736,9 +1736,9 @@ $L__BB10_10:
 	.loc	3 5161 9, function_name $L__info_string64, inlined_at 3 5267 5
 	mul.ftz.f32 	%f99, %f94, %f98;
 	.loc	1 656 9, function_name $L__info_string68, inlined_at 1 846 1048
-	ld.global.f32 	%f100, [_ZNK22DiffuseAndSpecularBRDF8evaluateERK10Vector3D_TIfLb0EES3_$294];
-	ld.global.f32 	%f101, [_ZNK22DiffuseAndSpecularBRDF8evaluateERK10Vector3D_TIfLb0EES3_$294+4];
-	ld.global.f32 	%f102, [_ZNK22DiffuseAndSpecularBRDF8evaluateERK10Vector3D_TIfLb0EES3_$294+8];
+	ld.global.f32 	%f100, [_ZNK22DiffuseAndSpecularBRDF8evaluateERK10Vector3D_TIfLb0EES3_$339];
+	ld.global.f32 	%f101, [_ZNK22DiffuseAndSpecularBRDF8evaluateERK10Vector3D_TIfLb0EES3_$339+4];
+	ld.global.f32 	%f102, [_ZNK22DiffuseAndSpecularBRDF8evaluateERK10Vector3D_TIfLb0EES3_$339+8];
 	.loc	3 230 5, function_name $L__info_string62, inlined_at 1 656 9
 	.loc	3 5243 5, function_name $L__info_string65, inlined_at 3 230 5
 	.loc	3 5147 9, function_name $L__info_string66, inlined_at 3 5243 5
@@ -1764,15 +1764,15 @@ $L__BB10_10:
 	.loc	1 660 9, function_name $L__info_string68, inlined_at 1 846 1048
 	setp.eq.ftz.f32 	%p7, %f92, 0f00000000;
 	.loc	1 661 13, function_name $L__info_string68, inlined_at 1 846 1048
-	ld.global.f32 	%f113, [_ZNK22DiffuseAndSpecularBRDF8evaluateERK10Vector3D_TIfLb0EES3_$295+8];
+	ld.global.f32 	%f113, [_ZNK22DiffuseAndSpecularBRDF8evaluateERK10Vector3D_TIfLb0EES3_$340+8];
 	.loc	1 660 9, function_name $L__info_string68, inlined_at 1 846 1048
 	selp.f32 	%f114, %f113, %f112, %p7;
 	.loc	1 661 13, function_name $L__info_string68, inlined_at 1 846 1048
-	ld.global.f32 	%f115, [_ZNK22DiffuseAndSpecularBRDF8evaluateERK10Vector3D_TIfLb0EES3_$295+4];
+	ld.global.f32 	%f115, [_ZNK22DiffuseAndSpecularBRDF8evaluateERK10Vector3D_TIfLb0EES3_$340+4];
 	.loc	1 660 9, function_name $L__info_string68, inlined_at 1 846 1048
 	selp.f32 	%f116, %f115, %f111, %p7;
 	.loc	1 661 13, function_name $L__info_string68, inlined_at 1 846 1048
-	ld.global.f32 	%f117, [_ZNK22DiffuseAndSpecularBRDF8evaluateERK10Vector3D_TIfLb0EES3_$295];
+	ld.global.f32 	%f117, [_ZNK22DiffuseAndSpecularBRDF8evaluateERK10Vector3D_TIfLb0EES3_$340];
 	.loc	1 660 9, function_name $L__info_string68, inlined_at 1 846 1048
 	selp.f32 	%f118, %f117, %f110, %p7;
 	.loc	1 663 9, function_name $L__info_string68, inlined_at 1 846 1048
@@ -2163,9 +2163,9 @@ $L__BB11_12:
 	.loc	1 743 9, function_name $L__info_string70, inlined_at 1 846 1870
 	mul.ftz.f32 	%f24, %f13, %f22;
 	.loc	1 745 9, function_name $L__info_string70, inlined_at 1 846 1870
-	ld.global.f32 	%f25, [_ZNK22DiffuseAndSpecularBRDF29evaluateDHReflectanceEstimateERK10Vector3D_TIfLb0EE$356];
-	ld.global.f32 	%f26, [_ZNK22DiffuseAndSpecularBRDF29evaluateDHReflectanceEstimateERK10Vector3D_TIfLb0EE$356+4];
-	ld.global.f32 	%f27, [_ZNK22DiffuseAndSpecularBRDF29evaluateDHReflectanceEstimateERK10Vector3D_TIfLb0EE$356+8];
+	ld.global.f32 	%f25, [_ZNK22DiffuseAndSpecularBRDF29evaluateDHReflectanceEstimateERK10Vector3D_TIfLb0EE$401];
+	ld.global.f32 	%f26, [_ZNK22DiffuseAndSpecularBRDF29evaluateDHReflectanceEstimateERK10Vector3D_TIfLb0EE$401+4];
+	ld.global.f32 	%f27, [_ZNK22DiffuseAndSpecularBRDF29evaluateDHReflectanceEstimateERK10Vector3D_TIfLb0EE$401+8];
 	.loc	1 745 9, function_name $L__info_string70, inlined_at 1 846 1870
 	.loc	3 230 5, function_name $L__info_string62, inlined_at 1 745 9
 	sub.ftz.f32 	%f28, %f9, %f24;
@@ -2198,9 +2198,9 @@ $L__BB11_12:
 	.loc	3 5149 9, function_name $L__info_string66, inlined_at 3 5243 5
 	fma.rn.ftz.f32 	%f40, %f23, %f21, %f37;
 	.loc	1 748 9, function_name $L__info_string70, inlined_at 1 846 1870
-	ld.global.f32 	%f41, [_ZNK22DiffuseAndSpecularBRDF29evaluateDHReflectanceEstimateERK10Vector3D_TIfLb0EE$357];
-	ld.global.f32 	%f42, [_ZNK22DiffuseAndSpecularBRDF29evaluateDHReflectanceEstimateERK10Vector3D_TIfLb0EE$357+4];
-	ld.global.f32 	%f43, [_ZNK22DiffuseAndSpecularBRDF29evaluateDHReflectanceEstimateERK10Vector3D_TIfLb0EE$357+8];
+	ld.global.f32 	%f41, [_ZNK22DiffuseAndSpecularBRDF29evaluateDHReflectanceEstimateERK10Vector3D_TIfLb0EE$402];
+	ld.global.f32 	%f42, [_ZNK22DiffuseAndSpecularBRDF29evaluateDHReflectanceEstimateERK10Vector3D_TIfLb0EE$402+4];
+	ld.global.f32 	%f43, [_ZNK22DiffuseAndSpecularBRDF29evaluateDHReflectanceEstimateERK10Vector3D_TIfLb0EE$402+8];
 	.loc	1 748 9, function_name $L__info_string70, inlined_at 1 846 1870
 	.loc	3 5320 5, function_name $L__info_string71, inlined_at 1 748 9
 	.loc	4 144 5, function_name $L__info_string72, inlined_at 3 5320 5
@@ -2418,28 +2418,138 @@ $L__BB11_12:
 	.param .u64 copyToLinearBuffers_param_3
 )
 {
-
-	.loc	6 8 0
-
-
-	.loc	6 14 1
-	ret;
-
-}
-	// .globl	visualizeToOutputBuffer
-.visible .entry visualizeToOutputBuffer(
-	.param .u64 visualizeToOutputBuffer_param_0,
-	.param .u32 visualizeToOutputBuffer_param_1,
-	.param .f32 visualizeToOutputBuffer_param_2,
-	.param .f32 visualizeToOutputBuffer_param_3,
-	.param .align 8 .b8 visualizeToOutputBuffer_param_4[8]
-)
-{
-
-	.loc	6 16 0
+	.reg .pred 	%p<8>;
+	.reg .f32 	%f<18>;
+	.reg .b32 	%r<30>;
+	.reg .b64 	%rd<29>;
+	.loc	6 10 0
 
 
-	.loc	6 23 1
+	ld.param.u64 	%rd4, [copyToLinearBuffers_param_0];
+	ld.param.u64 	%rd5, [copyToLinearBuffers_param_1];
+	ld.param.u64 	%rd6, [copyToLinearBuffers_param_2];
+	ld.param.u64 	%rd7, [copyToLinearBuffers_param_3];
+	.loc	6 16 5
+	mov.u32 	%r4, %ctaid.x;
+	mov.u32 	%r5, %ntid.x;
+	mov.u32 	%r6, %tid.x;
+	mad.lo.s32 	%r1, %r5, %r4, %r6;
+	mov.u32 	%r7, %ctaid.y;
+	mov.u32 	%r8, %ntid.y;
+	mov.u32 	%r9, %tid.y;
+	mad.lo.s32 	%r2, %r8, %r7, %r9;
+	.loc	6 19 5
+	ld.const.u64 	%rd8, [plp];
+	cvta.to.global.u64 	%rd1, %rd8;
+	ld.global.u32 	%r3, [%rd1];
+	setp.ge.u32 	%p1, %r1, %r3;
+	@%p1 bra 	$L__BB16_5;
+
+	ld.global.u32 	%r10, [%rd1+4];
+	setp.ge.u32 	%p2, %r2, %r10;
+	@%p2 bra 	$L__BB16_5;
+
+	.loc	6 24 5
+	.loc	7 80 17, function_name $L__info_string81, inlined_at 6 24 5
+	ld.global.u64 	%rd9, [%rd1+192];
+	shl.b32 	%r11, %r1, 4;
+	.loc	6 23 5
+	mad.lo.s32 	%r12, %r3, %r2, %r1;
+	.loc	6 24 5
+	cvt.u64.u32 	%rd3, %r12;
+	.loc	6 16 5
+	cvta.to.global.u64 	%rd10, %rd4;
+	.loc	6 24 5
+	mul.wide.u32 	%rd11, %r12, 16;
+	add.s64 	%rd12, %rd10, %rd11;
+	.loc	7 80 17, function_name $L__info_string81, inlined_at 6 24 5
+	.loc	8 122 4, function_name $L__info_string82, inlined_at 7 80 17
+	.loc	8 115 3, function_name $L__info_string83, inlined_at 8 122 4
+	suld.b.2d.v4.b32.trap {%r13, %r14, %r15, %r16}, [%rd9, {%r11, %r2}];
+	.loc	6 24 5
+	st.global.v4.u32 	[%rd12], {%r13, %r14, %r15, %r16};
+	.loc	6 25 5
+	.loc	7 80 17, function_name $L__info_string81, inlined_at 6 25 5
+	ld.global.u64 	%rd13, [%rd1+200];
+	.loc	6 16 5
+	cvta.to.global.u64 	%rd14, %rd5;
+	.loc	6 25 5
+	add.s64 	%rd15, %rd14, %rd11;
+	.loc	7 80 17, function_name $L__info_string81, inlined_at 6 25 5
+	.loc	8 122 4, function_name $L__info_string82, inlined_at 7 80 17
+	.loc	8 115 3, function_name $L__info_string83, inlined_at 8 122 4
+	suld.b.2d.v4.b32.trap {%r17, %r18, %r19, %r20}, [%rd13, {%r11, %r2}];
+	.loc	6 25 5
+	st.global.v4.u32 	[%rd15], {%r17, %r18, %r19, %r20};
+	.loc	6 26 5
+	.loc	7 80 17, function_name $L__info_string81, inlined_at 6 26 5
+	ld.global.u64 	%rd16, [%rd1+208];
+	.loc	7 80 17, function_name $L__info_string81, inlined_at 6 26 5
+	.loc	8 122 4, function_name $L__info_string82, inlined_at 7 80 17
+	.loc	8 115 3, function_name $L__info_string83, inlined_at 8 122 4
+	suld.b.2d.v4.b32.trap {%r21, %r22, %r23, %r24}, [%rd16, {%r11, %r2}];
+	mov.b32 	%f15, %r21;
+	mov.b32 	%f16, %r22;
+	mov.b32 	%f17, %r23;
+	.loc	6 27 5
+	setp.eq.ftz.f32 	%p3, %f15, 0f00000000;
+	setp.eq.ftz.f32 	%p4, %f16, 0f00000000;
+	and.pred  	%p5, %p3, %p4;
+	setp.eq.ftz.f32 	%p6, %f17, 0f00000000;
+	and.pred  	%p7, %p6, %p5;
+	@%p7 bra 	$L__BB16_4;
+
+	.loc	6 28 9
+	.loc	3 2559 9, function_name $L__info_string15, inlined_at 6 28 9
+	.loc	3 2556 9, function_name $L__info_string16, inlined_at 3 2559 9
+	.loc	3 2553 9, function_name $L__info_string17, inlined_at 3 2556 9
+	mul.ftz.f32 	%f10, %f16, %f16;
+	fma.rn.ftz.f32 	%f11, %f15, %f15, %f10;
+	fma.rn.ftz.f32 	%f12, %f17, %f17, %f11;
+	.loc	3 2560 9, function_name $L__info_string15, inlined_at 6 28 9
+	.loc	3 2533 9, function_name $L__info_string18, inlined_at 3 2560 9
+	rsqrt.approx.ftz.f32 	%f13, %f12;
+	.loc	3 2534 9, function_name $L__info_string18, inlined_at 3 2560 9
+	mul.ftz.f32 	%f15, %f13, %f15;
+	.loc	3 2535 9, function_name $L__info_string18, inlined_at 3 2560 9
+	mul.ftz.f32 	%f16, %f13, %f16;
+	.loc	3 2536 9, function_name $L__info_string18, inlined_at 3 2560 9
+	mul.ftz.f32 	%f17, %f13, %f17;
+
+$L__BB16_4:
+	.loc	6 29 5
+	mov.f32 	%f14, 0f3F800000;
+	.loc	6 16 5
+	cvta.to.global.u64 	%rd17, %rd6;
+	.loc	6 29 5
+	shl.b64 	%rd18, %rd3, 4;
+	add.s64 	%rd19, %rd17, %rd18;
+	st.global.v4.f32 	[%rd19], {%f15, %f16, %f17, %f14};
+	.loc	6 30 5
+	ld.const.u64 	%rd20, [plp+8];
+	cvta.to.global.u64 	%rd21, %rd20;
+	ld.global.u32 	%r25, [%rd21+144];
+	.loc	6 30 5
+	.loc	7 98 21, function_name $L__info_string84, inlined_at 6 30 5
+	shr.u32 	%r26, %r25, 1;
+	cvt.u64.u32 	%rd22, %r26;
+	and.b64  	%rd23, %rd22, 8;
+	add.s64 	%rd24, %rd1, %rd23;
+	ld.global.u64 	%rd25, [%rd24+48];
+	shl.b32 	%r27, %r1, 3;
+	.loc	7 98 21, function_name $L__info_string84, inlined_at 6 30 5
+	.loc	8 122 4, function_name $L__info_string85, inlined_at 7 98 21
+	.loc	8 115 3, function_name $L__info_string86, inlined_at 8 122 4
+	suld.b.2d.v2.b32.trap {%r28, %r29}, [%rd25, {%r27, %r2}];
+	.loc	6 16 5
+	cvta.to.global.u64 	%rd26, %rd7;
+	.loc	6 31 5
+	shl.b64 	%rd27, %rd3, 3;
+	add.s64 	%rd28, %rd26, %rd27;
+	st.global.v2.u32 	[%rd28], {%r28, %r29};
+
+$L__BB16_5:
+	.loc	6 32 1
 	ret;
 
 }
@@ -2449,6 +2559,8 @@ $L__BB11_12:
 	.file	4 "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.42.34433\\include\\cmath"
 	.file	5 "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.9\\include\\crt\\math_functions.hpp"
 	.file	6 "E:\\1Milo\\Milo\\framework\\engine_core\\excludeFromBuild\\cuda\\optix_shocker_copybuffers.cu"
+	.file	7 "E:/1Milo/Milo/thirdparty/optiXUtil/src\\optixu_on_cudau.h"
+	.file	8 "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v12.9\\include\\surface_indirect_functions.h"
 	.section	.debug_str
 	{
 $L__info_string0:
@@ -2676,5 +2788,30 @@ $L__info_string79:
 .b8 95,57,66,83,68,70,70,108,97,103,115,69,0
 $L__info_string80:
 .b8 95,90,78,49,52,83,105,109,112,108,101,80,66,82,95,66,82,68,70,67,49,69,82,75,53,82,71,66,95,84,73,102,69,102,102,102,0
+$L__info_string81:
+.b8 95,90,78,75,54,111,112,116,105,120,117,49,57,78,97,116,105,118,101,66,108,111,99,107,66,117,102,102,101,114,50,68,73,54,102,108,111,97,116,52
+.b8 69,52,114,101,97,100,69,53,117,105,110,116,50,50,51,99,117,100,97,83,117,114,102,97,99,101,66,111,117,110,100,97,114,121,77,111,100,101,0
+$L__info_string82:
+.b8 95,90,78,53,57,95,73,78,84,69,82,78,65,76,95,57,53,56,100,101,50,49,52,95,50,56,95,111,112,116,105,120,95,115,104,111,99,107,101,114
+.b8 95,99,111,112,121,98,117,102,102,101,114,115,95,99,117,95,56,49,49,55,99,56,54,53,49,48,115,117,114,102,50,68,114,101,97,100,73,54,102,108
+.b8 111,97,116,52,69,69,84,95,121,105,105,50,51,99,117,100,97,83,117,114,102,97,99,101,66,111,117,110,100,97,114,121,77,111,100,101,0
+$L__info_string83:
+.b8 95,90,78,53,57,95,73,78,84,69,82,78,65,76,95,57,53,56,100,101,50,49,52,95,50,56,95,111,112,116,105,120,95,115,104,111,99,107,101,114
+.b8 95,99,111,112,121,98,117,102,102,101,114,115,95,99,117,95,56,49,49,55,99,56,54,53,49,48,115,117,114,102,50,68,114,101,97,100,73,54,102,108
+.b8 111,97,116,52,69,69,78,49,54,95,95,110,118,95,105,115,117,114,102,95,116,114,97,105,116,73,84,95,69,52,116,121,112,101,69,80,83,51,95,121
+.b8 105,105,50,51,99,117,100,97,83,117,114,102,97,99,101,66,111,117,110,100,97,114,121,77,111,100,101,0
+$L__info_string84:
+.b8 95,90,78,75,54,111,112,116,105,120,117,49,57,78,97,116,105,118,101,66,108,111,99,107,66,117,102,102,101,114,50,68,73,78,49,52,115,104,111,99
+.b8 107,101,114,95,115,104,97,114,101,100,49,54,71,66,117,102,102,101,114,49,69,108,101,109,101,110,116,115,69,69,52,114,101,97,100,69,53,117,105,110
+.b8 116,50,50,51,99,117,100,97,83,117,114,102,97,99,101,66,111,117,110,100,97,114,121,77,111,100,101,0
+$L__info_string85:
+.b8 95,90,78,53,57,95,73,78,84,69,82,78,65,76,95,57,53,56,100,101,50,49,52,95,50,56,95,111,112,116,105,120,95,115,104,111,99,107,101,114
+.b8 95,99,111,112,121,98,117,102,102,101,114,115,95,99,117,95,56,49,49,55,99,56,54,53,49,48,115,117,114,102,50,68,114,101,97,100,73,53,117,105
+.b8 110,116,50,69,69,84,95,121,105,105,50,51,99,117,100,97,83,117,114,102,97,99,101,66,111,117,110,100,97,114,121,77,111,100,101,0
+$L__info_string86:
+.b8 95,90,78,53,57,95,73,78,84,69,82,78,65,76,95,57,53,56,100,101,50,49,52,95,50,56,95,111,112,116,105,120,95,115,104,111,99,107,101,114
+.b8 95,99,111,112,121,98,117,102,102,101,114,115,95,99,117,95,56,49,49,55,99,56,54,53,49,48,115,117,114,102,50,68,114,101,97,100,73,53,117,105
+.b8 110,116,50,69,69,78,49,54,95,95,110,118,95,105,115,117,114,102,95,116,114,97,105,116,73,84,95,69,52,116,121,112,101,69,80,83,51,95,121,105
+.b8 105,50,51,99,117,100,97,83,117,114,102,97,99,101,66,111,117,110,100,97,114,121,77,111,100,101,0
 
 	}

@@ -8,7 +8,6 @@
 using namespace shocker_shared;
 
 
-
 CUDA_DEVICE_KERNEL void RT_AH_NAME (visibility)()
 {
     float visibility = 0.0f;
@@ -226,7 +225,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void sampleLight (
 template <typename RayType, bool withVisibility>
 CUDA_DEVICE_FUNCTION CUDA_INLINE RGB performDirectLighting (
     const Point3D& shadingPoint, const Vector3D& vOutLocal, const ReferenceFrame& shadingFrame,
-    const const DisneyPrincipled& bsdf, const shocker_shared::LightSample& lightSample)
+    const DisneyPrincipled& bsdf, const shocker_shared::LightSample& lightSample)
 {
     using namespace shared;
     Vector3D shadowRayDir = lightSample.atInfinity ? Vector3D (lightSample.position) : (lightSample.position - shadingPoint);
