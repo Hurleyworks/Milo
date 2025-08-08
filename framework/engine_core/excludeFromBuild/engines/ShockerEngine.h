@@ -52,6 +52,9 @@ public:
     
     void setRenderMode(RenderMode mode) { renderMode_ = mode; }
     RenderMode getRenderMode() const { return renderMode_; }
+    
+    // Handle window resize
+    void resize(uint32_t width, uint32_t height);
 
 private:
     // Pipeline setup methods
@@ -114,6 +117,7 @@ private:
     // RNG buffer
     optixu::HostBlockBuffer2D<shared::PCG32RNG, 1> rngBuffer_;
     
-    // G-buffer textures (for visualization)
-    cudau::Array gbufferTextures_[4];  // Position, Normal, Albedo, Motion
+    // G-buffers (matching sample code structure)
+    cudau::Array gBuffer0_[2];  // Double buffered for temporal effects
+    cudau::Array gBuffer1_[2];  // Double buffered for temporal effects
 };

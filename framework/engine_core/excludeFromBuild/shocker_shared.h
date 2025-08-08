@@ -216,12 +216,12 @@ namespace shocker_shared
 
     // Payload structures for OptiX ray tracing
 
-    // G-Buffer ray payload (simple, single bounce)
-    struct GBufferPayload
-    {
-        HitPointParams* hitPoint;
-        PickInfo* pickInfo;
-    };
+    //// G-Buffer ray payload (simple, single bounce)
+    //struct GBufferPayload
+    //{
+    //    HitPointParams* hitPoint;
+    //    PickInfo* pickInfo;
+    //};
 
     // Path tracing payload (complex, multi-bounce)
     struct PathTraceWriteOnlyPayload

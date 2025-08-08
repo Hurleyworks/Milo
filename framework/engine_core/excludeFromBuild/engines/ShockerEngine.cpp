@@ -59,10 +59,12 @@ void ShockerEngine::initialize(RenderContext* ctx)
     // Allocate launch parameters
     allocateLaunchParameters();
     
-    // Initialize RNG buffer
+    // Initialize buffers
     if (renderWidth_ > 0 && renderHeight_ > 0 && renderContext_)
     {
         CUcontext cuContext = renderContext_->getCudaContext();
+        
+        // Initialize RNG buffer
         rngBuffer_.initialize(cuContext, cudau::BufferType::Device, renderWidth_, renderHeight_);
         uint64_t seed = 12345;
         rngBuffer_.map();
@@ -73,6 +75,23 @@ void ShockerEngine::initialize(RenderContext* ctx)
             }
         }
         rngBuffer_.unmap();
+        
+        // Initialize G-buffers (double buffered, matching sample code pattern)
+        for (int i = 0; i < 2; ++i)
+        {
+            gBuffer0_[i].initialize2D(
+                cuContext, cudau::ArrayElementType::UInt32, 
+                (sizeof(shocker_shared::GBuffer0Elements) + 3) / 4,
+                cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+                renderWidth_, renderHeight_, 1);
+            
+            gBuffer1_[i].initialize2D(
+                cuContext, cudau::ArrayElementType::UInt32,
+                (sizeof(shocker_shared::GBuffer1Elements) + 3) / 4,
+                cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+                renderWidth_, renderHeight_, 1);
+        }
+        LOG(DBUG) << "G-buffers initialized";
     }
     
     // Initialize camera
@@ -120,10 +139,13 @@ void ShockerEngine::cleanup()
         rngBuffer_.finalize();
     }
     
-    // Clean up G-buffer textures
-    for (auto& tex : gbufferTextures_) {
-        if (tex.isInitialized()) {
-            tex.finalize();
+    // Clean up G-buffers
+    for (int i = 1; i >= 0; --i) {
+        if (gBuffer1_[i].isInitialized()) {
+            gBuffer1_[i].finalize();
+        }
+        if (gBuffer0_[i].isInitialized()) {
+            gBuffer0_[i].finalize();
         }
     }
     
@@ -191,6 +213,76 @@ void ShockerEngine::clearScene()
     }
     
     restartRender_ = true;
+}
+
+void ShockerEngine::resize(uint32_t width, uint32_t height)
+{
+    if (!isInitialized_ || width == 0 || height == 0) {
+        return;
+    }
+    
+    LOG(DBUG) << "Resizing ShockerEngine from " << renderWidth_ << "x" << renderHeight_ 
+              << " to " << width << "x" << height;
+    
+    renderWidth_ = width;
+    renderHeight_ = height;
+    
+    CUcontext cuContext = renderContext_->getCudaContext();
+    
+    // Resize RNG buffer
+    if (rngBuffer_.isInitialized()) {
+        rngBuffer_.finalize();
+    }
+    rngBuffer_.initialize(cuContext, cudau::BufferType::Device, width, height);
+    uint64_t seed = 12345;
+    rngBuffer_.map();
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            shared::PCG32RNG& rng = rngBuffer_(x, y);
+            rng.setState(seed + (y * width + x) * 1234567);
+        }
+    }
+    rngBuffer_.unmap();
+    
+    // Resize G-buffers
+    for (int i = 0; i < 2; ++i) {
+        if (gBuffer0_[i].isInitialized()) {
+            gBuffer0_[i].resize(width, height);
+        } else {
+            gBuffer0_[i].initialize2D(
+                cuContext, cudau::ArrayElementType::UInt32,
+                (sizeof(shocker_shared::GBuffer0Elements) + 3) / 4,
+                cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+                width, height, 1);
+        }
+        
+        if (gBuffer1_[i].isInitialized()) {
+            gBuffer1_[i].resize(width, height);
+        } else {
+            gBuffer1_[i].initialize2D(
+                cuContext, cudau::ArrayElementType::UInt32,
+                (sizeof(shocker_shared::GBuffer1Elements) + 3) / 4,
+                cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+                width, height, 1);
+        }
+    }
+    
+    // Resize render handler
+    if (renderHandler_) {
+        renderHandler_->resize(width, height);
+    }
+    
+    // Resize denoiser handler
+    if (denoiserHandler_) {
+        denoiserHandler_->resize(width, height);
+    }
+    
+    // Update camera aspect ratio
+    lastCamera_.aspect = static_cast<float>(width) / height;
+    
+    // Mark for render restart
+    restartRender_ = true;
+    LOG(DBUG) << "ShockerEngine resize complete";
 }
 
 void ShockerEngine::render(const mace::InputEvent& input, bool updateMotion, uint32_t frameNumber)
@@ -574,14 +666,19 @@ void ShockerEngine::updateLaunchParameters(const mace::InputEvent& input)
         // RNG buffer is already a BlockBuffer2D, just get the native version
         staticPlp_.rngBuffer = rngBuffer_.getBlockBuffer2D();
         
+        // Setup G-buffers (direct assignment of surface objects)
+        for (int i = 0; i < 2; ++i) {
+            staticPlp_.GBuffer0[i] = gBuffer0_[i].getSurfaceObject(0);
+            staticPlp_.GBuffer1[i] = gBuffer1_[i].getSurfaceObject(0);
+        }
+        
         // Update accumulation buffer references from render handler
         if (renderHandler_) {
-            // Setup beauty accumulation buffer - create empty for now
-            // TODO: Connect to actual render handler buffers
-            staticPlp_.beautyAccumBuffer = optixu::NativeBlockBuffer2D<float4>();
-            staticPlp_.albedoAccumBuffer = optixu::NativeBlockBuffer2D<float4>();
-            staticPlp_.normalAccumBuffer = optixu::NativeBlockBuffer2D<float4>();
-            staticPlp_.motionAccumBuffer = optixu::NativeBlockBuffer2D<float2>();
+            // Direct assignment of surface objects from render handler
+            staticPlp_.beautyAccumBuffer = renderHandler_->getBeautyAccumSurfaceObject();
+            staticPlp_.albedoAccumBuffer = renderHandler_->getAlbedoAccumSurfaceObject();
+            staticPlp_.normalAccumBuffer = renderHandler_->getNormalAccumSurfaceObject();
+            staticPlp_.motionAccumBuffer = renderHandler_->getMotionAccumSurfaceObject();
         }
         
         // TODO: Update material and instance buffers from handlers
