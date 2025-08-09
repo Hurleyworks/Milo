@@ -380,7 +380,7 @@ void ShockerEngine::render(const mace::InputEvent& input, bool updateMotion, uin
     // Update camera (simplified for now)
     if (true) { // TODO: proper input comparison
         updateCameraBody(input);
-        updateCameraSensor();
+      
         lastInput_ = input;
     }
     
@@ -402,6 +402,9 @@ void ShockerEngine::render(const mace::InputEvent& input, bool updateMotion, uin
     //        break;
     //}
     renderGBuffer();
+    renderPathTracing();
+
+      updateCameraSensor();
 
     // Update frame counter
     frameCounter_++;
@@ -414,9 +417,51 @@ void ShockerEngine::render(const mace::InputEvent& input, bool updateMotion, uin
 
 void ShockerEngine::onEnvironmentChanged()
 {
-    LOG(DBUG) << "Environment changed in ShockerEngine";
+    LOG(INFO) << "ShockerEngine::onEnvironmentChanged()";
+    
+    // Mark environment as dirty
     environmentDirty_ = true;
+    
+    // Reset accumulation since lighting has changed
     restartRender_ = true;
+    perFramePlp_.numAccumFrames = 0;
+    
+    // Update environment texture immediately
+    if (renderContext_) {
+        auto& handlers = renderContext_->getHandlers();
+        if (handlers.skyDomeHandler && handlers.skyDomeHandler->hasEnvironmentTexture()) {
+            staticPlp_.envLightTexture = handlers.skyDomeHandler->getEnvironmentTexture();
+            
+            // Get the environment light importance map
+            handlers.skyDomeHandler->getImportanceMap().getDeviceType(&staticPlp_.envLightImportanceMap);
+            
+            LOG(INFO) << "Environment texture updated: " << std::hex << staticPlp_.envLightTexture << std::dec;
+        } else {
+            // Clear environment if no texture
+            staticPlp_.envLightTexture = 0;
+            staticPlp_.envLightImportanceMap = shared::RegularConstantContinuousDistribution2D();
+            LOG(INFO) << "Environment texture cleared";
+        }
+        
+        // Upload the updated static parameters to device immediately
+        if (staticPlpOnDevice_) {
+            CUcontext prevContext;
+            CUDADRV_CHECK(cuCtxGetCurrent(&prevContext));
+            CUDADRV_CHECK(cuCtxSetCurrent(renderContext_->getCudaContext()));
+            
+            CUDADRV_CHECK(cuMemcpyHtoD(staticPlpOnDevice_, &staticPlp_, sizeof(staticPlp_)));
+            
+            // Also update the main plp structure
+            plp_.s = reinterpret_cast<shocker_shared::StaticPipelineLaunchParameters*>(staticPlpOnDevice_);
+            CUDADRV_CHECK(cuMemcpyHtoD(plpOnDevice_, &plp_, sizeof(plp_)));
+            
+            CUDADRV_CHECK(cuCtxSetCurrent(prevContext));
+            
+            LOG(INFO) << "Environment parameters uploaded to device";
+        }
+    }
+    
+    LOG(INFO) << "Environment changed - accumulation reset";
 }
 
 void ShockerEngine::setupPipelines()
@@ -882,6 +927,21 @@ void ShockerEngine::updateLaunchParameters(const mace::InputEvent& input)
         // TODO: Update material and instance buffers from handlers when they change
     }
     
+    // Update environment texture and importance map (following MiloEngine pattern)
+    staticPlp_.envLightTexture = 0;
+    if (renderContext_) {
+        auto& handlers = renderContext_->getHandlers();
+        if (handlers.skyDomeHandler && handlers.skyDomeHandler->hasEnvironmentTexture()) {
+            staticPlp_.envLightTexture = handlers.skyDomeHandler->getEnvironmentTexture();
+            
+            // Get the environment light importance map
+            handlers.skyDomeHandler->getImportanceMap().getDeviceType(&staticPlp_.envLightImportanceMap);
+        } else {
+            // Initialize with empty distribution
+            staticPlp_.envLightImportanceMap = shared::RegularConstantContinuousDistribution2D();
+        }
+    }
+    
     // Ensure device pointers are allocated
     if (!plpOnDevice_ || !staticPlpOnDevice_ || !perFramePlpOnDevice_) {
         LOG(WARNING) << "Launch parameters not allocated, cannot update";
@@ -962,27 +1022,116 @@ void ShockerEngine::allocateLaunchParameters()
 
 void ShockerEngine::updateCameraBody(const mace::InputEvent& input)
 {
-    // Simple camera update based on input
-    // TODO: Implement proper camera controls
+    if (!renderContext_)
+    {
+        return;
+    }
     
-    // TODO: check for camera changes properly
-    if (false) {
+    // Store last input
+    lastInput_ = input;
+    
+    // Save previous camera for temporal effects
+    prevCamera_ = lastCamera_;
+    
+    // Get camera from render context
+    auto camera = renderContext_->getCamera();
+    if (!camera)
+    {
+        LOG(WARNING) << "No camera available";
+        return;
+    }
+    
+    // Check if camera has changed
+    if (camera->isDirty() || camera->hasSettingsChanged())
+    {
         cameraChanged_ = true;
         restartRender_ = true;
+        
+        // Update camera parameters
+        sabi::CameraSensor* sensor = camera->getSensor();
+        if (sensor)
+        {
+            lastCamera_.aspect = sensor->getPixelAspectRatio();
+        }
+        else
+        {
+            lastCamera_.aspect = static_cast<float>(renderWidth_) / static_cast<float>(renderHeight_);
+        }
+        lastCamera_.fovY = camera->getVerticalFOVradians();
+        
+        // Get camera position
+        Eigen::Vector3f eyePoint = camera->getEyePoint();
+        lastCamera_.position = Point3D(eyePoint.x(), eyePoint.y(), eyePoint.z());
+        
+        // Build camera orientation matrix from camera vectors
+        Eigen::Vector3f right = camera->getRight();
+        const Eigen::Vector3f& up = camera->getUp();
+        const Eigen::Vector3f& forward = camera->getFoward();
+        
+        // Fix for standalone applications - negate right vector to correct trackball rotation
+        // (not needed in LightWave but required in standalone)
+        right *= -1.0f;
+        
+        // Convert to shared types
+        Vector3D camRight(right.x(), right.y(), right.z());
+        Vector3D camUp(up.x(), up.y(), up.z());
+        Vector3D camForward(forward.x(), forward.y(), forward.z());
+        
+        // Build orientation matrix from camera basis vectors
+        // Using the same constructor as production code: Matrix3x3(right, up, forward)
+        lastCamera_.orientation = Matrix3x3(camRight, camUp, camForward);
+        
+        // Note: Lens parameters (lensSize, focusDistance) are not in the basic PerspectiveCamera
+        // These would be needed for depth of field effects in a more advanced version
+        
+        // Mark camera as not dirty after processing
+        camera->setDirty(false);
     }
 }
 
 void ShockerEngine::updateCameraSensor()
 {
-    // Update camera sensor parameters
-    if (cameraChanged_) {
-        // Update aspect ratio if window resized
-        if (renderHandler_) {
-            lastCamera_.aspect = static_cast<float>(renderHandler_->getWidth()) / 
-                                renderHandler_->getHeight();
-        }
-        cameraChanged_ = false;
+    // Get camera and check if it has a sensor
+    if (!renderContext_)
+    {
+        LOG(WARNING) << "No render context available for camera sensor update";
+        return;
     }
+    
+    auto camera = renderContext_->getCamera();
+    if (!camera || !camera->getSensor())
+    {
+        LOG(WARNING) << "No camera or sensor available for update";
+        return;
+    }
+    
+    // Get the linear beauty buffer from our RenderHandler
+    if (!renderHandler_ || !renderHandler_->isInitialized())
+    {
+        LOG(WARNING) << "RenderHandler not available or not initialized";
+        return;
+    }
+    
+    // Use the linear beauty buffer from ShockerRenderHandler
+    auto& linearBeautyBuffer = renderHandler_->getLinearBeautyBuffer();
+    
+    // Since linear buffers are device-only, we need to copy to host
+    std::vector<float4> hostPixels(renderWidth_ * renderHeight_);
+    linearBeautyBuffer.read(hostPixels.data(), renderWidth_ * renderHeight_);
+    
+    // Update the camera sensor with the rendered image
+    bool previewMode = false; // Full quality display
+    uint32_t renderScale = 1; // No scaling
+    
+    Eigen::Vector2i renderSize(renderWidth_, renderHeight_);
+    bool success = camera->getSensor()->updateImage(hostPixels.data(), renderSize, previewMode, renderScale);
+    
+    if (!success)
+    {
+        LOG(WARNING) << "Failed to update camera sensor with rendered image";
+    }
+    
+   
 }
 
 void ShockerEngine::renderGBuffer()
@@ -1003,10 +1152,10 @@ void ShockerEngine::renderGBuffer()
     CUstream stream = renderContext_->getCudaStream();
     uint32_t width = renderHandler_->getWidth();
     uint32_t height = renderHandler_->getHeight();
-    
+  /*  
     LOG(DBUG) << "Launching G-buffer pipeline: width=" << width << ", height=" << height 
               << ", plpOnDevice_=" << std::hex << plpOnDevice_ << std::dec
-              << ", travHandle=" << perFramePlp_.travHandle;
+              << ", travHandle=" << perFramePlp_.travHandle;*/
     
     // Launch G-buffer pipeline
     gbufferPipeline_->setEntryPoint(GBufferEntryPoint::setupGBuffers);
@@ -1035,6 +1184,8 @@ void ShockerEngine::renderPathTracing()
         LOG(WARNING) << "Path tracing pipeline not ready";
         return;
     }
+
+     LOG (DBUG) << _FN_;
     
     CUstream stream = renderContext_->getCudaStream();
     uint32_t width = renderHandler_->getWidth();
@@ -1045,7 +1196,7 @@ void ShockerEngine::renderPathTracing()
     pathTracePipeline_->setEntryPoint(PathTracingEntryPoint::pathTrace);
     
     // TODO: Launch when pipeline is fully configured
-    // pathTracePipeline_->optixPipeline.launch(stream, plpOnDevice_, width, height, 1);
+    pathTracePipeline_->optixPipeline.launch(stream, plpOnDevice_, width, height, 1);
     
     // Copy accumulation buffers to linear buffers for display
     renderHandler_->copyAccumToLinearBuffers(stream);

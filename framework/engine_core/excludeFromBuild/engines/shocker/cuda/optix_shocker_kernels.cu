@@ -488,5 +488,36 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME (pathTrace)()
 
 CUDA_DEVICE_KERNEL void RT_MS_NAME (pathTrace)()
 {
-    // STUB
+    if constexpr (useImplicitLightSampling)
+    {
+        if (!plp.s->envLightTexture || !plp.f->enableEnvLight)
+            return;
+
+        PathTraceReadWritePayload* rwPayload;
+        PathTraceRayPayloadSignature::get (nullptr, &rwPayload);
+
+        const Vector3D rayDir = normalize (Vector3D (optixGetWorldRayDirection()));
+        float posPhi, theta;
+        toPolarYUp (rayDir, &posPhi, &theta);
+
+        float phi = posPhi + plp.f->envLightRotation;
+        phi = phi - floorf (phi / (2 * pi_v<float>)) * 2 * pi_v<float>;
+        const Point2D texCoord (phi / (2 * pi_v<float>), theta / pi_v<float>);
+
+        // Implicit Light Sampling
+        const float4 texValue = tex2DLod<float4> (plp.s->envLightTexture, texCoord.x, texCoord.y, 0.0f);
+        RGB luminance = plp.f->envLightPowerCoeff * RGB (getXYZ (texValue));
+        float misWeight = 1.0f;
+        if constexpr (useMultipleImportanceSampling)
+        {
+            const float uvPDF = plp.s->envLightImportanceMap.evaluatePDF (texCoord.x, texCoord.y);
+            const float hypAreaPDensity = uvPDF / (2 * pi_v<float> * pi_v<float> * std::sin (theta));
+            const float lightPDensity =
+                (plp.s->lightInstDist.integral() > 0.0f ? probToSampleEnvLight : 1.0f) *
+                hypAreaPDensity;
+            const float bsdfPDensity = rwPayload->prevDirPDensity;
+            misWeight = pow2 (bsdfPDensity) / (pow2 (bsdfPDensity) + pow2 (lightPDensity));
+        }
+        rwPayload->contribution += rwPayload->alpha * luminance * misWeight;
+    }
 }
