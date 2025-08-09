@@ -190,8 +190,7 @@ void ShockerRenderHandler::loadKernels()
     
     // Set up the kernels
     kernelCopySurfacesToLinear_.set(moduleShockerCopyBuffers_, "copySurfacesToLinear", cudau::dim3(8, 8), 0);
-    kernelClearAccumBuffers_.set(moduleShockerCopyBuffers_, "clearAccumBuffers", cudau::dim3(8, 8), 0);
-    
+  
     LOG(INFO) << "Shocker copy buffers module loaded successfully";
 }
 
@@ -227,29 +226,6 @@ void ShockerRenderHandler::copyAccumToLinearBuffers(CUstream stream)
     );
 }
 
-void ShockerRenderHandler::clearAccumBuffers(CUstream stream)
-{
-    if (!initialized_ || !moduleShockerCopyBuffers_)
-    {
-        LOG(WARNING) << "ShockerRenderHandler not properly initialized";
-        return;
-    }
-    
-    // Clear all accumulation buffers
-    kernelClearAccumBuffers_.launchWithThreadDim(
-        stream, cudau::dim3(width_, height_),
-        beautyAccumBuffer_.getSurfaceObject(0),
-        albedoAccumBuffer_.getSurfaceObject(0),
-        normalAccumBuffer_.getSurfaceObject(0),
-        motionAccumBuffer_.getSurfaceObject(0),
-        uint2{width_, height_}
-    );
-    
-    // Reset accumulation count
-    accumulationCount_ = 0;
-    
-    LOG(DBUG) << "Shocker accumulation buffers cleared";
-}
 
 bool ShockerRenderHandler::denoise(CUstream stream, bool isNewSequence, ShockerDenoiserHandler* denoiserHandler, GPUTimerManager::GPUTimer* timer)
 {

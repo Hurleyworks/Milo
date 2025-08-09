@@ -72,7 +72,7 @@ public:
     
     // Operations
     void copyAccumToLinearBuffers(CUstream stream);
-    void clearAccumBuffers(CUstream stream);
+  
     
     // Denoising operation
     // Returns true if denoising was performed, false if denoiser not available
@@ -115,7 +115,7 @@ private:
     // CUDA module and kernels for buffer operations
     CUmodule moduleShockerCopyBuffers_ = nullptr;
     cudau::Kernel kernelCopySurfacesToLinear_;
-    cudau::Kernel kernelClearAccumBuffers_;
+    
     
     // Private methods
     void loadKernels();

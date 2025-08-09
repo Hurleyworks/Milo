@@ -773,11 +773,7 @@ void ShockerEngine::renderPathTracing()
     CUstream stream = renderContext_->getCudaStream();
     uint32_t width = renderHandler_->getWidth();
     uint32_t height = renderHandler_->getHeight();
-    
-    // Clear accumulation buffers if restarting
-    if (restartRender_) {
-        renderHandler_->clearAccumBuffers(stream);
-    }
+   
     
     // Launch path tracing pipeline
     pathTracePipeline_->setEntryPoint(PathTracingEntryPoint::pathTrace);

@@ -145,7 +145,7 @@ void Renderer::initializeEngine (CameraHandle camera, ImageCacheHandlerPtr image
         // 4. Restore original condition and rebuild application
         // 5. Application will then use the embedded PTX files
 
-        bool compileCuda = true;
+        bool compileCuda = false;
         std::string engineFilter = "all";  // Can be "all", "milo", or "shocker"
 
         if (compileCuda || (!softwareReleaseMode && !embeddedPTX))
@@ -245,7 +245,7 @@ void Renderer::initializeEngine (CameraHandle camera, ImageCacheHandlerPtr image
         }
         
         // Start with basic path tracer as default
-        engineManager_->switchEngine("milo");
+        engineManager_->switchEngine("shocker");
 
         // Step 7: Pipeline Handler is already initialized for geometry support
         // The scene pipeline is active by default for model creation
