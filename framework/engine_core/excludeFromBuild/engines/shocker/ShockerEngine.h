@@ -94,8 +94,8 @@ private:
     void updateCameraSensor();
     
     // Rendering methods
-    void renderGBuffer();
-    void renderPathTracing();
+    void renderGBuffer(CUstream stream);
+    void renderPathTracing(CUstream stream);
     
     // Dual pipelines
     std::shared_ptr<engine_core::RenderPipeline<GBufferEntryPoint>> gbufferPipeline_;

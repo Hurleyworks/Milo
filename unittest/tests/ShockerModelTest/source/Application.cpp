@@ -19,8 +19,8 @@ using nlohmann::json;
 #include <engine_core/engine_core.h>
 
 // Include ShockerModel
-#include "engine_core/excludeFromBuild/model/ShockerModel.h"
-#include "engine_core/excludeFromBuild/model/ShockerCore.h"
+#include "engine_core/excludeFromBuild/engines/shocker/models/ShockerModel.h"
+#include "engine_core/excludeFromBuild/engines/shocker/models/ShockerCore.h"
 
 // Include common_host for geometry structures  
 #include "engine_core/excludeFromBuild/common/common_host.h"

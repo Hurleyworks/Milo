@@ -6,9 +6,9 @@
 #include <filesystem>
 #include <chrono>
 
-#include "engine_core/excludeFromBuild/handlers/ShockerModelHandler.h"
-#include "engine_core/excludeFromBuild/model/ShockerModel.h"
-#include "engine_core/excludeFromBuild/model/ShockerCore.h"
+#include "engine_core/excludeFromBuild/engines/shocker/handlers/ShockerModelHandler.h"
+#include "engine_core/excludeFromBuild/engines/shocker/models/ShockerModel.h"
+#include "engine_core/excludeFromBuild/engines/shocker/models/ShockerCore.h"
 
 static void loadGLTF (const std::filesystem::path& gltfPath)
 {

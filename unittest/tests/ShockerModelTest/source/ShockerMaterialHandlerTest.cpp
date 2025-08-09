@@ -5,10 +5,10 @@
 #include <sabi_core/sabi_core.h>
 #include <filesystem>
 
-#include "engine_core/excludeFromBuild/handlers/ShockerMaterialHandler.h"
-#include "engine_core/excludeFromBuild/handlers/ShockerModelHandler.h"
-#include "engine_core/excludeFromBuild/model/ShockerModel.h"
-#include "engine_core/excludeFromBuild/model/ShockerCore.h"
+#include "engine_core/excludeFromBuild/engines/shocker/handlers/ShockerMaterialHandler.h"
+#include "engine_core/excludeFromBuild/engines/shocker/handlers/ShockerModelHandler.h"
+#include "engine_core/excludeFromBuild/engines/shocker/models/ShockerModel.h"
+#include "engine_core/excludeFromBuild/engines/shocker/models/ShockerCore.h"
 
 TEST_CASE("ShockerMaterialHandler Basic Operations")
 {

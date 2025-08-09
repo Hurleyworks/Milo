@@ -308,8 +308,8 @@ bool ShockerRenderHandler::denoise(CUstream stream, bool isNewSequence, ShockerD
         timer->denoise.stop(stream);
     }
     
-    LOG(DBUG) << "Shocker denoising completed (temporal: " << denoiserHandler->isTemporalDenoiser() 
-              << ", new sequence: " << isNewSequence << ")";
+   // LOG(DBUG) << "Shocker denoising completed (temporal: " << denoiserHandler->isTemporalDenoiser() 
+     //         << ", new sequence: " << isNewSequence << ")";
     
     return true;  // Successfully invoked denoiser
 }

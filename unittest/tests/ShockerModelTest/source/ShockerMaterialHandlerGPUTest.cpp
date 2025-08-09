@@ -4,12 +4,12 @@
 #include <doctest/doctest.h>
 #include <sabi_core/sabi_core.h>
 
-#include "engine_core/excludeFromBuild/handlers/ShockerMaterialHandler.h"
-#include "engine_core/excludeFromBuild/handlers/ShockerModelHandler.h"
+#include "engine_core/excludeFromBuild/engines/shocker/handlers/ShockerMaterialHandler.h"
+#include "engine_core/excludeFromBuild/engines/shocker/handlers/ShockerModelHandler.h"
 #include "engine_core/excludeFromBuild/handlers/TextureHandler.h"
 #include "engine_core/excludeFromBuild/handlers/Handlers.h"
 #include "engine_core/excludeFromBuild/RenderContext.h"
-#include "engine_core/excludeFromBuild/model/ShockerModel.h"
+#include "engine_core/excludeFromBuild/engines/shocker/models/ShockerModel.h"
 
 // Helper class to initialize GPU context for testing
 class GPUTestContext
