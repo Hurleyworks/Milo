@@ -9,3 +9,7 @@
 /sample_code
 /unittest/builds/VisualStudio2022
 /LighttWave
+/framework/engine_core/generated/embedded_ptx.h
+/resources/RenderDog/ptx/Debug/sm_86/optix_shocker_copybuffers.ptx
+/resources/RenderDog/ptx/Debug/sm_86/optix_shocker_kernels.ptx
+/crash.jpg
