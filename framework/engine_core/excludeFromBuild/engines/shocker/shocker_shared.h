@@ -49,7 +49,6 @@ namespace shocker_shared
     };
 
     constexpr uint32_t maxNumRayTypes = 2;
-
     // Camera structure (matching sample code exactly)
     struct PerspectiveCamera
     {

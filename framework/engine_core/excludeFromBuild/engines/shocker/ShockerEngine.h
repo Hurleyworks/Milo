@@ -55,14 +55,33 @@ public:
     
     // Handle window resize
     void resize(uint32_t width, uint32_t height);
+    
+    // Light probability computation kernels structure
+    struct ComputeProbTex
+    {
+        CUmodule cudaModule = 0;
+        cudau::Kernel computeFirstMip;
+        cudau::Kernel computeTriangleProbTexture;
+        cudau::Kernel computeGeomInstProbTexture;
+        cudau::Kernel computeInstProbTexture;
+        cudau::Kernel computeMip;
+        cudau::Kernel computeTriangleProbBuffer;
+        cudau::Kernel computeAreaLightProbBuffer;
+        cudau::Kernel finalizeDiscreteDistribution1D;
+        cudau::Kernel test;
+    };
+    
+    // Accessor for light probability computation kernels
+    const ComputeProbTex& getComputeProbTex() const { return computeProbTex_; }
 
 private:
     // Pipeline setup methods
     void setupPipelines();
-    void createGBufferPipeline();
-    void createPathTracingPipeline();
-    void createSBTs();
-    void updateSBTs();  // Update SBTs after scene changes
+    void createModules();
+    void createPrograms();
+    void initializeLightProbabilityKernels();
+    void createSBT();
+    void updateSBT();  // Update SBT after scene changes
     void linkPipelines();
     void updateMaterialHitGroups(ShockerModelPtr model);  // Set hit groups on model's materials
     
@@ -120,4 +139,7 @@ private:
     // G-buffers (matching sample code structure)
     cudau::Array gBuffer0_[2];  // Double buffered for temporal effects
     cudau::Array gBuffer1_[2];  // Double buffered for temporal effects
+    
+    // Light probability computation kernels
+    ComputeProbTex computeProbTex_;
 };

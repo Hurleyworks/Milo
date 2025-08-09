@@ -126,6 +126,12 @@ void ShockerEngine::cleanup()
         pathTracePipeline_.reset();
     }
     
+    // Clean up launch parameters
+    if (plpOnDevice_) {
+        CUDADRV_CHECK(cuMemFree(plpOnDevice_));
+        plpOnDevice_ = 0;
+    }
+    
     // Clean up buffers
     if (staticPlpBuffer_.isInitialized()) {
         staticPlpBuffer_.finalize();
@@ -335,51 +341,91 @@ void ShockerEngine::onEnvironmentChanged()
 
 void ShockerEngine::setupPipelines()
 {
-    LOG(DBUG) << "Setting up ShockerEngine pipelines";
+    LOG(INFO) << "ShockerEngine::setupPipelines()";
     
-    // Create pipeline instances
-    gbufferPipeline_ = std::make_shared<engine_core::RenderPipeline<GBufferEntryPoint>>();
-    pathTracePipeline_ = std::make_shared<engine_core::RenderPipeline<PathTracingEntryPoint>>();
-    
-    // Setup G-buffer pipeline
-    createGBufferPipeline();
-    
-    // Setup path tracing pipeline
-    createPathTracingPipeline();
-    
-    // Create shader binding tables
-    createSBTs();
-    
-    // Link pipelines
-    linkPipelines();
-}
-
-void ShockerEngine::createGBufferPipeline()
-{
-    LOG(DBUG) << "Creating G-buffer pipeline";
-    
-    if (!ptxManager_ || !gbufferPipeline_) {
-        LOG(WARNING) << "PTXManager or G-buffer pipeline not ready";
+    if (!renderContext_ || !renderContext_->getOptiXContext())
+    {
+        LOG(WARNING) << "Context not ready for pipeline setup";
         return;
     }
     
-    // Pipeline configuration
-    engine_core::PipelineConfig config;
-    config.maxTraceDepth = 1;  // Single bounce for G-buffer
-    config.numPayloadDwords = 8;  // For G-buffer payload
-    config.numAttributeDwords = 2;
+    optixu::Context optixContext = renderContext_->getOptiXContext();
     
-    // Initialize pipeline
-    gbufferPipeline_->initialize(renderContext_, config);
+    // Create G-buffer pipeline
+    gbufferPipeline_ = std::make_shared<engine_core::RenderPipeline<GBufferEntryPoint>>();
+    gbufferPipeline_->optixPipeline = optixContext.createPipeline();
+    
+    // Configure G-buffer pipeline options
+    gbufferPipeline_->optixPipeline.setPipelineOptions(
+        std::max ({shocker_shared::PrimaryRayPayloadSignature::numDwords}), // Payload dwords for G-buffer
+        optixu::calcSumDwords<float2>(),  
+        "plp",  // Pipeline launch parameters name
+        sizeof(shocker_shared::PipelineLaunchParameters),
+        OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+        OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
+        OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
+    
+    LOG(INFO) << "Shocker G-buffer pipeline configured";
+    
+    // Create path tracing pipeline
+    pathTracePipeline_ = std::make_shared<engine_core::RenderPipeline<PathTracingEntryPoint>>();
+    pathTracePipeline_->optixPipeline = optixContext.createPipeline();
+    
+    // Configure path tracing pipeline options
+    pathTracePipeline_->optixPipeline.setPipelineOptions(
+        std::max ({shocker_shared::PathTraceRayPayloadSignature::numDwords,
+                   shocker_shared::VisibilityRayPayloadSignature::numDwords}), // Payload dwords for path tracing
+        optixu::calcSumDwords<float2>(),  // Attribute dwords for barycentrics
+        "plp",  // Pipeline launch parameters name
+        sizeof(shocker_shared::PipelineLaunchParameters),
+        OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+        OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
+        OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
+    
+    LOG(INFO) << "Shocker path tracing pipeline configured";
+    
+    // Create modules
+    createModules();
+    
+    // Initialize light probability computation kernels
+    initializeLightProbabilityKernels();
+    
+    // Create programs
+    createPrograms();
+    
+    // Link pipelines
+    linkPipelines();
+    
+    // Generate SBT layout for the scene first
+    // This is required before we can build the pipeline SBTs
+    size_t dummySize;
+    scene_.generateShaderBindingTableLayout(&dummySize);
+    LOG(INFO) << "Generated scene SBT layout, size: " << dummySize << " bytes";
+    
+    // Create shader binding tables
+    createSBT();
+}
+
+void ShockerEngine::createModules()
+{
+    LOG(INFO) << "ShockerEngine::createModules()";
+    
+    if (!ptxManager_ || !gbufferPipeline_ || !gbufferPipeline_->optixPipeline ||
+        !pathTracePipeline_ || !pathTracePipeline_->optixPipeline)
+    {
+        LOG(WARNING) << "PTXManager or Pipelines not ready";
+        return;
+    }
     
     // Load PTX for G-buffer kernels
     std::vector<char> gbufferPtxData = ptxManager_->getPTXData("optix_shocker_gbuffer");
-    if (gbufferPtxData.empty()) {
+    if (gbufferPtxData.empty())
+    {
         LOG(WARNING) << "Failed to load PTX for optix_shocker_gbuffer";
         return;
     }
     
-    // Create module from PTX
+    // Create module for G-buffer pipeline
     std::string gbufferPtxString(gbufferPtxData.begin(), gbufferPtxData.end());
     gbufferPipeline_->optixModule = gbufferPipeline_->optixPipeline.createModuleFromPTXString(
         gbufferPtxString,
@@ -387,50 +433,17 @@ void ShockerEngine::createGBufferPipeline()
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
         DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
     
-    // Create program groups
-    gbufferPipeline_->entryPoints[GBufferEntryPoint::setupGBuffers] = 
-        gbufferPipeline_->optixPipeline.createRayGenProgram(
-            gbufferPipeline_->optixModule, "__raygen__setupGBuffers");
-    
-    gbufferPipeline_->programs["__miss__setupGBuffers"] = 
-        gbufferPipeline_->optixPipeline.createMissProgram(
-            gbufferPipeline_->optixModule, "__miss__setupGBuffers");
-    
-    // Create hit group for G-buffer generation
-    gbufferPipeline_->hitPrograms["__closesthit__setupGBuffers"] = 
-        gbufferPipeline_->optixPipeline.createHitProgramGroupForTriangleIS(
-            gbufferPipeline_->optixModule, "__closesthit__setupGBuffers",
-            optixu::Module(), nullptr);
-    
-    LOG(DBUG) << "G-buffer pipeline created successfully";
-}
-
-void ShockerEngine::createPathTracingPipeline()
-{
-    LOG(DBUG) << "Creating path tracing pipeline";
-    
-    if (!ptxManager_ || !pathTracePipeline_) {
-        LOG(WARNING) << "PTXManager or path tracing pipeline not ready";
-        return;
-    }
-    
-    // Pipeline configuration
-    engine_core::PipelineConfig config;
-    config.maxTraceDepth = 8;  // Multiple bounces for path tracing
-    config.numPayloadDwords = 16;  // For path trace payload
-    config.numAttributeDwords = 2;
-    
-    // Initialize pipeline
-    pathTracePipeline_->initialize(renderContext_, config);
+    LOG(INFO) << "Shocker G-buffer module created successfully";
     
     // Load PTX for path tracing kernels
     std::vector<char> pathTracePtxData = ptxManager_->getPTXData("optix_shocker_kernels");
-    if (pathTracePtxData.empty()) {
+    if (pathTracePtxData.empty())
+    {
         LOG(WARNING) << "Failed to load PTX for optix_shocker_kernels";
         return;
     }
     
-    // Create module from PTX
+    // Create module for path tracing pipeline
     std::string pathTracePtxString(pathTracePtxData.begin(), pathTracePtxData.end());
     pathTracePipeline_->optixModule = pathTracePipeline_->optixPipeline.createModuleFromPTXString(
         pathTracePtxString,
@@ -438,33 +451,143 @@ void ShockerEngine::createPathTracingPipeline()
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
         DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
     
-    // Create program groups
-    pathTracePipeline_->entryPoints[PathTracingEntryPoint::pathTrace] = 
-        pathTracePipeline_->optixPipeline.createRayGenProgram(
-            pathTracePipeline_->optixModule, "__raygen__pathTrace");
-    
-    pathTracePipeline_->programs["__miss__pathTrace"] = 
-        pathTracePipeline_->optixPipeline.createMissProgram(
-            pathTracePipeline_->optixModule, "__miss__pathTrace");
-    
-    // Create hit groups for path tracing
-    pathTracePipeline_->hitPrograms["__closesthit__pathTrace"] = 
-        pathTracePipeline_->optixPipeline.createHitProgramGroupForTriangleIS(
-            pathTracePipeline_->optixModule, "__closesthit__pathTrace",
-            optixu::Module(), nullptr);
-    
-    // Shadow hit group for shadow rays  
-    pathTracePipeline_->hitPrograms["__anyhit__visibility"] = 
-        pathTracePipeline_->optixPipeline.createHitProgramGroupForTriangleIS(
-            optixu::Module(), nullptr,
-            pathTracePipeline_->optixModule, "__anyhit__visibility");
-    
-    LOG(DBUG) << "Path tracing pipeline created successfully";
+    LOG(INFO) << "Shocker path tracing module created successfully";
 }
 
-void ShockerEngine::createSBTs()
+void ShockerEngine::createPrograms()
 {
-    LOG(DBUG) << "Creating shader binding tables";
+    LOG(INFO) << "ShockerEngine::createPrograms()";
+    
+    if (!gbufferPipeline_ || !gbufferPipeline_->optixModule || !gbufferPipeline_->optixPipeline ||
+        !pathTracePipeline_ || !pathTracePipeline_->optixModule || !pathTracePipeline_->optixPipeline)
+    {
+        LOG(WARNING) << "Pipelines not ready";
+        return;
+    }
+    
+    optixu::Module emptyModule;  // For empty programs
+    
+    // G-Buffer Pipeline Programs
+    {
+        auto& p = gbufferPipeline_->optixPipeline;
+        auto& m = gbufferPipeline_->optixModule;
+        
+        // Create ray generation program for G-buffer setup
+        gbufferPipeline_->entryPoints[GBufferEntryPoint::setupGBuffers] = 
+            p.createRayGenProgram(m, RT_RG_NAME_STR("setupGBuffers"));
+        
+        // Create miss program for G-buffer
+        gbufferPipeline_->programs[RT_MS_NAME_STR("setupGBuffers")] = 
+            p.createMissProgram(m, RT_MS_NAME_STR("setupGBuffers"));
+        
+        // Create hit group for G-buffer generation
+        gbufferPipeline_->hitPrograms[RT_CH_NAME_STR("setupGBuffers")] = 
+            p.createHitProgramGroupForTriangleIS(
+                m, RT_CH_NAME_STR("setupGBuffers"),
+                emptyModule, nullptr);
+        
+        // Set the entry point
+        gbufferPipeline_->setEntryPoint(GBufferEntryPoint::setupGBuffers);
+        
+        // Configure miss programs for ray types
+        p.setNumMissRayTypes(shocker_shared::maxNumRayTypes);
+        p.setMissProgram(0,  // Primary ray type 
+                         gbufferPipeline_->programs.at(RT_MS_NAME_STR("setupGBuffers")));
+        
+        LOG(INFO) << "G-buffer pipeline programs created";
+    }
+    
+    // Path Tracing Pipeline Programs
+    {
+        auto& p = pathTracePipeline_->optixPipeline;
+        auto& m = pathTracePipeline_->optixModule;
+        
+        // Create ray generation program for path tracing
+        pathTracePipeline_->entryPoints[PathTracingEntryPoint::pathTrace] = 
+            p.createRayGenProgram(m, RT_RG_NAME_STR("pathTrace"));
+        
+        // Create miss program for path tracing
+        pathTracePipeline_->programs[RT_MS_NAME_STR("pathTrace")] = 
+            p.createMissProgram(m, RT_MS_NAME_STR("pathTrace"));
+        
+        // Create hit group for path tracing (closest hit)
+        pathTracePipeline_->hitPrograms[RT_CH_NAME_STR("pathTrace")] = 
+            p.createHitProgramGroupForTriangleIS(
+                m, RT_CH_NAME_STR("pathTrace"),
+                emptyModule, nullptr);
+        
+        // Create hit group for visibility rays (any hit only)
+        pathTracePipeline_->hitPrograms[RT_AH_NAME_STR("visibility")] = 
+            p.createHitProgramGroupForTriangleIS(
+                emptyModule, nullptr,
+                m, RT_AH_NAME_STR("visibility"));
+        
+        // Create empty miss program for visibility rays
+        pathTracePipeline_->programs["emptyMiss"] = p.createMissProgram(emptyModule, nullptr);
+        
+        // Set the entry point
+        pathTracePipeline_->setEntryPoint(PathTracingEntryPoint::pathTrace);
+        
+        // Configure miss programs for ray types
+        p.setNumMissRayTypes(shocker_shared::maxNumRayTypes);
+        p.setMissProgram(0,  // Closest ray type
+                         pathTracePipeline_->programs.at(RT_MS_NAME_STR("pathTrace")));
+        p.setMissProgram(1,  // Visibility ray type
+                         pathTracePipeline_->programs.at("emptyMiss"));
+        
+        LOG(INFO) << "Path tracing pipeline programs created";
+    }
+}
+
+void ShockerEngine::initializeLightProbabilityKernels()
+{
+    LOG(INFO) << "ShockerEngine::initializeLightProbabilityKernels()";
+    
+    if (!ptxManager_ || !renderContext_)
+    {
+        LOG(WARNING) << "PTXManager or RenderContext not ready";
+        return;
+    }
+    
+    // Load PTX for compute_light_probs kernels
+    std::vector<char> probPtxData = ptxManager_->getPTXData("compute_light_probs");
+    if (probPtxData.empty())
+    {
+        LOG(WARNING) << "Failed to load PTX for compute_light_probs";
+        return;
+    }
+    
+    // Create null-terminated string for cuModuleLoadData
+    probPtxData.push_back('\0');
+    
+    // Load CUDA module
+    CUDADRV_CHECK(cuModuleLoadData(&computeProbTex_.cudaModule, probPtxData.data()));
+    
+    // Initialize all kernels
+    computeProbTex_.computeFirstMip = cudau::Kernel(
+        computeProbTex_.cudaModule, "computeProbabilityTextureFirstMip", cudau::dim3(32), 0);
+    
+    computeProbTex_.computeTriangleProbTexture = cudau::Kernel(
+        computeProbTex_.cudaModule, "computeTriangleProbTexture", cudau::dim3(32), 0);
+    
+    computeProbTex_.computeGeomInstProbTexture = cudau::Kernel(
+        computeProbTex_.cudaModule, "computeGeomInstProbTexture", cudau::dim3(32), 0);
+    
+    computeProbTex_.computeInstProbTexture = cudau::Kernel(
+        computeProbTex_.cudaModule, "computeInstProbTexture", cudau::dim3(32), 0);
+    
+    computeProbTex_.computeMip = cudau::Kernel(
+        computeProbTex_.cudaModule, "computeProbabilityTextureMip", cudau::dim3(8, 8), 0);
+    
+    computeProbTex_.computeTriangleProbBuffer = cudau::Kernel(
+        computeProbTex_.cudaModule, "computeTriangleProbBuffer", cudau::dim3(32), 0);
+    
+    LOG(INFO) << "Light probability kernels initialized successfully";
+}
+
+void ShockerEngine::createSBT()
+{
+    LOG(INFO) << "ShockerEngine::createSBT()";
     
     if (!renderContext_)
     {
@@ -477,7 +600,7 @@ void ShockerEngine::createSBTs()
     // Get hit group SBT size from scene
     size_t hitGroupSbtSize = 0;
     scene_.generateShaderBindingTableLayout(&hitGroupSbtSize);
-    LOG(DBUG) << "Scene hit group SBT size: " << hitGroupSbtSize << " bytes";
+    LOG(INFO) << "Scene hit group SBT size: " << hitGroupSbtSize << " bytes";
     
     // Create SBT for G-buffer pipeline
     if (gbufferPipeline_ && gbufferPipeline_->optixPipeline)
@@ -486,7 +609,7 @@ void ShockerEngine::createSBTs()
         size_t sbtSize;
         p.generateShaderBindingTableLayout(&sbtSize);
         
-        LOG(DBUG) << "G-buffer pipeline SBT size: " << sbtSize << " bytes";
+        LOG(INFO) << "G-buffer pipeline SBT size: " << sbtSize << " bytes";
         
         if (sbtSize > 0)
         {
@@ -505,7 +628,10 @@ void ShockerEngine::createSBTs()
                 gbufferPipeline_->hitGroupSbt.setMappedMemoryPersistent(true);
             }
         }
-        p.setHitGroupShaderBindingTable(gbufferPipeline_->hitGroupSbt, gbufferPipeline_->hitGroupSbt.getMappedPointer());
+        gbufferPipeline_->optixPipeline.setHitGroupShaderBindingTable(
+            gbufferPipeline_->hitGroupSbt, gbufferPipeline_->hitGroupSbt.getMappedPointer());
+        
+        LOG(INFO) << "G-buffer pipeline SBT created";
     }
     
     // Create SBT for path tracing pipeline
@@ -515,7 +641,7 @@ void ShockerEngine::createSBTs()
         size_t sbtSize;
         p.generateShaderBindingTableLayout(&sbtSize);
         
-        LOG(DBUG) << "Path tracing pipeline SBT size: " << sbtSize << " bytes";
+        LOG(INFO) << "Path tracing pipeline SBT size: " << sbtSize << " bytes";
         
         if (sbtSize > 0)
         {
@@ -533,14 +659,21 @@ void ShockerEngine::createSBTs()
                 pathTracePipeline_->hitGroupSbt.initialize(cuContext, cudau::BufferType::Device, 1, hitGroupSbtSize);
                 pathTracePipeline_->hitGroupSbt.setMappedMemoryPersistent(true);
             }
+            else
+            {
+                // Even with no geometry, initialize a minimal buffer
+                pathTracePipeline_->hitGroupSbt.initialize(cuContext, cudau::BufferType::Device, 1, 1);
+                pathTracePipeline_->hitGroupSbt.setMappedMemoryPersistent(true);
+            }
+            pathTracePipeline_->optixPipeline.setHitGroupShaderBindingTable(
+                pathTracePipeline_->hitGroupSbt, pathTracePipeline_->hitGroupSbt.getMappedPointer());
         }
-        p.setHitGroupShaderBindingTable(pathTracePipeline_->hitGroupSbt, pathTracePipeline_->hitGroupSbt.getMappedPointer());
+        
+        LOG(INFO) << "Path tracing pipeline SBT created";
     }
-    
-    LOG(DBUG) << "Shader binding tables created successfully";
 }
 
-void ShockerEngine::updateSBTs()
+void ShockerEngine::updateSBT()
 {
     LOG(DBUG) << "Updating shader binding tables";
     
@@ -604,34 +737,26 @@ void ShockerEngine::updateSBTs()
 
 void ShockerEngine::linkPipelines()
 {
-    LOG(DBUG) << "Linking pipelines";
+    LOG(INFO) << "ShockerEngine::linkPipelines()";
     
-    // Link G-buffer pipeline
-    if (gbufferPipeline_ && gbufferPipeline_->optixPipeline) {
-        constexpr uint32_t maxTraceDepth = 1;
-        gbufferPipeline_->optixPipeline.link(maxTraceDepth);
+    // Link G-buffer pipeline with depth 1 (no recursive rays)
+    if (gbufferPipeline_ && gbufferPipeline_->optixPipeline)
+    {
+        // Set the scene on the pipeline
+        gbufferPipeline_->optixPipeline.setScene(scene_);
         
-        // Set stack sizes
-        size_t ccStackSize = 0;
-        // Calculate stack size for pipeline
-        // This is simplified - actual implementation needs proper stack calculation
-        gbufferPipeline_->optixPipeline.setStackSize(ccStackSize, 0, 2048, maxTraceDepth);
-        
-        LOG(DBUG) << "G-buffer pipeline linked with CC stack size: " << ccStackSize;
+        gbufferPipeline_->optixPipeline.link(1);
+        LOG(INFO) << "G-buffer pipeline linked successfully";
     }
     
-    // Link path tracing pipeline
-    if (pathTracePipeline_ && pathTracePipeline_->optixPipeline) {
-        constexpr uint32_t maxTraceDepth = 8;
-        pathTracePipeline_->optixPipeline.link(maxTraceDepth);
+    // Link path tracing pipeline with depth 2 (for recursive rays)
+    if (pathTracePipeline_ && pathTracePipeline_->optixPipeline)
+    {
+        // Set the scene on the pipeline
+        pathTracePipeline_->optixPipeline.setScene(scene_);
         
-        // Set stack sizes
-        size_t ccStackSize = 0;
-        // Calculate stack size for pipeline  
-        // This is simplified - actual implementation needs proper stack calculation
-        pathTracePipeline_->optixPipeline.setStackSize(ccStackSize, 0, 4096, maxTraceDepth);
-        
-        LOG(DBUG) << "Path tracing pipeline linked with CC stack size: " << ccStackSize;
+        pathTracePipeline_->optixPipeline.link(2);
+        LOG(INFO) << "Path tracing pipeline linked successfully";
     }
 }
 
@@ -690,12 +815,25 @@ void ShockerEngine::updateLaunchParameters(const mace::InputEvent& input)
     if (staticPlpBuffer_.isInitialized() && perFramePlpBuffer_.isInitialized()) {
         staticPlpBuffer_.write(&staticPlp_, 1);
         perFramePlpBuffer_.write(&perFramePlp_, 1);
+        
+        // Upload the main launch parameters structure that contains the pointers
+        CUDADRV_CHECK(cuMemcpyHtoDAsync(
+            plpOnDevice_,
+            &plp_,
+            sizeof(shocker_shared::PipelineLaunchParameters),
+            renderContext_->getCudaStream()));
     }
 }
 
 void ShockerEngine::allocateLaunchParameters()
 {
-    LOG(DBUG) << "Allocating launch parameters";
+    LOG(INFO) << "ShockerEngine::allocateLaunchParameters()";
+    
+    if (!renderContext_)
+    {
+        LOG(WARNING) << "Render context not available";
+        return;
+    }
     
     CUcontext cuContext = renderContext_->getCudaContext();
     
@@ -711,8 +849,10 @@ void ShockerEngine::allocateLaunchParameters()
     plp_.f = reinterpret_cast<shocker_shared::PerFramePipelineLaunchParameters*>(
         perFramePlpBuffer_.getDevicePointer());
     
-    // Get device pointer for launch
-    plpOnDevice_ = reinterpret_cast<CUdeviceptr>(&plp_);
+    // Allocate device memory for the main launch parameters structure
+    CUDADRV_CHECK(cuMemAlloc(&plpOnDevice_, sizeof(shocker_shared::PipelineLaunchParameters)));
+    
+    LOG(INFO) << "Launch parameters allocated on device";
 }
 
 void ShockerEngine::updateCameraBody(const mace::InputEvent& input)
