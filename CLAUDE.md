@@ -199,3 +199,7 @@ These headers are not part of this codebase and will cause compilation errors.
 - Use g3log for logging
 - Use DBUG level for debug information (not DEBUG)
 - Use WARNING level for non-fatal issues
+
+## Miscellaneous Notes
+
+- **Scene Traversable Handle**: Scene traversable handle can be set to 0 in an empty scene. It's a feature

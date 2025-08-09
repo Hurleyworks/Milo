@@ -51,15 +51,17 @@ void ShockerEngine::initialize(RenderContext* ctx)
     initializeHandlerWithDimensions(renderHandler_, "RenderHandler");
     
     // Initialize denoiser if available
-    initializeHandlerWithDimensions(denoiserHandler_, "DenoiserHandler");
+    if (initializeHandlerWithDimensions(denoiserHandler_, "DenoiserHandler"))
+    {
+        // Setup denoiser state after initialization
+        denoiserHandler_->setupState(renderContext_->getCudaStream());
+        LOG(INFO) << "ShockerDenoiserHandler state setup completed";
+    }
     
     // Setup pipelines
     setupPipelines();
     
-    // Allocate launch parameters
-    allocateLaunchParameters();
-    
-    // Initialize buffers
+    // Initialize buffers first (before allocating launch parameters)
     if (renderWidth_ > 0 && renderHeight_ > 0 && renderContext_)
     {
         CUcontext cuContext = renderContext_->getCudaContext();
@@ -92,7 +94,66 @@ void ShockerEngine::initialize(RenderContext* ctx)
                 renderWidth_, renderHeight_, 1);
         }
         LOG(DBUG) << "G-buffers initialized";
+        
+        // Initialize pick info buffers (double buffered for temporal stability)
+        shocker_shared::PickInfo initPickInfo = {};
+        initPickInfo.hit = false;
+        initPickInfo.instSlot = 0xFFFFFFFF;
+        initPickInfo.geomInstSlot = 0xFFFFFFFF;
+        initPickInfo.matSlot = 0xFFFFFFFF;
+        initPickInfo.primIndex = 0xFFFFFFFF;
+        initPickInfo.positionInWorld = Point3D(0.0f);
+        initPickInfo.normalInWorld = Normal3D(0.0f);
+        initPickInfo.albedo = RGB(0.0f);
+        initPickInfo.emittance = RGB(0.0f);
+        
+        for (int i = 0; i < 2; ++i)
+        {
+            pickInfoBuffers_[i].initialize(cuContext, cudau::BufferType::Device, 1, initPickInfo);
+        }
+        LOG(DBUG) << "Pick info buffers initialized";
+        
+        // Now populate static launch parameters with buffer pointers
+        // IMPORTANT: Initialize ALL fields to avoid accessing uninitialized memory
+        memset(&staticPlp_, 0, sizeof(staticPlp_));  // Zero initialize everything first
+        
+        staticPlp_.imageSize = make_int2(renderWidth_, renderHeight_);
+        staticPlp_.rngBuffer = rngBuffer_.getBlockBuffer2D();
+        
+        // Setup G-buffers
+        for (int i = 0; i < 2; ++i) {
+            staticPlp_.GBuffer0[i] = gBuffer0_[i].getSurfaceObject(0);
+            staticPlp_.GBuffer1[i] = gBuffer1_[i].getSurfaceObject(0);
+        }
+        
+        // Setup pick info buffers
+        staticPlp_.pickInfos[0] = pickInfoBuffers_[0].getDevicePointer();
+        staticPlp_.pickInfos[1] = pickInfoBuffers_[1].getDevicePointer();
+        
+        // Initialize material and instance buffers to empty (will be set when models are loaded)
+        staticPlp_.disneyMaterialBuffer = shared::ROBuffer<shared::DisneyData>();
+        staticPlp_.instanceDataBufferArray[0] = shared::ROBuffer<shocker::ShockerNodeData>();
+        staticPlp_.instanceDataBufferArray[1] = shared::ROBuffer<shocker::ShockerNodeData>();
+        staticPlp_.geometryInstanceDataBuffer = shared::ROBuffer<shocker::ShockerSurfaceData>();
+        
+        // Initialize light distribution to empty
+        staticPlp_.lightInstDist = shared::LightDistribution();
+        
+        // Initialize environment map structures
+        staticPlp_.envLightImportanceMap = shared::RegularConstantContinuousDistribution2D();
+        staticPlp_.envLightTexture = 0;  // No texture initially
+        
+        // Update accumulation buffer references from render handler if available
+        if (renderHandler_) {
+            staticPlp_.beautyAccumBuffer = renderHandler_->getBeautyAccumSurfaceObject();
+            staticPlp_.albedoAccumBuffer = renderHandler_->getAlbedoAccumSurfaceObject();
+            staticPlp_.normalAccumBuffer = renderHandler_->getNormalAccumSurfaceObject();
+            staticPlp_.motionAccumBuffer = renderHandler_->getMotionAccumSurfaceObject();
+        }
     }
+    
+    // Now allocate and upload launch parameters with populated data
+    allocateLaunchParameters();
     
     // Initialize camera
     lastCamera_.aspect = static_cast<float>(renderWidth_) / renderHeight_;
@@ -126,18 +187,18 @@ void ShockerEngine::cleanup()
         pathTracePipeline_.reset();
     }
     
-    // Clean up launch parameters
+    // Clean up launch parameters (matching sample code)
     if (plpOnDevice_) {
         CUDADRV_CHECK(cuMemFree(plpOnDevice_));
         plpOnDevice_ = 0;
     }
-    
-    // Clean up buffers
-    if (staticPlpBuffer_.isInitialized()) {
-        staticPlpBuffer_.finalize();
+    if (staticPlpOnDevice_) {
+        CUDADRV_CHECK(cuMemFree(staticPlpOnDevice_));
+        staticPlpOnDevice_ = 0;
     }
-    if (perFramePlpBuffer_.isInitialized()) {
-        perFramePlpBuffer_.finalize();
+    if (perFramePlpOnDevice_) {
+        CUDADRV_CHECK(cuMemFree(perFramePlpOnDevice_));
+        perFramePlpOnDevice_ = 0;
     }
     
     // Clean up RNG buffer
@@ -152,6 +213,13 @@ void ShockerEngine::cleanup()
         }
         if (gBuffer0_[i].isInitialized()) {
             gBuffer0_[i].finalize();
+        }
+    }
+    
+    // Clean up pick info buffers
+    for (int i = 1; i >= 0; --i) {
+        if (pickInfoBuffers_[i].isInitialized()) {
+            pickInfoBuffers_[i].finalize();
         }
     }
     
@@ -281,6 +349,8 @@ void ShockerEngine::resize(uint32_t width, uint32_t height)
     // Resize denoiser handler
     if (denoiserHandler_) {
         denoiserHandler_->resize(width, height);
+        // Setup state after resize
+        denoiserHandler_->setupState(renderContext_->getCudaStream());
     }
     
     // Update camera aspect ratio
@@ -297,6 +367,15 @@ void ShockerEngine::render(const mace::InputEvent& input, bool updateMotion, uin
         return;
     }
     
+    // Ensure launch parameters are initialized on first render
+    static bool firstRender = true;
+    if (firstRender) {
+        // Force initial upload of all launch parameters
+        updateLaunchParameters(input);
+        restartRender_ = true;  // Force static parameter upload
+        firstRender = false;
+    }
+    
     // Update camera if needed
     // Update camera (simplified for now)
     if (true) { // TODO: proper input comparison
@@ -308,21 +387,22 @@ void ShockerEngine::render(const mace::InputEvent& input, bool updateMotion, uin
     // Update launch parameters
     updateLaunchParameters(input);
     
-    // Choose rendering path based on mode
-    switch (renderMode_) {
-        case RenderMode::GBufferPreview:
-        case RenderMode::DebugNormals:
-        case RenderMode::DebugAlbedo:
-        case RenderMode::DebugDepth:
-        case RenderMode::DebugMotion:
-            renderGBuffer();
-            break;
-            
-        case RenderMode::PathTraceFinal:
-            renderPathTracing();
-            break;
-    }
-    
+    //// Choose rendering path based on mode
+    //switch (renderMode_) {
+    //    case RenderMode::GBufferPreview:
+    //    case RenderMode::DebugNormals:
+    //    case RenderMode::DebugAlbedo:
+    //    case RenderMode::DebugDepth:
+    //    case RenderMode::DebugMotion:
+    //        renderGBuffer();
+    //        break;
+    //        
+    //    case RenderMode::PathTraceFinal:
+    //        renderPathTracing();
+    //        break;
+    //}
+    renderGBuffer();
+
     // Update frame counter
     frameCounter_++;
     
@@ -492,6 +572,8 @@ void ShockerEngine::createPrograms()
         // Configure miss programs for ray types
         p.setNumMissRayTypes(shocker_shared::maxNumRayTypes);
         p.setMissProgram(0,  // Primary ray type 
+                         gbufferPipeline_->programs.at(RT_MS_NAME_STR("setupGBuffers")));
+        p.setMissProgram(1,  // Shadow ray type (not used in G-buffer but needs to be set)
                          gbufferPipeline_->programs.at(RT_MS_NAME_STR("setupGBuffers")));
         
         LOG(INFO) << "G-buffer pipeline programs created";
@@ -786,42 +868,43 @@ void ShockerEngine::updateLaunchParameters(const mace::InputEvent& input)
     perFramePlp_.renderMode = static_cast<uint32_t>(renderMode_);
     
     // Update static parameters if needed
-    if (restartRender_) {
+    // NOTE: Don't update buffer pointers here as they were set during initialization
+    // Only update things that might change during runtime
+    if (restartRender_ && renderHandler_) {
         staticPlp_.imageSize = make_int2(renderHandler_->getWidth(), renderHandler_->getHeight());
-        // RNG buffer is already a BlockBuffer2D, just get the native version
-        staticPlp_.rngBuffer = rngBuffer_.getBlockBuffer2D();
         
-        // Setup G-buffers (direct assignment of surface objects)
-        for (int i = 0; i < 2; ++i) {
-            staticPlp_.GBuffer0[i] = gBuffer0_[i].getSurfaceObject(0);
-            staticPlp_.GBuffer1[i] = gBuffer1_[i].getSurfaceObject(0);
-        }
+        // Only update accumulation buffer references from render handler if they might have changed
+        staticPlp_.beautyAccumBuffer = renderHandler_->getBeautyAccumSurfaceObject();
+        staticPlp_.albedoAccumBuffer = renderHandler_->getAlbedoAccumSurfaceObject();
+        staticPlp_.normalAccumBuffer = renderHandler_->getNormalAccumSurfaceObject();
+        staticPlp_.motionAccumBuffer = renderHandler_->getMotionAccumSurfaceObject();
         
-        // Update accumulation buffer references from render handler
-        if (renderHandler_) {
-            // Direct assignment of surface objects from render handler
-            staticPlp_.beautyAccumBuffer = renderHandler_->getBeautyAccumSurfaceObject();
-            staticPlp_.albedoAccumBuffer = renderHandler_->getAlbedoAccumSurfaceObject();
-            staticPlp_.normalAccumBuffer = renderHandler_->getNormalAccumSurfaceObject();
-            staticPlp_.motionAccumBuffer = renderHandler_->getMotionAccumSurfaceObject();
-        }
-        
-        // TODO: Update material and instance buffers from handlers
-        
-        restartRender_ = false;
+        // TODO: Update material and instance buffers from handlers when they change
     }
     
-    // Upload to device
-    if (staticPlpBuffer_.isInitialized() && perFramePlpBuffer_.isInitialized()) {
-        staticPlpBuffer_.write(&staticPlp_, 1);
-        perFramePlpBuffer_.write(&perFramePlp_, 1);
-        
-        // Upload the main launch parameters structure that contains the pointers
-        CUDADRV_CHECK(cuMemcpyHtoDAsync(
-            plpOnDevice_,
-            &plp_,
-            sizeof(shocker_shared::PipelineLaunchParameters),
-            renderContext_->getCudaStream()));
+    // Ensure device pointers are allocated
+    if (!plpOnDevice_ || !staticPlpOnDevice_ || !perFramePlpOnDevice_) {
+        LOG(WARNING) << "Launch parameters not allocated, cannot update";
+        return;
+    }
+    
+    // Upload to device (exactly matching sample code pattern)
+    // Upload per-frame parameters
+    CUDADRV_CHECK(cuMemcpyHtoDAsync(perFramePlpOnDevice_, &perFramePlp_, sizeof(perFramePlp_), renderContext_->getCudaStream()));
+    
+    // Make sure the pointers in plp_ are set correctly (they get lost during updates)
+    plp_.s = reinterpret_cast<shocker_shared::StaticPipelineLaunchParameters*>(staticPlpOnDevice_);
+    plp_.f = reinterpret_cast<shocker_shared::PerFramePipelineLaunchParameters*>(perFramePlpOnDevice_);
+    
+    // Upload the main launch parameters structure
+    CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice_, &plp_, sizeof(plp_), renderContext_->getCudaStream()));
+    
+    // Upload static parameters on first render or when needed
+    static bool firstRender = true;
+    if (firstRender || restartRender_) {
+        CUDADRV_CHECK(cuMemcpyHtoD(staticPlpOnDevice_, &staticPlp_, sizeof(staticPlp_)));
+        firstRender = false;
+        restartRender_ = false;
     }
 }
 
@@ -835,24 +918,46 @@ void ShockerEngine::allocateLaunchParameters()
         return;
     }
     
-    CUcontext cuContext = renderContext_->getCudaContext();
+    // Initialize per-frame parameters before uploading
+    memset(&perFramePlp_, 0, sizeof(perFramePlp_));  // Zero initialize
+    perFramePlp_.travHandle = 0;  // Empty scene initially
+    perFramePlp_.numAccumFrames = 0;
+    perFramePlp_.frameIndex = 0;
+    perFramePlp_.camera = lastCamera_;
+    perFramePlp_.prevCamera = lastCamera_;
+    perFramePlp_.envLightPowerCoeff = 1.0f;
+    perFramePlp_.envLightRotation = 0.0f;
+    perFramePlp_.mousePosition = make_int2(0, 0);
+    perFramePlp_.maxPathLength = 8;
+    perFramePlp_.bufferIndex = 0;
+    perFramePlp_.resetFlowBuffer = 0;
+    perFramePlp_.enableJittering = 1;
+    perFramePlp_.enableEnvLight = 1;
+    perFramePlp_.enableBumpMapping = 1;
+    perFramePlp_.enableDebugPrint = 0;
+    perFramePlp_.enableDenoiser = 0;
+    perFramePlp_.renderMode = 0;  // GBuffer mode
+    perFramePlp_.debugSwitches = 0;
     
-    // Allocate buffers for split launch parameters
-    staticPlpBuffer_.initialize(cuContext, cudau::BufferType::Device, 
-                                sizeof(shocker_shared::StaticPipelineLaunchParameters), 1);
-    perFramePlpBuffer_.initialize(cuContext, cudau::BufferType::Device,
-                                  sizeof(shocker_shared::PerFramePipelineLaunchParameters), 1);
+    // Allocate device memory for static parameters (matching sample code)
+    CUDADRV_CHECK(cuMemAlloc(&staticPlpOnDevice_, sizeof(shocker_shared::StaticPipelineLaunchParameters)));
+    CUDADRV_CHECK(cuMemcpyHtoD(staticPlpOnDevice_, &staticPlp_, sizeof(staticPlp_)));
+    
+    // Allocate device memory for per-frame parameters
+    CUDADRV_CHECK(cuMemAlloc(&perFramePlpOnDevice_, sizeof(shocker_shared::PerFramePipelineLaunchParameters)));
+    CUDADRV_CHECK(cuMemcpyHtoD(perFramePlpOnDevice_, &perFramePlp_, sizeof(perFramePlp_)));
     
     // Setup pointers in main launch parameter structure
-    plp_.s = reinterpret_cast<shocker_shared::StaticPipelineLaunchParameters*>(
-        staticPlpBuffer_.getDevicePointer());
-    plp_.f = reinterpret_cast<shocker_shared::PerFramePipelineLaunchParameters*>(
-        perFramePlpBuffer_.getDevicePointer());
+    plp_.s = reinterpret_cast<shocker_shared::StaticPipelineLaunchParameters*>(staticPlpOnDevice_);
+    plp_.f = reinterpret_cast<shocker_shared::PerFramePipelineLaunchParameters*>(perFramePlpOnDevice_);
     
     // Allocate device memory for the main launch parameters structure
     CUDADRV_CHECK(cuMemAlloc(&plpOnDevice_, sizeof(shocker_shared::PipelineLaunchParameters)));
     
-    LOG(INFO) << "Launch parameters allocated on device";
+    // Upload the main launch parameters structure with the pointers (critical!)
+    CUDADRV_CHECK(cuMemcpyHtoD(plpOnDevice_, &plp_, sizeof(plp_)));
+    
+    LOG(INFO) << "Launch parameters allocated and uploaded to device";
 }
 
 void ShockerEngine::updateCameraBody(const mace::InputEvent& input)
@@ -887,15 +992,36 @@ void ShockerEngine::renderGBuffer()
         return;
     }
     
+    // Check if launch parameters are allocated
+    if (!plpOnDevice_ || !staticPlpOnDevice_ || !perFramePlpOnDevice_) {
+        LOG(WARNING) << "Launch parameters not allocated for G-buffer pipeline";
+        return;
+    }
+    
+    LOG (DBUG) << _FN_;
+
     CUstream stream = renderContext_->getCudaStream();
     uint32_t width = renderHandler_->getWidth();
     uint32_t height = renderHandler_->getHeight();
     
+    LOG(DBUG) << "Launching G-buffer pipeline: width=" << width << ", height=" << height 
+              << ", plpOnDevice_=" << std::hex << plpOnDevice_ << std::dec
+              << ", travHandle=" << perFramePlp_.travHandle;
+    
     // Launch G-buffer pipeline
     gbufferPipeline_->setEntryPoint(GBufferEntryPoint::setupGBuffers);
     
-    // TODO: Launch when pipeline is fully configured
-    // gbufferPipeline_->optixPipeline.launch(stream, plpOnDevice_, width, height, 1);
+    // Launch the G-buffer pipeline
+    try {
+        gbufferPipeline_->optixPipeline.launch(stream, plpOnDevice_, width, height, 1);
+        
+        // Synchronize to catch any errors immediately
+        CUDADRV_CHECK(cuStreamSynchronize(stream));
+    }
+    catch (const std::exception& e) {
+        LOG(WARNING) << "G-buffer pipeline launch failed: " << e.what();
+        return;
+    }
     
     // Visualize G-buffer based on debug mode
     if (renderMode_ != RenderMode::GBufferPreview) {

@@ -120,9 +120,9 @@ private:
     shocker_shared::PerFramePipelineLaunchParameters perFramePlp_;
     shocker_shared::PipelineLaunchParameters plp_;
     
-    // Device pointers for launch parameters
-    cudau::Buffer staticPlpBuffer_;
-    cudau::Buffer perFramePlpBuffer_;
+    // Device pointers for launch parameters (matching sample code)
+    CUdeviceptr staticPlpOnDevice_ = 0;
+    CUdeviceptr perFramePlpOnDevice_ = 0;
     CUdeviceptr plpOnDevice_ = 0;
     
     // Camera state
@@ -139,6 +139,9 @@ private:
     // G-buffers (matching sample code structure)
     cudau::Array gBuffer0_[2];  // Double buffered for temporal effects
     cudau::Array gBuffer1_[2];  // Double buffered for temporal effects
+    
+    // Pick info buffers for mouse interaction (double buffered)
+    cudau::TypedBuffer<shocker_shared::PickInfo> pickInfoBuffers_[2];
     
     // Light probability computation kernels
     ComputeProbTex computeProbTex_;
