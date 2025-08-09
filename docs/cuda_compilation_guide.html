@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CUDA Compilation System - Developer Guide</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 30px;
+            border-bottom: 2px solid #ecf0f1;
+            padding-bottom: 8px;
+        }
+        h3 {
+            color: #555;
+            margin-top: 20px;
+        }
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        pre {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            line-height: 1.4;
+        }
+        pre code {
+            background: none;
+            color: #ecf0f1;
+            padding: 0;
+        }
+        .note {
+            background: #e8f4fd;
+            border-left: 4px solid #3498db;
+            padding: 12px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #f39c12;
+            padding: 12px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .success {
+            background: #d4edda;
+            border-left: 4px solid #27ae60;
+            padding: 12px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+        .file-structure {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            line-height: 1.8;
+        }
+        .workflow-step {
+            background: #f8f9fa;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid #3498db;
+        }
+        .workflow-step h4 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background: #3498db;
+            color: white;
+            font-weight: 600;
+        }
+        tr:hover {
+            background: #f5f5f5;
+        }
+        .highlight {
+            background: #ffeb3b;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        ul {
+            padding-left: 25px;
+        }
+        li {
+            margin: 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 CUDA Compilation System - Developer Guide</h1>
+        
+        <div class="note">
+            <strong>Quick Start:</strong> To compile CUDA kernels, set <code>compileCuda = true</code> in 
+            <code>Renderer.cpp:148</code> and run the application. Only changed files will be recompiled!
+        </div>
+
+        <h2>📋 Table of Contents</h2>
+        <ul>
+            <li><a href="#overview">System Overview</a></li>
+            <li><a href="#architecture">Architecture</a></li>
+            <li><a href="#workflow">Development Workflow</a></li>
+            <li><a href="#selective">Selective Compilation</a></li>
+            <li><a href="#engine-filtering">Engine Filtering</a></li>
+            <li><a href="#file-structure">File Structure</a></li>
+            <li><a href="#troubleshooting">Troubleshooting</a></li>
+            <li><a href="#advanced">Advanced Usage</a></li>
+        </ul>
+
+        <h2 id="overview">🔍 System Overview</h2>
+        <p>
+            The Milo CUDA compilation system provides intelligent, selective compilation of CUDA kernels for the 
+            OptiX ray tracing engines. It features timestamp-based change detection, engine-specific filtering, 
+            and detailed progress reporting.
+        </p>
+
+        <h3>Key Features</h3>
+        <ul>
+            <li><strong>Selective Compilation:</strong> Only recompiles changed <code>.cu</code> files</li>
+            <li><strong>Timestamp Checking:</strong> Compares source modification times against PTX outputs</li>
+            <li><strong>Engine Filtering:</strong> Compile only Milo, Shocker, or all engines</li>
+            <li><strong>Progress Reporting:</strong> Shows compiled, skipped, and failed files</li>
+            <li><strong>Force Compile:</strong> Option to override timestamp checking</li>
+        </ul>
+
+        <h2 id="architecture">🏗️ Architecture</h2>
+        
+        <h3>Components</h3>
+        <table>
+            <tr>
+                <th>Component</th>
+                <th>Location</th>
+                <th>Purpose</th>
+            </tr>
+            <tr>
+                <td><code>CudaCompiler</code></td>
+                <td>framework/engine_core/excludeFromBuild/nvcc/</td>
+                <td>Main compilation orchestrator</td>
+            </tr>
+            <tr>
+                <td><code>Renderer</code></td>
+                <td>framework/engine_core/excludeFromBuild/</td>
+                <td>Triggers compilation during initialization</td>
+            </tr>
+            <tr>
+                <td>CUDA Files</td>
+                <td>engines/[milo|shocker]/cuda/</td>
+                <td>Engine-specific kernel implementations</td>
+            </tr>
+            <tr>
+                <td>PTX Output</td>
+                <td>resources/RenderDog/ptx/[Debug|Release]/sm_86/</td>
+                <td>Compiled PTX binaries</td>
+            </tr>
+        </table>
+
+        <h2 id="workflow">🔄 Development Workflow</h2>
+        
+        <div class="workflow-step">
+            <h4>Step 1: Enable CUDA Compilation</h4>
+            <p>Edit <code>framework/engine_core/excludeFromBuild/Renderer.cpp</code>:</p>
+            <pre><code>// Line 148
+bool compileCuda = true;  // Set to true to enable compilation
+std::string engineFilter = "all";  // Options: "all", "milo", "shocker"</code></pre>
+        </div>
+
+        <div class="workflow-step">
+            <h4>Step 2: Make Your CUDA Changes</h4>
+            <p>Edit any <code>.cu</code> files in the engine directories:</p>
+            <ul>
+                <li><code>engines/milo/cuda/*.cu</code> - Milo engine kernels</li>
+                <li><code>engines/shocker/cuda/*.cu</code> - Shocker engine kernels</li>
+                <li><code>common/gpu_kernels/*.cu</code> - Shared kernels</li>
+            </ul>
+        </div>
+
+        <div class="workflow-step">
+            <h4>Step 3: Build and Run</h4>
+            <pre><code># Build the project
+b.bat
+
+# Run the application - CUDA compilation happens automatically
+builds\bin\Debug-windows-x86_64\RenderDog\RenderDog.exe</code></pre>
+        </div>
+
+        <div class="workflow-step">
+            <h4>Step 4: Check Compilation Output</h4>
+            <p>Look for the compilation summary in the console:</p>
+            <pre><code>===== CUDA Compilation Summary =====
+  Compiled: 1 files
+  Skipped:  8 files (up-to-date)
+====================================</code></pre>
+        </div>
+
+        <h2 id="selective">⚡ Selective Compilation</h2>
+        
+        <p>The system automatically detects which files need recompilation by:</p>
+        
+        <ol>
+            <li><strong>Checking PTX existence:</strong> If output doesn't exist, compile</li>
+            <li><strong>Comparing timestamps:</strong> If source is newer than PTX, recompile</li>
+            <li><strong>Skip up-to-date files:</strong> Files with unchanged timestamps are skipped</li>
+        </ol>
+
+        <h3>Example Output</h3>
+        <pre><code>INFO  Source newer than output, will recompile: "optix_milo_kernels.cu"
+INFO  Compiling: optix_milo_kernels.cu -> "optix_milo_kernels.ptx"
+DEBUG Skipping up-to-date: "optix_shocker_kernels.cu"
+DEBUG Skipping up-to-date: "compute_light_probs.cu"</code></pre>
+
+        <div class="success">
+            <strong>Performance Benefit:</strong> Changing one file results in ~3 second compilation 
+            instead of ~15 seconds for full recompilation!
+        </div>
+
+        <h2 id="engine-filtering">🎯 Engine Filtering</h2>
+        
+        <p>Compile only specific engine kernels by setting the <code>engineFilter</code>:</p>
+        
+        <table>
+            <tr>
+                <th>Filter</th>
+                <th>Compiles</th>
+                <th>Use Case</th>
+            </tr>
+            <tr>
+                <td><code>"all"</code></td>
+                <td>All CUDA files from both engines</td>
+                <td>Default, full compilation</td>
+            </tr>
+            <tr>
+                <td><code>"milo"</code></td>
+                <td>Only Milo engine files + shared</td>
+                <td>Working on Milo features</td>
+            </tr>
+            <tr>
+                <td><code>"shocker"</code></td>
+                <td>Only Shocker engine files + shared</td>
+                <td>Working on Shocker features</td>
+            </tr>
+        </table>
+
+        <h3>Example: Compile Only Shocker</h3>
+        <pre><code>// In Renderer.cpp
+bool compileCuda = true;
+std::string engineFilter = "shocker";  // Only compile Shocker files</code></pre>
+
+        <h2 id="file-structure">📁 File Structure</h2>
+        
+        <div class="file-structure">
+framework/engine_core/excludeFromBuild/
+├── engines/
+│   ├── milo/
+│   │   ├── cuda/
+│   │   │   ├── optix_milo_kernels.cu
+│   │   │   ├── optix_milo_copybuffers.cu
+│   │   │   └── *.h (headers)
+│   │   └── milo_shared.h
+│   └── shocker/
+│       ├── cuda/
+│       │   ├── optix_shocker_kernels.cu
+│       │   ├── optix_shocker_copybuffers.cu
+│       │   ├── optix_shocker_gbuffer.cu
+│       │   └── *.h (headers)
+│       └── shocker_shared.h
+├── common/
+│   └── gpu_kernels/
+│       └── compute_light_probs.cu
+├── cuda/ (legacy)
+│   ├── compute_area_light_probs.cu
+│   └── optix_deform_kernels.cu
+└── nvcc/
+    ├── CudaCompiler.h
+    └── CudaCompiler.cpp
+        </div>
+
+        <h2 id="troubleshooting">🔧 Troubleshooting</h2>
+        
+        <h3>Common Issues and Solutions</h3>
+        
+        <div class="warning">
+            <strong>Issue:</strong> "No CUDA files found for engine: all"<br>
+            <strong>Solution:</strong> Check that the engine folders exist and contain .cu files
+        </div>
+
+        <div class="warning">
+            <strong>Issue:</strong> Include file errors during compilation<br>
+            <strong>Solution:</strong> Verify relative paths in .cu files match the new structure:
+            <pre><code>// Correct paths after refactoring:
+#include "../../common/common_device.cuh"
+#include "../engines/milo/milo_shared.h"</code></pre>
+        </div>
+
+        <div class="warning">
+            <strong>Issue:</strong> Compilation takes too long<br>
+            <strong>Solution:</strong> Use engine filtering to compile only what you need:
+            <pre><code>std::string engineFilter = "milo";  // Compile only Milo files</code></pre>
+        </div>
+
+        <h2 id="advanced">🔬 Advanced Usage</h2>
+        
+        <h3>Force Recompilation</h3>
+        <p>To force recompile all files regardless of timestamps:</p>
+        <pre><code>// In Renderer.cpp, after creating nvcc object:
+CudaCompiler nvcc;
+nvcc.setForceCompile(true);  // Force recompile everything
+nvcc.compile(resourceFolder, repoFolder, targetArchitectures, engineFilter);</code></pre>
+
+        <h3>Custom Architecture Targets</h3>
+        <p>Modify target GPU architectures in <code>Renderer.cpp</code>:</p>
+        <pre><code>std::vector&lt;std::string&gt; targetArchitectures = {
+    "sm_60",  // Pascal
+    "sm_75",  // Turing  
+    "sm_80",  // Ampere
+    "sm_86",  // Ampere (default)
+    "sm_90"   // Hopper
+};</code></pre>
+
+        <div class="note">
+            <strong>Note:</strong> Currently only <code>sm_86</code> is actively compiled. 
+            Modify the check in <code>CudaCompiler::compile()</code> line 336 to enable others.
+        </div>
+
+        <h3>Embedding PTX for Release</h3>
+        <p>After successful compilation, embed PTX files for release builds:</p>
+        <pre><code># 1. Compile CUDA kernels with compileCuda = true
+# 2. Run the embedding script:
+scripts\desktop_dog_embed_ptx_debug.bat    # For Debug builds
+scripts\desktop_dog_embed_ptx_release.bat  # For Release builds
+
+# 3. Set compileCuda = false and rebuild
+# 4. Application now uses embedded PTX</code></pre>
+
+        <h3>Compilation Statistics API</h3>
+        <p>The <code>CompilationResult</code> struct provides detailed statistics:</p>
+        <pre><code>struct CompilationResult {
+    int compiled = 0;      // Number of files compiled
+    int skipped = 0;       // Number of files skipped (up-to-date)
+    int failed = 0;        // Number of compilation failures
+    std::vector&lt;std::string&gt; failedFiles;  // List of failed files
+    
+    void print() const;    // Print summary to log
+    bool hasErrors() const; // Check if any compilations failed
+};</code></pre>
+
+        <h3>Log Levels</h3>
+        <p>Control verbosity by checking log output:</p>
+        <ul>
+            <li><code>INFO</code> - Files being compiled, summary statistics</li>
+            <li><code>DEBUG</code> - Files being skipped, detailed paths</li>
+            <li><code>WARNING</code> - Compilation failures, missing files</li>
+        </ul>
+
+        <hr style="margin-top: 40px;">
+        
+        <div class="success">
+            <strong>💡 Pro Tip:</strong> Keep <code>compileCuda = false</code> in version control 
+            and only set it to <code>true</code> locally when you need to compile CUDA changes. 
+            This prevents accidental compilation in production builds.
+        </div>
+
+        <p style="text-align: center; color: #7f8c8d; margin-top: 30px;">
+            <em>Last updated: December 2024 | Generated with Claude Code</em>
+        </p>
+    </div>
+</body>
+</html>
