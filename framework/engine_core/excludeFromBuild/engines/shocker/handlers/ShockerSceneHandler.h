@@ -91,6 +91,12 @@ public:
     size_t getNodeCount() const { return nodes_.size(); }
     size_t getSurfaceCount() const;
     size_t getMaterialCount() const;
+    
+    // Get the traversable handle for the scene
+    OptixTraversableHandle getTraversableHandle() const { return travHandle_; }
+    
+    // Set the scene (must be called before building acceleration structures)
+    void setScene(optixu::Scene* scene) { scene_ = scene; }
 
 private:
     // Render context
@@ -113,4 +119,11 @@ private:
     
     // Maximum number of instances
     static constexpr size_t MaxNumInstances = 100000;
+    
+    // OptiX scene and IAS
+    optixu::Scene* scene_ = nullptr;  // Not owned, set by engine
+    optixu::InstanceAccelerationStructure ias_;
+    cudau::Buffer iasMem_;
+    cudau::TypedBuffer<OptixInstance> instanceBuffer_;
+    OptixTraversableHandle travHandle_ = 0;  // 0 is valid for empty scene
 };

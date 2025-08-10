@@ -37,11 +37,23 @@ void ShockerEngine::initialize (RenderContext* ctx)
     auto ctxPtr = std::shared_ptr<RenderContext> (renderContext_, [] (RenderContext*) {});
     sceneHandler_ = ShockerSceneHandler::create (ctxPtr);
     materialHandler_ = std::make_shared<ShockerMaterialHandler>();
+    materialHandler_->initialize (renderContext_);
     modelHandler_ = std::make_shared<ShockerModelHandler>();
     modelHandler_->initialize (ctxPtr);
     renderHandler_ = ShockerRenderHandler::create (ctxPtr);
     denoiserHandler_ = ShockerDenoiserHandler::create (ctxPtr);
     areaLightHandler_ = std::make_shared<AreaLightHandler>();
+    areaLightHandler_->initialize (renderContext_->getCudaContext(), 100000);
+    
+    // Pass the scene from BaseRenderingEngine to the scene handler
+    sceneHandler_->setScene(&scene_);
+    
+    // Set up handler dependencies
+    modelHandler_->setMaterialHandler(materialHandler_.get());
+    modelHandler_->setAreaLightHandler(areaLightHandler_);
+    sceneHandler_->setModelHandler(modelHandler_);
+    sceneHandler_->setMaterialHandler(materialHandler_);
+    sceneHandler_->setAreaLightHandler(areaLightHandler_);
 
     if (!sceneHandler_ || !materialHandler_ || !modelHandler_ || !renderHandler_)
     {
@@ -241,13 +253,8 @@ void ShockerEngine::cleanup()
         }
     }
 
-    // Clean up scene
-    if (scene_)
-    {
-        scene_.destroy();
-    }
-
     // Clean up handlers
+    // Note: Scene is destroyed in BaseRenderingEngine::cleanup()
     if (denoiserHandler_)
     {
         denoiserHandler_->finalize();
@@ -269,7 +276,9 @@ void ShockerEngine::cleanup()
     materialHandler_.reset();
     modelHandler_.reset();
 
-    isInitialized_ = false;
+    // Call base class cleanup to destroy scene and reset state
+    BaseRenderingEngine::cleanup();
+    
     LOG (DBUG) << "ShockerEngine cleanup complete";
 }
 
@@ -281,13 +290,35 @@ void ShockerEngine::addGeometry (sabi::RenderableNode node)
         return;
     }
 
-    LOG (DBUG) << "Adding geometry to ShockerEngine";
+    LOG (DBUG) << "Adding geometry to ShockerEngine: " << node->getName();
 
-    // TODO: Convert RenderableNode to ShockerModel and add to scene
-    // This will be implemented when we have the full ShockerModel implementation
-
-    // For now, just mark that we need to update the scene
-    restartRender_ = true;
+    // Process the node through the scene handler
+    // This will create the ShockerModel and ShockerNode
+    if (sceneHandler_)
+    {
+        sceneHandler_->processRenderableNode(node);
+        
+        // Build/update acceleration structures after adding geometry
+        sceneHandler_->buildAccelerationStructures();
+        
+        // Update SBT to include the new geometry
+        updateSBT();
+        
+        // Update traversable handle from scene
+        perFramePlp_.travHandle = sceneHandler_->getTraversableHandle();
+        
+        // Mark that we need to restart accumulation
+        restartRender_ = true;
+        perFramePlp_.numAccumFrames = 0;
+        
+        LOG (INFO) << "Added geometry: " << node->getName() 
+                   << " (Total nodes: " << sceneHandler_->getNodeCount() 
+                   << ", traversable: " << perFramePlp_.travHandle << ")";
+    }
+    else
+    {
+        LOG (WARNING) << "Scene handler not initialized";
+    }
 }
 
 void ShockerEngine::clearScene()
@@ -299,20 +330,20 @@ void ShockerEngine::clearScene()
 
     LOG (DBUG) << "Clearing ShockerEngine scene";
 
-    // Clear models from handlers
-    if (modelHandler_)
+    // Clear all nodes and models through scene handler
+    if (sceneHandler_)
     {
-        // modelHandler doesn't have clearScene, models are cleared in clear()
+        sceneHandler_->clear();
     }
 
-    // Reset scene
-    if (scene_)
-    {
-        scene_.destroy();
-        scene_ = context_->createScene();
-    }
+    // Reset scene traversable handle  
+    perFramePlp_.travHandle = 0;  // Will be 0 after clearing
 
+    // Mark that we need to restart accumulation
     restartRender_ = true;
+    perFramePlp_.numAccumFrames = 0;
+    
+    LOG (INFO) << "Scene cleared";
 }
 
 void ShockerEngine::resize (uint32_t width, uint32_t height)
@@ -939,6 +970,10 @@ void ShockerEngine::updateSBT()
         pathTracePipeline_->optixPipeline.setHitGroupShaderBindingTable (
             pathTracePipeline_->hitGroupSbt, pathTracePipeline_->hitGroupSbt.getMappedPointer());
     }
+    
+    // NOTE: Pipelines do NOT need to be relinked after SBT updates.
+    // The SBT can be updated without relinking as long as we're just resizing buffers.
+    // Relinking is only needed when the pipeline structure changes (programs, modules, etc.)
 }
 
 void ShockerEngine::linkPipelines()
@@ -977,8 +1012,12 @@ void ShockerEngine::updateMaterialHitGroups (ShockerModelPtr model)
 void ShockerEngine::updateLaunchParameters (const mace::InputEvent& input)
 {
     // Update per-frame parameters
-    // Get traversable handle from scene (method depends on optixu::Scene API)
-    perFramePlp_.travHandle = 0; // TODO: Get from scene when API is known
+    // Get traversable handle from scene handler
+    if (sceneHandler_) {
+        perFramePlp_.travHandle = sceneHandler_->getTraversableHandle();
+    } else {
+        perFramePlp_.travHandle = 0;
+    }
     perFramePlp_.numAccumFrames = restartRender_ ? 0 : perFramePlp_.numAccumFrames + 1;
     perFramePlp_.frameIndex = frameCounter_;
     perFramePlp_.camera = lastCamera_;
@@ -1226,43 +1265,17 @@ void ShockerEngine::renderGBuffer(CUstream stream)
         return;
     }
 
-    // Check if launch parameters are allocated
     if (!plpOnDevice_ || !staticPlpOnDevice_ || !perFramePlpOnDevice_)
     {
         LOG (WARNING) << "Launch parameters not allocated for G-buffer pipeline";
         return;
     }
 
-   // LOG (DBUG) << _FN_;
     uint32_t width = renderHandler_->getWidth();
     uint32_t height = renderHandler_->getHeight();
-    /*
-      LOG(DBUG) << "Launching G-buffer pipeline: width=" << width << ", height=" << height
-                << ", plpOnDevice_=" << std::hex << plpOnDevice_ << std::dec
-                << ", travHandle=" << perFramePlp_.travHandle;*/
 
-    // Launch G-buffer pipeline
-    gbufferPipeline_->setEntryPoint (GBufferEntryPoint::setupGBuffers);
-
-    // Launch the G-buffer pipeline
-    try
-    {
-        gbufferPipeline_->optixPipeline.launch (stream, plpOnDevice_, width, height, 1);
-
-        // Synchronize to catch any errors immediately
-        CUDADRV_CHECK (cuStreamSynchronize (stream));
-    }
-    catch (const std::exception& e)
-    {
-        LOG (WARNING) << "G-buffer pipeline launch failed: " << e.what();
-        return;
-    }
-
-    // Visualize G-buffer based on debug mode
-    if (renderMode_ != RenderMode::GBufferPreview)
-    {
-        // TODO: Copy specific G-buffer channel to display
-    }
+    // Launch the G-buffer pipeline - let exceptions propagate
+    gbufferPipeline_->optixPipeline.launch (stream, plpOnDevice_, width, height, 1);
 }
 
 void ShockerEngine::renderPathTracing(CUstream stream)

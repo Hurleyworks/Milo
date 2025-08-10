@@ -86,7 +86,7 @@ void ShockerModel::calculateCombinedAABB()
 // ShockerTriangleModel Implementation
 // =============================================================================
 
-void ShockerTriangleModel::createFromRenderableNode(const RenderableNode& node, SlotFinder& slotFinder)
+void ShockerTriangleModel::createFromRenderableNode(const RenderableNode& node, SlotFinder& slotFinder, RenderContext* renderContext)
 {
     sourceNode_ = node.get();
     
@@ -125,7 +125,7 @@ void ShockerTriangleModel::createFromRenderableNode(const RenderableNode& node, 
         surface->geomInstSlot = slot;
         
         // Create appropriate geometry type based on surface properties
-        createGeometryForSurface(model, surfIdx, surface.get());
+        createGeometryForSurface(model, surfIdx, surface.get(), renderContext);
         
         // Note: surface->mat (DisneyMaterial*) will be set later by MaterialHandler
         // Each surface gets its own DisneyMaterial since each ShockerSurface
@@ -178,7 +178,8 @@ void ShockerTriangleModel::createFromRenderableNode(const RenderableNode& node, 
 void ShockerTriangleModel::createGeometryForSurface(
     const CgModelPtr& model,
     size_t surfaceIndex,
-    shocker::ShockerSurface* surface)
+    shocker::ShockerSurface* surface,
+    RenderContext* renderContext)
 {
     // Determine appropriate geometry type for this surface
     if (shouldUseDisplacementGeometry(model, surfaceIndex)) {
@@ -198,12 +199,31 @@ void ShockerTriangleModel::createGeometryForSurface(
         extractTriangleGeometry(model, surfaceIndex, vertices, triangles, materialIndices);
         
         // Create triangle geometry
-        // Note: TriangleGeometry uses cudau::TypedBuffer, not std::vector
-        // For now, just create empty buffers - actual GPU allocation would happen later
         TriangleGeometry triGeom;
-        // triGeom.vertexBuffer will be allocated and filled with vertices data
-        // triGeom.triangleBuffer will be allocated and filled with triangles data
-        // Note: TriangleGeometry doesn't have materialIndexBuffer - each GeometryInstance has one material
+        
+        // If we have a render context and valid data, create GPU resources
+        if (renderContext && !vertices.empty() && !triangles.empty()) {
+            // Get CUDA context
+            CUcontext cudaContext = renderContext->getCudaContext();
+            optixu::Context optixContext = renderContext->getOptiXContext();
+            
+            // Create GPU buffers
+            triGeom.vertexBuffer.initialize(cudaContext, cudau::BufferType::Device, vertices.size());
+            triGeom.triangleBuffer.initialize(cudaContext, cudau::BufferType::Device, triangles.size());
+            
+            // Upload data to GPU
+            triGeom.vertexBuffer.write(vertices.data(), vertices.size());
+            triGeom.triangleBuffer.write(triangles.data(), triangles.size());
+            
+            // Note: OptiX geometry instance will be created later in ShockerSceneHandler
+            // when building the acceleration structures
+            
+            LOG(DBUG) << "Created GPU geometry for surface " << surfaceIndex 
+                      << " with " << vertices.size() << " vertices and " 
+                      << triangles.size() << " triangles";
+        } else if (!renderContext) {
+            LOG(DBUG) << "No render context provided - GPU resources not allocated";
+        }
         
         surface->geometry = std::move(triGeom);
         
@@ -378,7 +398,7 @@ AABB ShockerTriangleModel::calculateAABBForVertices(const std::vector<shared::Ve
 // ShockerFlyweightModel Implementation
 // =============================================================================
 
-void ShockerFlyweightModel::createFromRenderableNode(const RenderableNode& node, SlotFinder& slotFinder)
+void ShockerFlyweightModel::createFromRenderableNode(const RenderableNode& node, SlotFinder& slotFinder, RenderContext* renderContext)
 {
     sourceNode_ = node.get();
     
@@ -406,7 +426,7 @@ void ShockerFlyweightModel::createFromRenderableNode(const RenderableNode& node,
 // ShockerPhantomModel Implementation
 // =============================================================================
 
-void ShockerPhantomModel::createFromRenderableNode(const RenderableNode& node, SlotFinder& slotFinder)
+void ShockerPhantomModel::createFromRenderableNode(const RenderableNode& node, SlotFinder& slotFinder, RenderContext* renderContext)
 {
     sourceNode_ = node.get();
     

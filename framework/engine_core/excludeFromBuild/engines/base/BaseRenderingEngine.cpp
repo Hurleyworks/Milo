@@ -119,6 +119,13 @@ void BaseRenderingEngine::cleanup()
         LOG(INFO) << "StreamChain finalized";
     }
     
+    // Clean up OptiX scene
+    if (scene_)
+    {
+        scene_.destroy();
+        LOG(INFO) << engineName_ << " OptiX scene destroyed";
+    }
+    
     // Reset state
     renderContext_ = nullptr;
     gpuTimerManager_ = nullptr;

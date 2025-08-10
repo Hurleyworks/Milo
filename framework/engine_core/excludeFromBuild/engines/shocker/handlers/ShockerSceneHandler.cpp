@@ -16,7 +16,30 @@ ShockerSceneHandler::ShockerSceneHandler(RenderContextPtr ctx)
 
 ShockerSceneHandler::~ShockerSceneHandler()
 {
-    // Destructor - no logging needed
+    // Clean up OptiX resources
+    if (ctx_ && ctx_->getCudaStream()) {
+        try {
+            CUDADRV_CHECK(cuStreamSynchronize(ctx_->getCudaStream()));
+        } catch (...) {
+            // Ignore errors during destruction
+        }
+    }
+    
+    if (ias_) {
+        ias_.destroy();
+    }
+    
+    if (iasMem_.isInitialized()) {
+        iasMem_.finalize();
+    }
+    
+    if (instanceBuffer_.isInitialized()) {
+        instanceBuffer_.finalize();
+    }
+    
+    // Note: scene_ is not owned by this handler, don't destroy it
+    scene_ = nullptr;
+    
     clear();
 }
 
@@ -57,15 +80,11 @@ shocker::ShockerNode* ShockerSceneHandler::createShockerNode(RenderableWeakRef& 
     }
 
     // Process the node through model handler
+    // Note: modelHandler_->processRenderableNode already handles material processing
     ShockerModelPtr model = modelHandler_->processRenderableNode(node);
     if (!model) {
         LOG(WARNING) << "Failed to create model for node: " << node->getName();
         return nullptr;
-    }
-
-    // Process materials if material handler is set
-    if (materialHandler_) {
-        materialHandler_->processMaterialsForModel(model.get(), node->getModel());
     }
 
     // Create ShockerNode from the model
@@ -174,17 +193,246 @@ void ShockerSceneHandler::buildAccelerationStructures()
 
     LOG(INFO) << "Building acceleration structures for " << nodes_.size() << " nodes";
     
-    // Build surface acceleration structures for all models
+    if (!ctx_) {
+        LOG(WARNING) << "No render context available - marking structures as built without GPU resources";
+        
+        // Even without a render context, we should mark the structures as "built"
+        // to maintain consistency in the state management
+        for (const auto& [name, model] : modelHandler_->getAllModels()) {
+            shocker::ShockerSurfaceGroup* surfaceGroup = model->getSurfaceGroup();
+            if (surfaceGroup && surfaceGroup->needsRebuild) {
+                surfaceGroup->needsRebuild = 0;
+                LOG(DBUG) << "Marked surface group as built (no GPU) for model: " << name;
+            }
+        }
+        return;
+    }
+    
+    // Build GAS for each surface group that needs rebuilding
+    CUcontext cudaContext = ctx_->getCudaContext();
+    CUstream cudaStream = ctx_->getCudaStream();
+    optixu::Context optixContext = ctx_->getOptiXContext();
+    
+    // Build GAS for each surface group that needs rebuilding
     for (const auto& [name, model] : modelHandler_->getAllModels()) {
         shocker::ShockerSurfaceGroup* surfaceGroup = model->getSurfaceGroup();
-        if (surfaceGroup && surfaceGroup->needsRebuild) {
-            // TODO: Build GAS when we have OptiX integration
+        if (!surfaceGroup) continue;
+        
+        if (surfaceGroup->needsRebuild) {
+            // Check if we have geometry to build
+            if (surfaceGroup->geomInsts.empty()) {
+                LOG(WARNING) << "Surface group has no geometry instances for model: " << name;
+                surfaceGroup->needsRebuild = 0;
+                continue;
+            }
+            
+            // Create GAS if not already created
+            if (!surfaceGroup->optixGas) {
+                surfaceGroup->optixGas = scene_->createGeometryAccelerationStructure();
+                surfaceGroup->optixGas.setConfiguration(
+                    optixu::ASTradeoff::PreferFastBuild,
+                    optixu::AllowUpdate::No,
+                    optixu::AllowCompaction::No);
+            }
+            
+            // Create and add geometry instances to GAS
+            for (const shocker::ShockerSurface* surfaceConst : surfaceGroup->geomInsts) {
+                // We need non-const access to create the optixGeomInst
+                shocker::ShockerSurface* surface = const_cast<shocker::ShockerSurface*>(surfaceConst);
+                
+                // Create OptiX geometry instance if needed
+                if (!surface->optixGeomInst) {
+                    if (const TriangleGeometry* triGeom = std::get_if<TriangleGeometry>(&surface->geometry)) {
+                        if (triGeom->vertexBuffer.isInitialized() && triGeom->triangleBuffer.isInitialized()) {
+                            surface->optixGeomInst = scene_->createGeometryInstance();
+                            surface->optixGeomInst.setVertexBuffer(triGeom->vertexBuffer);
+                            surface->optixGeomInst.setTriangleBuffer(triGeom->triangleBuffer);
+                            surface->optixGeomInst.setNumMaterials(1, optixu::BufferView());
+                            surface->optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
+                            surface->optixGeomInst.setUserData(surface->geomInstSlot);
+                            
+                            // Create and set a default material for now
+                            // TODO: Use actual materials from the material handler
+                            optixu::Material defaultMat = ctx_->getOptiXContext().createMaterial();
+                            surface->optixGeomInst.setMaterial(0, 0, defaultMat);
+                        }
+                    }
+                }
+                
+                if (surface->optixGeomInst) {
+                    surfaceGroup->optixGas.addChild(surface->optixGeomInst);
+                }
+            }
+            
+            // Prepare for build
+            OptixAccelBufferSizes asSizes;
+            surfaceGroup->optixGas.prepareForBuild(&asSizes);
+            
+            // Allocate memory for GAS
+            if (!surfaceGroup->optixGasMem.isInitialized()) {
+                surfaceGroup->optixGasMem.initialize(
+                    cudaContext, cudau::BufferType::Device,
+                    asSizes.outputSizeInBytes, 1);
+            } else if (surfaceGroup->optixGasMem.sizeInBytes() < asSizes.outputSizeInBytes) {
+                surfaceGroup->optixGasMem.resize(asSizes.outputSizeInBytes, 1);
+            }
+            
+            // Allocate scratch memory if needed
+            cudau::Buffer scratchMem;
+            scratchMem.initialize(cudaContext, cudau::BufferType::Device, asSizes.tempSizeInBytes, 1);
+            
+            // Build the GAS
+            surfaceGroup->optixGas.rebuild(cudaStream, surfaceGroup->optixGasMem, scratchMem);
+            
+            // Clean up scratch memory
+            scratchMem.finalize();
+            
+            // Log the GAS handle for debugging
+            OptixTraversableHandle gasHandle = surfaceGroup->optixGas.getHandle();
+            LOG(DBUG) << "Built GAS for model: " << name << ", handle: " << gasHandle;
+            
             surfaceGroup->needsRebuild = 0;
-            // GAS built for surface group
         }
     }
     
-    // TODO: Build instance acceleration structure (IAS) when we have OptiX integration
+    // Build IAS if we have nodes and scene is set
+    if (!nodes_.empty() && scene_) {
+        // Generate shader binding table layout before building IAS
+        // This is required to avoid "Shader binding table layout generation has not been done" error
+        size_t hitGroupSbtSize;
+        scene_->generateShaderBindingTableLayout(&hitGroupSbtSize);
+        LOG(DBUG) << "Generated scene SBT layout, size: " << hitGroupSbtSize << " bytes";
+        
+        // Create IAS if not already created
+        if (!ias_) {
+            try {
+                ias_ = scene_->createInstanceAccelerationStructure();
+                ias_.setConfiguration(
+                    optixu::ASTradeoff::PreferFastBuild,
+                    optixu::AllowUpdate::Yes);
+                LOG(DBUG) << "Created IAS for scene";
+            } catch (const std::exception& e) {
+                LOG(WARNING) << "Failed to create IAS: " << e.what();
+                return;
+            }
+        }
+        
+        try {
+            // Prepare instance buffer
+            if (!instanceBuffer_.isInitialized() || instanceBuffer_.numElements() < nodes_.size()) {
+                if (instanceBuffer_.isInitialized()) {
+                    instanceBuffer_.finalize();
+                }
+                instanceBuffer_.initialize(cudaContext, cudau::BufferType::Device, nodes_.size());
+            }
+            
+            // Create OptixInstance data for each node
+            std::vector<OptixInstance> instances;
+            instances.reserve(nodes_.size());
+            
+            for (size_t i = 0; i < nodes_.size(); ++i) {
+                shocker::ShockerNode* node = nodes_[i];
+                if (!node) continue;
+                
+                OptixInstance instance = {};
+                
+                // Set transform from node
+                const Matrix4x4& transform = node->matM2W;
+                instance.transform[0] = transform.c0.x;
+                instance.transform[1] = transform.c1.x;
+                instance.transform[2] = transform.c2.x;
+                instance.transform[3] = transform.c3.x;
+                instance.transform[4] = transform.c0.y;
+                instance.transform[5] = transform.c1.y;
+                instance.transform[6] = transform.c2.y;
+                instance.transform[7] = transform.c3.y;
+                instance.transform[8] = transform.c0.z;
+                instance.transform[9] = transform.c1.z;
+                instance.transform[10] = transform.c2.z;
+                instance.transform[11] = transform.c3.z;
+                
+                // Set instance ID and other properties
+                instance.instanceId = node->instSlot;
+                instance.visibilityMask = 255;  // Visible to all ray types
+                instance.flags = OPTIX_INSTANCE_FLAG_NONE;
+                
+                // Get the traversable handle from the surface group's GAS
+                OptixTraversableHandle gasHandle = 0;
+                if (node->geomGroupInst.geomGroup) {
+                    if (node->geomGroupInst.geomGroup->optixGas) {
+                        gasHandle = node->geomGroupInst.geomGroup->optixGas.getHandle();
+                        LOG(DBUG) << "Got GAS handle for node " << i << ": " << gasHandle;
+                    } else {
+                        LOG(WARNING) << "Node " << i << " surface group has no optixGas";
+                    }
+                } else {
+                    LOG(WARNING) << "Node " << i << " has no geomGroup";
+                }
+                instance.traversableHandle = gasHandle;
+                
+                if (gasHandle == 0) {
+                    LOG(WARNING) << "Node " << i << " has no GAS traversable handle";
+                }
+                
+                instances.push_back(instance);
+            }
+            
+            // Upload instances to GPU
+            if (!instances.empty()) {
+                instanceBuffer_.write(instances.data(), instances.size());
+                
+                // Mark IAS for rebuild
+                ias_.markDirty();
+                
+                // Clear existing children and add new ones
+                while (ias_.getNumChildren() > 0) {
+                    ias_.removeChildAt(ias_.getNumChildren() - 1);
+                }
+                
+                // Create instances with their GAS objects
+                for (size_t i = 0; i < nodes_.size(); ++i) {
+                    optixu::Instance inst = scene_->createInstance();
+                    
+                    // Get the GAS from the node's surface group
+                    auto node = nodes_[i];
+                    if (node && node->geomGroupInst.geomGroup && node->geomGroupInst.geomGroup->optixGas) {
+                        // Set the child using the GeometryAccelerationStructure object
+                        inst.setChild(node->geomGroupInst.geomGroup->optixGas);
+                    } else {
+                        LOG(WARNING) << "Instance " << i << " has no GAS object";
+                    }
+                    ias_.addChild(inst);
+                }
+                
+                // Prepare for build
+                OptixAccelBufferSizes bufferSizes;
+                ias_.prepareForBuild(&bufferSizes);
+                
+                // Allocate memory if needed
+                if (!iasMem_.isInitialized() || iasMem_.sizeInBytes() < bufferSizes.outputSizeInBytes) {
+                    if (iasMem_.isInitialized()) {
+                        iasMem_.finalize();
+                    }
+                    iasMem_.initialize(cudaContext, cudau::BufferType::Device, bufferSizes.outputSizeInBytes, 1);
+                }
+                
+                // Build the IAS
+                travHandle_ = ias_.rebuild(cudaStream, instanceBuffer_, iasMem_, ctx_->getASBuildScratchMem());
+                
+                // Synchronize to ensure build completes
+                CUDADRV_CHECK(cuStreamSynchronize(cudaStream));
+                
+                LOG(INFO) << "Built IAS with " << instances.size() << " instances, traversable handle: " << travHandle_;
+            }
+        } catch (const std::exception& e) {
+            LOG(WARNING) << "Failed to build IAS: " << e.what();
+            travHandle_ = 0;  // 0 is valid for empty scene
+        }
+    } else if (nodes_.empty()) {
+        // Empty scene - traversable handle should be 0
+        travHandle_ = 0;
+        LOG(DBUG) << "No nodes in scene, traversable handle set to 0";
+    }
     
     LOG(INFO) << "Acceleration structures built";
 }

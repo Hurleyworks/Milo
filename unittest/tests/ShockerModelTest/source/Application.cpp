@@ -112,7 +112,7 @@ TEST_CASE("ShockerTriangleModel")
         auto model = std::static_pointer_cast<ShockerTriangleModel>(ShockerTriangleModel::create());
         SlotFinder slotFinder;
         slotFinder.initialize(100);
-        model->createFromRenderableNode(node, slotFinder);
+        model->createFromRenderableNode(node, slotFinder, nullptr);
         
         // Verify geometry extraction
         CHECK(model->getGeometryType() == ShockerGeometryType::Triangle);
@@ -143,7 +143,7 @@ TEST_CASE("ShockerTriangleModel")
         auto model = std::static_pointer_cast<ShockerTriangleModel>(ShockerTriangleModel::create());
         SlotFinder slotFinder;
         slotFinder.initialize(100);
-        model->createFromRenderableNode(node, slotFinder);
+        model->createFromRenderableNode(node, slotFinder, nullptr);
         
         // Check geometry instances were created
         const auto& surfaces = model->getSurfaces();
@@ -169,7 +169,7 @@ TEST_CASE("ShockerTriangleModel")
         auto model = std::static_pointer_cast<ShockerTriangleModel>(ShockerTriangleModel::create());
         SlotFinder slotFinder;
         slotFinder.initialize(100);
-        model->createFromRenderableNode(node, slotFinder);
+        model->createFromRenderableNode(node, slotFinder, nullptr);
         
         // Check one geometry instance per surface
         const auto& surfaces = model->getSurfaces();
@@ -191,7 +191,7 @@ TEST_CASE("ShockerTriangleModel")
         auto model = std::static_pointer_cast<ShockerTriangleModel>(ShockerTriangleModel::create());
         SlotFinder slotFinder;
         slotFinder.initialize(100);
-        model->createFromRenderableNode(node, slotFinder);
+        model->createFromRenderableNode(node, slotFinder, nullptr);
         
         // Get the geometry group
         shocker::ShockerSurfaceGroup* surfaceGroup = model->getSurfaceGroup();
@@ -232,7 +232,7 @@ TEST_CASE("ShockerModel Instance Creation")
         st.worldTransform = st.localTransform;
         
         // Create model from node
-        model->createFromRenderableNode(node, slotFinder);
+        model->createFromRenderableNode(node, slotFinder, nullptr);
         
         // Model should have geometry group
         shocker::ShockerSurfaceGroup* surfaceGroup = model->getSurfaceGroup();
@@ -346,7 +346,7 @@ TEST_CASE("ShockerFlyweightModel")
         // Create from node
         SlotFinder slotFinder;
         slotFinder.initialize(100);
-        model->createFromRenderableNode(node, slotFinder);
+        model->createFromRenderableNode(node, slotFinder, nullptr);
         
         // Flyweight model doesn't create geometry, just references other models
         // AABB should be from source model or zero if no source
@@ -370,7 +370,7 @@ TEST_CASE("ShockerPhantomModel")
         // Create from node
         SlotFinder slotFinder;
         slotFinder.initialize(100);
-        model->createFromRenderableNode(node, slotFinder);
+        model->createFromRenderableNode(node, slotFinder, nullptr);
         
         // Phantom should have zero AABB (no visible geometry)
         const AABB& aabb = model->getAABB();
@@ -412,3 +412,4 @@ Jahley::App* Jahley::CreateApplication()
 #include "ShockerMaterialHandlerComplexTest.cpp"
 #include "ShockerMaterialHandlerGPUTest.cpp"
 #include "ShockerSceneHandlerTest.cpp"
+#include "ShockerEngineGeometryTest.cpp"

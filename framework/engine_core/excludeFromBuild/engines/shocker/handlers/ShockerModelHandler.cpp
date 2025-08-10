@@ -26,7 +26,7 @@ ShockerModelPtr ShockerModelHandler::processRenderableNode(const sabi::Renderabl
     if (!cgModel) {
         // Create phantom model for nodes without geometry
         ShockerModelPtr phantomModel = ShockerPhantomModel::create();
-        phantomModel->createFromRenderableNode(node, geomInstSlotFinder_);
+        phantomModel->createFromRenderableNode(node, geomInstSlotFinder_, renderContext_.get());
         models_[node->getName()] = phantomModel;
         return phantomModel;
     }
@@ -40,7 +40,7 @@ ShockerModelPtr ShockerModelHandler::processRenderableNode(const sabi::Renderabl
     
     // Create geometry from the renderable node
     // The model will internally allocate slots for each geometry instance
-    model->createFromRenderableNode(node, geomInstSlotFinder_);
+    model->createFromRenderableNode(node, geomInstSlotFinder_, renderContext_.get());
     
     // Process materials if we have a material handler
     if (materialHandler_) {

@@ -49,7 +49,7 @@ public:
     virtual ShockerGeometryType getGeometryType() const = 0;
     
     // Create all geometry from the RenderableNode
-    virtual void createFromRenderableNode(const RenderableNode& node, SlotFinder& slotFinder) = 0;
+    virtual void createFromRenderableNode(const RenderableNode& node, SlotFinder& slotFinder, RenderContext* renderContext = nullptr) = 0;
     
     // Get the ShockerSurfaceGroup for this model
     shocker::ShockerSurfaceGroup* getSurfaceGroup() { return surfaceGroup_.get(); }
@@ -110,14 +110,15 @@ public:
         return ShockerGeometryType::Triangle; 
     }
     
-    void createFromRenderableNode(const RenderableNode& node, SlotFinder& slotFinder) override;
+    void createFromRenderableNode(const RenderableNode& node, SlotFinder& slotFinder, RenderContext* renderContext = nullptr) override;
     
 private:
     // Helper to create appropriate geometry based on surface properties
     void createGeometryForSurface(
         const CgModelPtr& model,
         size_t surfaceIndex,
-        shocker::ShockerSurface* surface);
+        shocker::ShockerSurface* surface,
+        RenderContext* renderContext = nullptr);
     
     // Helper to extract triangle geometry for a specific surface
     void extractTriangleGeometry(
@@ -154,7 +155,7 @@ public:
         return ShockerGeometryType::Flyweight; 
     }
     
-    void createFromRenderableNode(const RenderableNode& node, SlotFinder& slotFinder) override;
+    void createFromRenderableNode(const RenderableNode& node, SlotFinder& slotFinder, RenderContext* renderContext = nullptr) override;
     
     // Set the source model this flyweight references
     void setSourceModel(ShockerModel* sourceModel) { sourceModel_ = sourceModel; }
@@ -178,5 +179,5 @@ public:
         return ShockerGeometryType::Phantom; 
     }
     
-    void createFromRenderableNode(const RenderableNode& node, SlotFinder& slotFinder) override;
+    void createFromRenderableNode(const RenderableNode& node, SlotFinder& slotFinder, RenderContext* renderContext = nullptr) override;
 };
