@@ -166,7 +166,7 @@ void RiPRRenderHandler::loadKernels()
     }
     
     // Use RiPR-specific copy buffers kernel
-    std::vector<char> ptxData = renderContext_->getPTXManager()->getPTXData("optix_shocker_copybuffers");
+    std::vector<char> ptxData = renderContext_->getPTXManager()->getPTXData("optix_ripr_copybuffers");
     
     if (ptxData.empty())
     {

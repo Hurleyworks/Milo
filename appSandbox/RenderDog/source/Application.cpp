@@ -45,9 +45,6 @@ class Application : public Jahley::App
         view->onAreaLightIntensityChange.connect<Controller, &Controller::onAreaLightIntensityChange> (&controller);
         view->onAreaLightEnable.connect<Controller, &Controller::onAreaLightEnable> (&controller);
         
-        // view to model connection for Shocker render mode changes
-        view->onShockerRenderModeChange.connect<Model, &Model::setShockerRenderMode> (&model);
-        
         // view to model connection for RiPR render mode changes
         view->onRiPRRenderModeChange.connect<Model, &Model::setRiPRRenderMode> (&model);
         
@@ -122,9 +119,9 @@ class Application : public Jahley::App
         std::string buggy = "E:/common_content/glTF-Sample-Models/2.0/Buggy/glTF/Buggy.gltf";
         std::string camera = "E:/common_content/glTF-Sample-Models/2.0/AntiqueCamera/glTF/AntiqueCamera.gltf";
         std::string ground = "E:/common_content/models/static_gound/static_ground.gltf";
-     //  model.loadGLTF (ground);
-   // model.loadGLTF (helmet);
-    model.loadGLTF (box);
+    //   model.loadGLTF (ground);
+  //  model.loadGLTF (helmet);
+   model.loadGLTF (box);
       //  model.loadGLTF (box);
        // model.loadGLTF (scifi);
        // model.loadGLTF (warrior);

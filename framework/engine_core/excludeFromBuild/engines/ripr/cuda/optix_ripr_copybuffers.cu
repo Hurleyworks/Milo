@@ -1,4 +1,4 @@
-// optix_shocker_copybuffers.cu
+// optix_ripr_copybuffers.cu
 // CUDA kernels for copying and visualizing buffers in the RiPR engine
 // Following Milo pattern - all parameters passed directly, no global plp
 

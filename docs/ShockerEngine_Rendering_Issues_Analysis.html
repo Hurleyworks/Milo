@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShockerEngine Rendering Issues - Root Cause Analysis</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%);
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #dc3545;
+            border-bottom: 3px solid #fd7e14;
+            padding-bottom: 10px;
+            font-size: 2.5em;
+        }
+        h2 {
+            color: #fd7e14;
+            margin-top: 40px;
+            border-left: 5px solid #dc3545;
+            padding-left: 15px;
+        }
+        .issue {
+            background: #fff3cd;
+            border-left: 5px solid #ffc107;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .critical {
+            background: #f8d7da;
+            border-left: 5px solid #dc3545;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+        }
+        .solution {
+            background: #d4edda;
+            border-left: 5px solid #28a745;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .code-ref {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: 'Consolas', 'Monaco', monospace;
+            overflow-x: auto;
+        }
+        .code-ref .file {
+            color: #dc3545;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .highlight {
+            background: #ffeb3b;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th {
+            background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%);
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+        td {
+            border: 1px solid #ddd;
+            padding: 12px;
+        }
+        tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+        .checklist {
+            background: #e3f2fd;
+            border: 2px solid #2196f3;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 30px 0;
+        }
+        .checklist ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        .checklist li {
+            padding: 8px 0;
+            border-bottom: 1px solid #90caf9;
+        }
+        .checklist li:before {
+            content: "☐ ";
+            color: #2196f3;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        .checklist li.checked:before {
+            content: "☑ ";
+            color: #4caf50;
+        }
+        .flow-diagram {
+            background: white;
+            border: 2px solid #dc3545;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 30px 0;
+            text-align: center;
+        }
+        .severity-high {
+            color: #dc3545;
+            font-weight: bold;
+        }
+        .severity-medium {
+            color: #fd7e14;
+            font-weight: bold;
+        }
+        .severity-low {
+            color: #ffc107;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 ShockerEngine Rendering Issues - Root Cause Analysis</h1>
+        
+        <div class="critical">
+            <strong>⚠️ Critical Finding:</strong> Based on code analysis, objects may not render in ShockerEngine due to several interconnected issues in the rendering pipeline.
+        </div>
+
+        <h2>🚨 Primary Issues Identified</h2>
+
+        <div class="critical">
+            <h3>Issue #1: Material and Hit Group Configuration <span class="severity-high">[HIGH SEVERITY]</span></h3>
+            <p><strong>Problem:</strong> The default material with hit groups is created but the connection between geometry and hit programs may be incomplete.</p>
+            
+            <div class="code-ref">
+                <div class="file">📁 ShockerSceneHandler.cpp:271-276</div>
+                <pre>if (defaultMaterial_) {
+    surface->optixGeomInst.setMaterial(0, 0, defaultMaterial_);
+    LOG(INFO) << "Set material on geometry instance";
+} else {
+    LOG(WARNING) << <span class="highlight">"No default material set! Geometry will not have hit groups!"</span>;
+    // Fallback: create a material without hit groups (rays will miss)
+}</pre>
+            </div>
+            
+            <p><strong>Impact:</strong> Without proper hit groups, rays pass through geometry without triggering closest hit shaders.</p>
+        </div>
+
+        <div class="critical">
+            <h3>Issue #2: SBT Generation Timing <span class="severity-high">[HIGH SEVERITY]</span></h3>
+            <p><strong>Problem:</strong> The Shader Binding Table must be generated AFTER instances are added to the scene but BEFORE the IAS is built.</p>
+            
+            <div class="code-ref">
+                <div class="file">📁 ShockerSceneHandler.cpp:443-447</div>
+                <pre>// CRITICAL: Generate SBT layout AFTER instances are added to the scene
+// This ensures the scene knows about all geometry for proper SBT generation
+size_t hitGroupSbtSize;
+scene_->generateShaderBindingTableLayout(&hitGroupSbtSize);
+LOG(INFO) << "Generated scene SBT layout after adding instances, size: " << hitGroupSbtSize << " bytes";</pre>
+            </div>
+            
+            <p><strong>Impact:</strong> Incorrect SBT generation order causes hit groups to not be properly registered for geometry.</p>
+        </div>
+
+        <div class="issue">
+            <h3>Issue #3: Empty Scene Handling <span class="severity-medium">[MEDIUM SEVERITY]</span></h3>
+            <p><strong>Problem:</strong> When the scene is empty, the traversable handle is set to 0, which is valid but needs proper handling in ray generation.</p>
+            
+            <div class="code-ref">
+                <div class="file">📁 ShockerEngine.cpp:387-388</div>
+                <pre>// Reset scene traversable handle  
+perFramePlp_.travHandle = 0;  <span class="highlight">// Will be 0 after clearing</span></pre>
+            </div>
+            
+            <div class="code-ref">
+                <div class="file">📁 optix_shocker_gbuffer.cu:64</div>
+                <pre>PrimaryRayPayloadSignature::trace(
+    shocker_plp.f->travHandle,  // If 0, no geometry to intersect
+    origin.toNative(), direction.toNative(),
+    ...);</pre>
+            </div>
+            
+            <p><strong>Impact:</strong> Rays traced with travHandle=0 will always miss, resulting in black screen.</p>
+        </div>
+
+        <div class="issue">
+            <h3>Issue #4: Material Handler Initialization <span class="severity-medium">[MEDIUM SEVERITY]</span></h3>
+            <p><strong>Problem:</strong> Materials are set to nullptr initially and depend on MaterialHandler to assign them.</p>
+            
+            <div class="code-ref">
+                <div class="file">📁 ShockerModel.cpp:133</div>
+                <pre>// Note: surface->mat (DisneyMaterial*) will be set later by MaterialHandler
+// Each surface gets its own DisneyMaterial since each ShockerSurface
+// can only have one material
+surface->mat = <span class="highlight">nullptr</span>;</pre>
+            </div>
+            
+            <p><strong>Impact:</strong> If MaterialHandler fails to process materials, surfaces have no material data for shading.</p>
+        </div>
+
+        <div class="issue">
+            <h3>Issue #5: Launch Parameter Synchronization <span class="severity-low">[LOW SEVERITY]</span></h3>
+            <p><strong>Problem:</strong> Launch parameters are updated multiple times and may not be synchronized properly.</p>
+            
+            <div class="code-ref">
+                <div class="file">📁 ShockerEngine.cpp:1146-1150</div>
+                <pre>// Get traversable handle from scene handler
+if (sceneHandler_) {
+    perFramePlp_.travHandle = sceneHandler_->getTraversableHandle();
+} else {
+    perFramePlp_.travHandle = 0;
+}</pre>
+            </div>
+        </div>
+
+        <h2>✅ Solutions and Fixes</h2>
+
+        <div class="solution">
+            <h3>Solution 1: Verify Material Creation and Assignment</h3>
+            <ol>
+                <li>Ensure <code>defaultMaterial_</code> is created before any geometry is added</li>
+                <li>Verify hit groups are properly set for both GBuffer and PathTracing ray types</li>
+                <li>Check that <code>sceneHandler_->setDefaultMaterial()</code> is called</li>
+            </ol>
+            
+            <div class="code-ref">
+                <div class="file">Verification Code:</div>
+                <pre>// In ShockerEngine::setupPipelines()
+if (defaultMaterial_) {
+    LOG(INFO) << "Default material created successfully";
+    // Verify hit groups
+    for (int rayType = 0; rayType < maxNumRayTypes; ++rayType) {
+        LOG(INFO) << "Ray type " << rayType << " has hit group: " 
+                  << (defaultMaterial_.hasHitGroup(rayType) ? "YES" : "NO");
+    }
+}</pre>
+            </div>
+        </div>
+
+        <div class="solution">
+            <h3>Solution 2: Fix SBT Generation Order</h3>
+            <p>Ensure the following sequence is strictly followed:</p>
+            <ol>
+                <li>Create all geometry instances</li>
+                <li>Add instances to IAS</li>
+                <li>Call <code>generateShaderBindingTableLayout()</code></li>
+                <li>Build IAS</li>
+                <li>Update SBT</li>
+            </ol>
+        </div>
+
+        <div class="solution">
+            <h3>Solution 3: Add Traversable Handle Validation</h3>
+            <div class="code-ref">
+                <div class="file">Add to ray generation shader:</div>
+                <pre>// In optix_shocker_gbuffer.cu
+if (shocker_plp.f->travHandle == 0) {
+    // Handle empty scene - write default values
+    // or skip ray tracing
+    return;
+}</pre>
+            </div>
+        </div>
+
+        <h2>🔧 Debugging Checklist</h2>
+
+        <div class="checklist">
+            <h3>Step-by-Step Verification</h3>
+            <ul>
+                <li>Check that <code>isInitialized_</code> is true before adding geometry</li>
+                <li>Verify <code>defaultMaterial_</code> is not null when setting on geometry</li>
+                <li>Confirm <code>travHandle</code> is non-zero after building acceleration structures</li>
+                <li>Check SBT size is non-zero after scene layout generation</li>
+                <li>Verify vertex and triangle buffers are properly uploaded to GPU</li>
+                <li>Confirm geometry AABB is not empty (check bounds)</li>
+                <li>Verify camera position can see the geometry (not inside or behind)</li>
+                <li>Check that ray generation shader is actually launching</li>
+                <li>Verify hit shaders are being called (add printf debugging)</li>
+                <li>Confirm material data buffer is accessible from shaders</li>
+            </ul>
+        </div>
+
+        <h2>📊 Diagnostic Code Additions</h2>
+
+        <div class="solution">
+            <h3>Add Debug Logging</h3>
+            <div class="code-ref">
+                <div class="file">ShockerEngine.cpp - After building acceleration structures:</div>
+                <pre>// Add after buildAccelerationStructures()
+LOG(INFO) << "=== Acceleration Structure Status ===";
+LOG(INFO) << "Traversable Handle: " << perFramePlp_.travHandle;
+LOG(INFO) << "Node Count: " << sceneHandler_->getNodeCount();
+LOG(INFO) << "Surface Count: " << sceneHandler_->getSurfaceCount();
+LOG(INFO) << "Material Count: " << sceneHandler_->getMaterialCount();
+LOG(INFO) << "SBT Size: " << /* get SBT size */;
+LOG(INFO) << "Default Material: " << (defaultMaterial_ ? "SET" : "NULL");</pre>
+            </div>
+
+            <div class="code-ref">
+                <div class="file">Add to closest hit shader:</div>
+                <pre>// In optix_shocker_kernels.cu closest hit
+if (optixGetLaunchIndex().x == 0 && optixGetLaunchIndex().y == 0) {
+    printf("CH: Hit at t=%.3f, geomInst=%d, prim=%d\n",
+           optixGetRayTmax(), 
+           optixGetInstanceId(),
+           optixGetPrimitiveIndex());
+}</pre>
+            </div>
+        </div>
+
+        <h2>🎯 Most Likely Root Cause</h2>
+
+        <div class="critical">
+            <h3>Primary Suspect: Material/Hit Group Setup</h3>
+            <p>The most likely reason objects don't render is that the <strong>default material is not properly configured with hit groups</strong> or the <strong>material is not being set on geometry instances</strong> before building acceleration structures.</p>
+            
+            <p><strong>Quick Fix to Try:</strong></p>
+            <div class="code-ref">
+                <pre>// In ShockerEngine::initialize(), after creating handlers:
+// Ensure pipelines are set up first
+setupPipelines();  // This creates defaultMaterial_
+
+// THEN pass to scene handler
+if (sceneHandler_ && defaultMaterial_) {
+    sceneHandler_->setDefaultMaterial(defaultMaterial_);
+    LOG(INFO) << "Default material passed to scene handler";
+}</pre>
+            </div>
+        </div>
+
+        <h2>📈 Performance Considerations</h2>
+
+        <table>
+            <tr>
+                <th>Issue</th>
+                <th>Performance Impact</th>
+                <th>Fix Priority</th>
+            </tr>
+            <tr>
+                <td>Missing hit groups</td>
+                <td>Rays traverse but don't shade (wasted computation)</td>
+                <td class="severity-high">HIGH</td>
+            </tr>
+            <tr>
+                <td>Incorrect SBT</td>
+                <td>May cause GPU memory access violations</td>
+                <td class="severity-high">HIGH</td>
+            </tr>
+            <tr>
+                <td>Empty traversable</td>
+                <td>Quick ray termination (low impact)</td>
+                <td class="severity-low">LOW</td>
+            </tr>
+            <tr>
+                <td>Null materials</td>
+                <td>Potential crashes in shaders</td>
+                <td class="severity-medium">MEDIUM</td>
+            </tr>
+        </table>
+
+        <div style="text-align: center; margin-top: 40px; padding: 20px; background: linear-gradient(135deg, #dc3545 0%, #fd7e14 100%); color: white; border-radius: 10px;">
+            <h3>📄 Document Information</h3>
+            <p>Analysis Complete: Issues Identified and Solutions Provided</p>
+            <p>Next Steps: Implement fixes in priority order and add diagnostic logging</p>
+        </div>
+    </div>
+</body>
+</html>

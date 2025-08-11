@@ -4,7 +4,7 @@
 #include "handlers/RiPRModelHandler.h"
 #include "handlers/RiPRRenderHandler.h"
 #include "handlers/RiPRDenoiserHandler.h"
-#include "../shocker/handlers/AreaLightHandler.h"
+#include "../../handlers/AreaLightHandler.h"
 #include "models/RiPRModel.h"
 #include "../../tools/PTXManager.h"
 
@@ -207,12 +207,15 @@ void RiPREngine::cleanup()
 
     LOG (DBUG) << "Cleaning up RiPREngine";
     
-    // Clean up default material
-    if (defaultMaterial_) {
-        defaultMaterial_.destroy();
+    // IMPORTANT: Cleanup order matters!
+    // 1. First clear handlers to destroy all geometry instances and acceleration structures
+    //    This ensures all references to materials are removed
+    if (sceneHandler_)
+    {
+        sceneHandler_->clear();
     }
-
-    // Clean up pipelines
+    
+    // 2. Then destroy pipelines (which reference the default material)
     if (gbufferPipeline_)
     {
         gbufferPipeline_->destroy();
@@ -223,6 +226,11 @@ void RiPREngine::cleanup()
     {
         pathTracePipeline_->destroy();
         pathTracePipeline_.reset();
+    }
+    
+    // 3. Finally destroy the default material
+    if (defaultMaterial_) {
+        defaultMaterial_.destroy();
     }
 
     // Clean up launch parameters (matching sample code)
@@ -286,12 +294,28 @@ void RiPREngine::cleanup()
 
     if (areaLightHandler_)
     {
+        areaLightHandler_->finalize();
         areaLightHandler_.reset();
     }
 
-    sceneHandler_.reset();
-    materialHandler_.reset();
-    modelHandler_.reset();
+    // Explicitly clear handlers before resetting to ensure proper cleanup
+    if (sceneHandler_)
+    {
+        sceneHandler_->clear();
+        sceneHandler_.reset();
+    }
+    
+    if (materialHandler_)
+    {
+        materialHandler_->clear();
+        materialHandler_.reset();
+    }
+    
+    if (modelHandler_)
+    {
+        modelHandler_->clear();
+        modelHandler_.reset();
+    }
 
     // Call base class cleanup to destroy scene and reset state
     BaseRenderingEngine::cleanup();
@@ -310,7 +334,7 @@ void RiPREngine::addGeometry (sabi::RenderableNode node)
     LOG (DBUG) << "Adding geometry to RiPREngine: " << node->getName();
 
     // Process the node through the scene handler
-    // This will create the RiPRModel and ShockerNode
+    // This will create the RiPRModel and RiPRNode
     if (sceneHandler_)
     {
         sceneHandler_->processRenderableNode(node);
@@ -624,13 +648,13 @@ void RiPREngine::setupPipelines()
     gbufferPipeline_->optixPipeline.setPipelineOptions (
         std::max ({ripr_shared::PrimaryRayPayloadSignature::numDwords}), // Payload dwords for G-buffer
         optixu::calcSumDwords<float2>(),
-        "plp", // Pipeline launch parameters name
+        "ripr_plp", // Pipeline launch parameters name - matches CUDA code
         sizeof (ripr_shared::PipelineLaunchParameters),
         OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
         OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
-    LOG (INFO) << "Shocker G-buffer pipeline configured";
+    LOG (INFO) << "RiPR G-buffer pipeline configured";
 
     // Create path tracing pipeline
     pathTracePipeline_ = std::make_shared<engine_core::RenderPipeline<PathTracingEntryPoint>>();
@@ -641,13 +665,13 @@ void RiPREngine::setupPipelines()
         std::max ({ripr_shared::PathTraceRayPayloadSignature::numDwords,
                    ripr_shared::VisibilityRayPayloadSignature::numDwords}), // Payload dwords for path tracing
         optixu::calcSumDwords<float2>(),                                       // Attribute dwords for barycentrics
-        "plp",                                                                 // Pipeline launch parameters name
+        "ripr_plp",                                                            // Pipeline launch parameters name - matches CUDA code
         sizeof (ripr_shared::PipelineLaunchParameters),
         OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
         OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
-    LOG (INFO) << "Shocker path tracing pipeline configured";
+    LOG (INFO) << "RiPR path tracing pipeline configured";
 
     // Create modules
     createModules();
@@ -698,7 +722,7 @@ void RiPREngine::createModules()
         DEBUG_SELECT (OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
         DEBUG_SELECT (OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
-    LOG (INFO) << "Shocker G-buffer module created successfully";
+    LOG (INFO) << "RiPR G-buffer module created successfully";
 
     // Load PTX for path tracing kernels
     std::vector<char> pathTracePtxData = ptxManager_->getPTXData ("optix_ripr_kernels");
@@ -716,7 +740,7 @@ void RiPREngine::createModules()
         DEBUG_SELECT (OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
         DEBUG_SELECT (OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
-    LOG (INFO) << "Shocker path tracing module created successfully";
+    LOG (INFO) << "RiPR path tracing module created successfully";
 }
 
 void RiPREngine::createPrograms()

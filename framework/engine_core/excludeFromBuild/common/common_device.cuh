@@ -196,6 +196,8 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void applyBumpMapping(
     *frameToModify = bumpShadingFrame;
 }
 
+// Callable programs disabled - not using them yet
+#if 0
 RT_CALLABLE_PROGRAM Normal3D RT_DC_NAME(readModifiedNormalFromNormalMap)
 (CUtexObject texture, shared::TexDimInfo dimInfo, Point2D texCoord, float mipLevel) {
     float4 texValue = sample<float4>(texture, dimInfo, texCoord, mipLevel);
@@ -232,6 +234,7 @@ RT_CALLABLE_PROGRAM Normal3D RT_DC_NAME(readModifiedNormalFromHeightMap)
     return modLocalNormal;
 }
 CUDA_DECLARE_CALLABLE_PROGRAM_POINTER(readModifiedNormalFromHeightMap);
+#endif
 
 
 
@@ -809,6 +812,8 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void setupBSDFBody<SimplePBR_BRDF>(
 
 
 
+// BSDF Callable programs disabled - not using them yet
+#if 0
 #define DEFINE_BSDF_CALLABLES(BSDFType) \
     RT_CALLABLE_PROGRAM void RT_DC_NAME(BSDFType ## _getSurfaceParameters)(\
         const uint32_t* data, RGB* diffuseReflectance, RGB* specularReflectance, float* roughness) {\
@@ -858,6 +863,7 @@ DEFINE_BSDF_CALLABLES(DiffuseAndSpecularBRDF);
 DEFINE_SETUP_BSDF_CALLABLE(LambertBRDF);
 DEFINE_SETUP_BSDF_CALLABLE(DiffuseAndSpecularBRDF);
 DEFINE_SETUP_BSDF_CALLABLE(SimplePBR_BRDF);
+#endif
 
 #undef DEFINE_SETUP_BSDF_CALLABLE
 

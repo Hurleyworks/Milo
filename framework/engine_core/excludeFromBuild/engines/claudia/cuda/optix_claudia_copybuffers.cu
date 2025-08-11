@@ -1,8 +1,7 @@
-// optix_shocker_copybuffers.cu
-// CUDA kernels for copying and visualizing buffers in the Shocker engine
-// Following Milo pattern - all parameters passed directly, no global plp
-
 #include "../../../common/common_shared.h"
+
+// Claudia-specific buffer copy kernel
+// Optimized for Claudia's rendering pipeline which includes flow buffers for temporal denoising
 
 // Simple utility function
 CUDA_DEVICE_FUNCTION CUDA_INLINE float3 getXYZ(const float4& v)
@@ -10,17 +9,17 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float3 getXYZ(const float4& v)
     return make_float3(v.x, v.y, v.z);
 }
 
-// Combined kernel that copies all Shocker surface buffers to linear memory in a single pass
-// Takes all parameters directly like Milo, avoiding constant memory issues
+// Combined kernel that copies all Claudia surface buffers to linear memory in a single pass
+// This is optimized for Claudia's specific buffer layout including flow vectors
 CUDA_DEVICE_KERNEL void copySurfacesToLinear(
-    CUsurfObject beautySurfObj,
+    CUsurfObject colorSurfObj,
     CUsurfObject albedoSurfObj,
     CUsurfObject normalSurfObj,
-    CUsurfObject motionSurfObj,
+    CUsurfObject flowSurfObj,
     float4* linearColorBuffer,
     float4* linearAlbedoBuffer,
     float4* linearNormalBuffer,
-    float2* linearMotionVectorBuffer,
+    float2* linearFlowBuffer,
     uint2 imageSize)
 {
     uint2 launchIndex = make_uint2(blockDim.x * blockIdx.x + threadIdx.x,
@@ -31,8 +30,8 @@ CUDA_DEVICE_KERNEL void copySurfacesToLinear(
 
     uint32_t linearIndex = launchIndex.y * imageSize.x + launchIndex.x;
 
-    // Read beauty/color from surface object
-    surf2Dread(&linearColorBuffer[linearIndex], beautySurfObj, launchIndex.x * sizeof(float4), launchIndex.y);
+    // Read color from surface object
+    surf2Dread(&linearColorBuffer[linearIndex], colorSurfObj, launchIndex.x * sizeof(float4), launchIndex.y);
     
     // Read albedo from surface object
     surf2Dread(&linearAlbedoBuffer[linearIndex], albedoSurfObj, launchIndex.x * sizeof(float4), launchIndex.y);
@@ -48,9 +47,9 @@ CUDA_DEVICE_KERNEL void copySurfacesToLinear(
     }
     linearNormalBuffer[linearIndex] = make_float4(normal.x, normal.y, normal.z, 1.0f);
 
-    // Read motion vector data for temporal denoising
-    float4 motionData;
-    surf2Dread(&motionData, motionSurfObj, launchIndex.x * sizeof(float4), launchIndex.y);
+    // Read flow data (motion vectors for temporal denoising)
+    float4 flowData;
+    surf2Dread(&flowData, flowSurfObj, launchIndex.x * sizeof(float4), launchIndex.y);
     // Only copy x,y components as motion vectors
-    linearMotionVectorBuffer[linearIndex] = make_float2(motionData.x, motionData.y);
+    linearFlowBuffer[linearIndex] = make_float2(flowData.x, flowData.y);
 }

@@ -1,10 +1,10 @@
 #include "RiPREngine.h"
-#include "../handlers/RiPRSceneHandler.h"
-#include "../handlers/RiPRMaterialHandler.h"
-#include "../handlers/RiPRModelHandler.h"
-#include "../handlers/RiPRRenderHandler.h"
-#include "../handlers/RiPRDenoiserHandler.h"
-#include "../handlers/AreaLightHandler.h"
+#include "handlers/RiPRSceneHandler.h"
+#include "handlers/RiPRMaterialHandler.h"
+#include "handlers/RiPRModelHandler.h"
+#include "handlers/RiPRRenderHandler.h"
+#include "handlers/RiPRDenoiserHandler.h"
+#include "../../handlers/AreaLightHandler.h"
 
 RiPREngine::RiPREngine()
 {

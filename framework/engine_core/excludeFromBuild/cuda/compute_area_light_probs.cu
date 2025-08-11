@@ -4,7 +4,7 @@
 #if 0
 
 #define PURE_CUDA
-#include "../common/common_device.cuh"
+#include "../common/deviceCommon.h"
 #include "../common/common_shared.h"
 #include "../material/DeviceDisneyMaterial.h"
 

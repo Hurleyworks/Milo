@@ -63,10 +63,10 @@ std::vector<std::filesystem::path> CudaCompiler::getCudaFilesForEngine(
             }
         }
         
-        // Shocker engine files
-        std::filesystem::path shockerPath = baseFolder / "engines" / "shocker" / "cuda";
-        if (std::filesystem::exists(shockerPath)) {
-            for (const auto& entry : std::filesystem::directory_iterator(shockerPath)) {
+        // Claudia engine files
+        std::filesystem::path claudiaPath = baseFolder / "engines" / "claudia" / "cuda";
+        if (std::filesystem::exists(claudiaPath)) {
+            for (const auto& entry : std::filesystem::directory_iterator(claudiaPath)) {
                 if (entry.path().extension() == ".cu") {
                     result.push_back(entry.path());
                 }
@@ -124,21 +124,21 @@ std::vector<std::filesystem::path> CudaCompiler::getCudaFilesForEngine(
             }
         }
     }
-    else if (engineFilter == "shocker") {
-        // Only Shocker engine files
-        std::filesystem::path shockerPath = baseFolder / "engines" / "shocker" / "cuda";
-        if (std::filesystem::exists(shockerPath)) {
-            for (const auto& entry : std::filesystem::directory_iterator(shockerPath)) {
+    else if (engineFilter == "claudia") {
+        // Only Claudia engine files
+        std::filesystem::path claudiaPath = baseFolder / "engines" / "claudia" / "cuda";
+        if (std::filesystem::exists(claudiaPath)) {
+            for (const auto& entry : std::filesystem::directory_iterator(claudiaPath)) {
                 if (entry.path().extension() == ".cu") {
                     result.push_back(entry.path());
                 }
             }
         }
         
-        // Add common files that Shocker uses
+        // Add common files that Claudia uses
         std::filesystem::path commonPath = baseFolder / "common" / "gpu_kernels";
         if (std::filesystem::exists(commonPath)) {
-            // Add compute_light_probs.cu if it exists (used by Shocker)
+            // Add compute_light_probs.cu if it exists (used by Claudia)
             auto lightProbs = commonPath / "compute_light_probs.cu";
             if (std::filesystem::exists(lightProbs)) {
                 result.push_back(lightProbs);

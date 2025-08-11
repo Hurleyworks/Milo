@@ -1,27 +1,28 @@
-#include "ShockerRenderHandler.h"
+#include "ClaudiaRenderHandler.h"
 #include "../../../RenderContext.h"
 #include "../../../tools/PTXManager.h"
 #include "../../../tools/GPUTimerManager.h"
-#include "ShockerDenoiserHandler.h"
+#include "../claudia_shared.h"
+#include "ClaudiaDenoiserHandler.h"
 
-ShockerRenderHandler::ShockerRenderHandler(RenderContextPtr ctx)
+ClaudiaRenderHandler::ClaudiaRenderHandler(RenderContextPtr ctx)
     : renderContext_(ctx)
 {
-    LOG(INFO) << "ShockerRenderHandler created";
+    LOG(INFO) << "ClaudiaRenderHandler created";
 }
 
-ShockerRenderHandler::~ShockerRenderHandler()
+ClaudiaRenderHandler::~ClaudiaRenderHandler()
 {
     finalize();
 }
 
-bool ShockerRenderHandler::initialize(uint32_t width, uint32_t height)
+bool ClaudiaRenderHandler::initialize(uint32_t width, uint32_t height)
 {
-    LOG(INFO) << "Initializing ShockerRenderHandler with dimensions " << width << "x" << height;
+    LOG(INFO) << "Initializing ClaudiaRenderHandler with dimensions " << width << "x" << height;
     
     if (initialized_ && width_ == width && height_ == height)
     {
-        LOG(DBUG) << "ShockerRenderHandler already initialized with same dimensions";
+        LOG(DBUG) << "ClaudiaRenderHandler already initialized with same dimensions";
         return true;
     }
     
@@ -39,11 +40,10 @@ bool ShockerRenderHandler::initialize(uint32_t width, uint32_t height)
     
     width_ = width;
     height_ = height;
-    accumulationCount_ = 0;
     
     CUcontext cuContext = renderContext_->getCudaContext();
     
-    // Initialize accumulation buffers (2D arrays for Shocker kernels to write to)
+    // Initialize accumulation buffers (2D arrays for Claudia kernels to write to)
     try
     {
         // Beauty accumulation buffer (HDR color)
@@ -73,10 +73,10 @@ bool ShockerRenderHandler::initialize(uint32_t width, uint32_t height)
             width, height, 1
         );
         
-        // Motion accumulation buffer (motion vectors for temporal denoising)
-        motionAccumBuffer_.initialize2D(
+        // Flow accumulation buffer (motion vectors)
+        flowAccumBuffer_.initialize2D(
             cuContext, 
-            cudau::ArrayElementType::Float32, 4,  // float4 (using float4 for consistency, even though we only need float2)
+            cudau::ArrayElementType::Float32, 4,  // float4
             cudau::ArraySurface::Enable, 
             cudau::ArrayTextureGather::Disable,
             width, height, 1
@@ -86,7 +86,7 @@ bool ShockerRenderHandler::initialize(uint32_t width, uint32_t height)
         linearBeautyBuffer_.initialize(cuContext, cudau::BufferType::Device, width * height);
         linearAlbedoBuffer_.initialize(cuContext, cudau::BufferType::Device, width * height);
         linearNormalBuffer_.initialize(cuContext, cudau::BufferType::Device, width * height);
-        linearMotionBuffer_.initialize(cuContext, cudau::BufferType::Device, width * height);
+        linearFlowBuffer_.initialize(cuContext, cudau::BufferType::Device, width * height);
         
         // Initialize pick info buffers (double buffered)
         for (int i = 0; i < 2; ++i)
@@ -98,25 +98,25 @@ bool ShockerRenderHandler::initialize(uint32_t width, uint32_t height)
         loadKernels();
         
         initialized_ = true;
-        LOG(INFO) << "ShockerRenderHandler initialized successfully";
+        LOG(INFO) << "ClaudiaRenderHandler initialized successfully";
         return true;
     }
     catch (const std::exception& e)
     {
-        LOG(WARNING) << "Failed to initialize ShockerRenderHandler: " << e.what();
+        LOG(WARNING) << "Failed to initialize ClaudiaRenderHandler: " << e.what();
         finalize();
         return false;
     }
 }
 
-void ShockerRenderHandler::finalize()
+void ClaudiaRenderHandler::finalize()
 {
     if (!initialized_)
     {
         return;
     }
     
-    LOG(DBUG) << "Finalizing ShockerRenderHandler";
+    LOG(DBUG) << "Finalizing ClaudiaRenderHandler";
     
     // Clean up kernels
     cleanupKernels();
@@ -128,8 +128,8 @@ void ShockerRenderHandler::finalize()
         albedoAccumBuffer_.finalize();
     if (normalAccumBuffer_.isInitialized())
         normalAccumBuffer_.finalize();
-    if (motionAccumBuffer_.isInitialized())
-        motionAccumBuffer_.finalize();
+    if (flowAccumBuffer_.isInitialized())
+        flowAccumBuffer_.finalize();
     
     if (linearBeautyBuffer_.isInitialized())
         linearBeautyBuffer_.finalize();
@@ -137,8 +137,8 @@ void ShockerRenderHandler::finalize()
         linearAlbedoBuffer_.finalize();
     if (linearNormalBuffer_.isInitialized())
         linearNormalBuffer_.finalize();
-    if (linearMotionBuffer_.isInitialized())
-        linearMotionBuffer_.finalize();
+    if (linearFlowBuffer_.isInitialized())
+        linearFlowBuffer_.finalize();
     
     // Finalize pick info buffers
     for (int i = 0; i < 2; ++i)
@@ -149,15 +149,14 @@ void ShockerRenderHandler::finalize()
     
     width_ = 0;
     height_ = 0;
-    accumulationCount_ = 0;
     initialized_ = false;
     
-    LOG(DBUG) << "ShockerRenderHandler resources finalized";
+    LOG(DBUG) << "ClaudiaRenderHandler resources finalized";
 }
 
-void ShockerRenderHandler::loadKernels()
+void ClaudiaRenderHandler::loadKernels()
 {
-    LOG(INFO) << "Loading Shocker render kernels...";
+    LOG(INFO) << "Loading Claudia render kernels...";
     
     if (!renderContext_ || !renderContext_->getPTXManager())
     {
@@ -165,49 +164,42 @@ void ShockerRenderHandler::loadKernels()
         return;
     }
     
-    // Use Shocker-specific copy buffers kernel
-    std::vector<char> ptxData = renderContext_->getPTXManager()->getPTXData("optix_shocker_copybuffers");
+    // Use Claudia-specific copy buffers kernel
+    std::vector<char> ptxData = renderContext_->getPTXManager()->getPTXData("optix_claudia_copybuffers");
     
     if (ptxData.empty())
     {
-        // Fall back to Milo kernels if Shocker-specific ones aren't available yet
-        LOG(WARNING) << "Shocker-specific PTX not found, falling back to Milo kernels";
-        ptxData = renderContext_->getPTXManager()->getPTXData("optix_milo_copybuffers");
-        
-        if (ptxData.empty())
-        {
-            LOG(WARNING) << "Failed to get PTX data for copy buffers";
-            return;
-        }
+        LOG(WARNING) << "Failed to get PTX data for optix_claudia_copybuffers";
+        return;
     }
     
-    LOG(DBUG) << "Loading PTX data for Shocker copy buffers (" << ptxData.size() << " bytes)";
+    LOG(DBUG) << "Loading PTX data for Claudia copy buffers (" << ptxData.size() << " bytes)";
     
     CUcontext cuContext = renderContext_->getCudaContext();
     
     // Load the module
-    CUDADRV_CHECK(cuModuleLoadData(&moduleShockerCopyBuffers_, ptxData.data()));
+    CUDADRV_CHECK(cuModuleLoadData(&moduleCopyBuffers_, ptxData.data()));
     
-    // Set up the kernels
-    kernelCopySurfacesToLinear_.set(moduleShockerCopyBuffers_, "copySurfacesToLinear", cudau::dim3(8, 8), 0);
-  
-    LOG(INFO) << "Shocker copy buffers module loaded successfully";
+    // Set up the combined kernel
+    kernelCopySurfacesToLinear_.set(moduleCopyBuffers_, "copySurfacesToLinear", cudau::dim3(8, 8), 0);
+    
+    LOG(INFO) << "Claudia copy buffers module loaded successfully";
 }
 
-void ShockerRenderHandler::cleanupKernels()
+void ClaudiaRenderHandler::cleanupKernels()
 {
-    if (moduleShockerCopyBuffers_)
+    if (moduleCopyBuffers_)
     {
-        CUDADRV_CHECK(cuModuleUnload(moduleShockerCopyBuffers_));
-        moduleShockerCopyBuffers_ = nullptr;
+        CUDADRV_CHECK(cuModuleUnload(moduleCopyBuffers_));
+        moduleCopyBuffers_ = nullptr;
     }
 }
 
-void ShockerRenderHandler::copyAccumToLinearBuffers(CUstream stream)
+void ClaudiaRenderHandler::copyAccumToLinearBuffers(CUstream stream)
 {
-    if (!initialized_ || !moduleShockerCopyBuffers_)
+    if (!initialized_ || !moduleCopyBuffers_)
     {
-        LOG(WARNING) << "ShockerRenderHandler not properly initialized";
+        LOG(WARNING) << "ClaudiaRenderHandler not properly initialized";
         return;
     }
     
@@ -217,21 +209,35 @@ void ShockerRenderHandler::copyAccumToLinearBuffers(CUstream stream)
         beautyAccumBuffer_.getSurfaceObject(0),
         albedoAccumBuffer_.getSurfaceObject(0),
         normalAccumBuffer_.getSurfaceObject(0),
-        motionAccumBuffer_.getSurfaceObject(0),
+        flowAccumBuffer_.getSurfaceObject(0),
         linearBeautyBuffer_.getDevicePointer(),
         linearAlbedoBuffer_.getDevicePointer(),
         linearNormalBuffer_.getDevicePointer(),
-        linearMotionBuffer_.getDevicePointer(),
+        linearFlowBuffer_.getDevicePointer(),
         uint2{width_, height_}
     );
 }
 
 
-bool ShockerRenderHandler::denoise(CUstream stream, bool isNewSequence, ShockerDenoiserHandler* denoiserHandler, GPUTimerManager::GPUTimer* timer)
+void ClaudiaRenderHandler::clearAccumBuffers(CUstream stream)
 {
     if (!initialized_)
     {
-        LOG(WARNING) << "ShockerRenderHandler not initialized";
+        LOG(WARNING) << "ClaudiaRenderHandler not initialized";
+        return;
+    }
+    
+    // For now, we'll rely on the Claudia kernels to handle initialization
+    // The clearAccumBuffers kernel is available in optix_claudia_copybuffers if needed
+    LOG(DBUG) << "Accumulation buffer clearing requested - Claudia kernels will handle initialization";
+}
+
+
+bool ClaudiaRenderHandler::denoise(CUstream stream, bool isNewSequence, ClaudiaDenoiserHandler* denoiserHandler, GPUTimerManager::GPUTimer* timer)
+{
+    if (!initialized_)
+    {
+        LOG(WARNING) << "ClaudiaRenderHandler not initialized";
         return false;
     }
     
@@ -253,14 +259,10 @@ bool ShockerRenderHandler::denoise(CUstream stream, bool isNewSequence, ShockerD
     inputBuffers.noisyBeauty = linearBeautyBuffer_;
     inputBuffers.albedo = linearAlbedoBuffer_;
     inputBuffers.normal = linearNormalBuffer_;
-    inputBuffers.flow = linearMotionBuffer_;  // Motion vectors for temporal denoising
+    inputBuffers.flow = linearFlowBuffer_;  // Motion vectors for temporal denoising
     
     // For temporal denoising: if new sequence, use noisy beauty as previous
-    // Otherwise, the denoised result from previous frame is already in the beauty buffer
-    if (denoiserHandler->isTemporalDenoiser())
-    {
-        inputBuffers.previousDenoisedBeauty = isNewSequence ? linearBeautyBuffer_ : linearBeautyBuffer_;
-    }
+    inputBuffers.previousDenoisedBeauty = linearBeautyBuffer_;
     
     // Set all formats
     inputBuffers.beautyFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
@@ -292,7 +294,7 @@ bool ShockerRenderHandler::denoise(CUstream stream, bool isNewSequence, ShockerD
     
     // Denoise (output goes back to beauty buffer since we don't have separate denoised buffer)
     const auto& denoisingTasks = denoiserHandler->getTasks();
-    for (size_t i = 0; i < denoisingTasks.size(); ++i)
+    for (int i = 0; i < denoisingTasks.size(); ++i)
     {
         denoiserHandler->getDenoiser().invoke(
             stream, denoisingTasks[i],
@@ -308,20 +310,17 @@ bool ShockerRenderHandler::denoise(CUstream stream, bool isNewSequence, ShockerD
         timer->denoise.stop(stream);
     }
     
-   // LOG(DBUG) << "Shocker denoising completed (temporal: " << denoiserHandler->isTemporalDenoiser() 
-     //         << ", new sequence: " << isNewSequence << ")";
-    
     return true;  // Successfully invoked denoiser
 }
 
-bool ShockerRenderHandler::resize(uint32_t newWidth, uint32_t newHeight)
+bool ClaudiaRenderHandler::resize(uint32_t newWidth, uint32_t newHeight)
 {
     if (newWidth == width_ && newHeight == height_)
     {
         return true;
     }
     
-    LOG(INFO) << "Resizing ShockerRenderHandler from " << width_ << "x" << height_ 
+    LOG(INFO) << "Resizing ClaudiaRenderHandler from " << width_ << "x" << height_ 
               << " to " << newWidth << "x" << newHeight;
     
     // Re-initialize with new dimensions

@@ -1,26 +1,26 @@
-#include "MiloEngine.h"
+#include "ClaudiaEngine.h"
 #include "../../RenderContext.h"
-#include "handlers/MiloSceneHandler.h"
-#include "handlers/MiloMaterialHandler.h"
-#include "handlers/MiloModelHandler.h"
-#include "handlers/MiloRenderHandler.h"
-#include "handlers/MiloDenoiserHandler.h"
-#include "models/MiloModel.h"
+#include "handlers/ClaudiaSceneHandler.h"
+#include "handlers/ClaudiaMaterialHandler.h"
+#include "handlers/ClaudiaModelHandler.h"
+#include "handlers/ClaudiaRenderHandler.h"
+#include "handlers/ClaudiaDenoiserHandler.h"
+#include "models/ClaudiaModel.h"
 
-MiloEngine::MiloEngine()
+ClaudiaEngine::ClaudiaEngine()
 {
-    LOG(INFO) << "MiloEngine created";
-    engineName_ = "MiloEngine";
+    LOG(INFO) << "ClaudiaEngine created";
+    engineName_ = "ClaudiaEngine";
 }
 
-MiloEngine::~MiloEngine()
+ClaudiaEngine::~ClaudiaEngine()
 {
     cleanup();
 }
 
-void MiloEngine::initialize(RenderContext* ctx)
+void ClaudiaEngine::initialize(RenderContext* ctx)
 {
-    LOG(INFO) << "MiloEngine::initialize()";
+    LOG(INFO) << "ClaudiaEngine::initialize()";
     
     // Call base class initialization
     // This will set up renderContext_, context_, ptxManager_ and initialize dimensions
@@ -36,15 +36,15 @@ void MiloEngine::initialize(RenderContext* ctx)
     RenderContextPtr renderContext = ctx->shared_from_this();
     
     // Create material handler first
-    materialHandler_ = MiloMaterialHandler::create(renderContext);
+    materialHandler_ = ClaudiaMaterialHandler::create(renderContext);
     materialHandler_->initialize();
     
     // Create scene handler and give it the scene
-    sceneHandler_ = MiloSceneHandler::create(renderContext);
+    sceneHandler_ = ClaudiaSceneHandler::create(renderContext);
     sceneHandler_->setScene(&scene_);
     
     // Create model handler and connect it to other handlers
-    modelHandler_ = MiloModelHandler::create(renderContext);
+    modelHandler_ = ClaudiaModelHandler::create(renderContext);
     modelHandler_->initialize();
     modelHandler_->setHandlers(materialHandler_, sceneHandler_);
     
@@ -52,33 +52,33 @@ void MiloEngine::initialize(RenderContext* ctx)
     sceneHandler_->setModelHandler(modelHandler_);
     
     // Set number of ray types
-    constexpr uint32_t numRayTypes = milo_shared::NumRayTypes;
+    constexpr uint32_t numRayTypes = claudia_shared::NumRayTypes;
     // Note: Ray types and material sets are set on geometry instances, not the scene
     // scene_.setNumRayTypes(numRayTypes);
     // scene_.setNumMaterialSets(MATERIAL_SETS);
     
-    LOG(INFO) << "Milo handlers created and configured with " << numRayTypes << " ray types";
+    LOG(INFO) << "Claudia handlers created and configured with " << numRayTypes << " ray types";
     
     // Create and setup pipelines
     setupPipelines();
     
     // Create render handler
-    renderHandler_ = MiloRenderHandler::create(renderContext);
+    renderHandler_ = ClaudiaRenderHandler::create(renderContext);
     initializeHandlerWithDimensions(renderHandler_, "RenderHandler");
     
-    // Initialize Milo-specific denoiser handler
-    denoiserHandler_ = MiloDenoiserHandler::create(ctx->shared_from_this());
+    // Initialize Claudia-specific denoiser handler
+    denoiserHandler_ = ClaudiaDenoiserHandler::create(ctx->shared_from_this());
     if (denoiserHandler_ && renderWidth_ > 0 && renderHeight_ > 0)
     {
         if (!denoiserHandler_->initialize(renderWidth_, renderHeight_, true)) // true = use temporal denoiser
         {
-            LOG(WARNING) << "Failed to initialize MiloDenoiserHandler";
+            LOG(WARNING) << "Failed to initialize ClaudiaDenoiserHandler";
         }
         else
         {
             // Setup denoiser state after initialization
             denoiserHandler_->setupState(renderContext_->getCudaStream());
-            LOG(INFO) << "MiloDenoiserHandler initialized successfully";
+            LOG(INFO) << "ClaudiaDenoiserHandler initialized successfully";
         }
     }
     
@@ -113,14 +113,14 @@ void MiloEngine::initialize(RenderContext* ctx)
     // TODO: Initialize temporal buffers
 }
 
-void MiloEngine::cleanup()
+void ClaudiaEngine::cleanup()
 {
     if (!isInitialized_)
     {
         return;
     }
     
-    LOG(INFO) << "MiloEngine::cleanup()";
+    LOG(INFO) << "ClaudiaEngine::cleanup()";
     
     // Clean up device memory
     if (plpOnDevice_)
@@ -197,7 +197,7 @@ void MiloEngine::cleanup()
     }
     
     
-    // Clean up Milo-specific denoiser handler
+    // Clean up Claudia-specific denoiser handler
     if (denoiserHandler_)
     {
         denoiserHandler_->finalize();
@@ -215,7 +215,7 @@ void MiloEngine::cleanup()
         computeProbTex_.cudaModule = nullptr;
     }
     
-    // TODO: Clean up Milo-specific resources
+    // TODO: Clean up Claudia-specific resources
     // - Temporal buffers
     // - Light sampling structures
     
@@ -223,9 +223,9 @@ void MiloEngine::cleanup()
     BaseRenderingEngine::cleanup();
 }
 
-void MiloEngine::addGeometry(sabi::RenderableNode node)
+void ClaudiaEngine::addGeometry(sabi::RenderableNode node)
 {
-    LOG(INFO) << "MiloEngine::addGeometry()";
+    LOG(INFO) << "ClaudiaEngine::addGeometry()";
     
     if (!node)
     {
@@ -250,7 +250,7 @@ void MiloEngine::addGeometry(sabi::RenderableNode node)
     // Get the model that was just created and update its material hit groups
     // This is necessary because materials are created during addCgModel
     // but pipelines/hit groups are already set up by this point
-    MiloModelPtr newModel = modelHandler_->getMiloModel(node->getClientID());
+    ClaudiaModelPtr newModel = modelHandler_->getClaudiaModel(node->getClientID());
     if (newModel)
     {
         updateMaterialHitGroups(newModel);
@@ -262,26 +262,26 @@ void MiloEngine::addGeometry(sabi::RenderableNode node)
     // Reset accumulation when scene changes
     restartRender_ = true;
     
-    // TODO: Additional Milo-specific handling
+    // TODO: Additional Claudia-specific handling
     // - Update light lists
     // - Invalidate temporal history
 }
 
-void MiloEngine::clearScene()
+void ClaudiaEngine::clearScene()
 {
-    LOG(INFO) << "MiloEngine::clearScene() - STUB";
+    LOG(INFO) << "ClaudiaEngine::clearScene() - STUB";
     
-    // TODO: Implement Milo scene clearing
+    // TODO: Implement Claudia scene clearing
     // - Clear acceleration structures
     // - Reset temporal buffers
     // - Clear light lists
 }
 
-void MiloEngine::render(const mace::InputEvent& input, bool updateMotion, uint32_t frameNumber)
+void ClaudiaEngine::render(const mace::InputEvent& input, bool updateMotion, uint32_t frameNumber)
 {
     if (!isInitialized_)
     {
-        LOG(WARNING) << "MiloEngine not initialized";
+        LOG(WARNING) << "ClaudiaEngine not initialized";
         return;
     }
     
@@ -406,9 +406,9 @@ void MiloEngine::render(const mace::InputEvent& input, bool updateMotion, uint32
  
 }
 
-void MiloEngine::onEnvironmentChanged()
+void ClaudiaEngine::onEnvironmentChanged()
 {
-    LOG(INFO) << "MiloEngine::onEnvironmentChanged()";
+    LOG(INFO) << "ClaudiaEngine::onEnvironmentChanged()";
     
     // Mark environment as dirty
     environmentDirty_ = true;
@@ -424,9 +424,9 @@ void MiloEngine::onEnvironmentChanged()
     LOG(INFO) << "Environment changed - accumulation reset";
 }
 
-void MiloEngine::setupPipelines()
+void ClaudiaEngine::setupPipelines()
 {
-    LOG(INFO) << "MiloEngine::setupPipelines()";
+    LOG(INFO) << "ClaudiaEngine::setupPipelines()";
     
     if (!renderContext_ || !renderContext_->getOptiXContext())
     {
@@ -443,20 +443,20 @@ void MiloEngine::setupPipelines()
     
     // Calculate max payload size for path tracing
     uint32_t maxPayloadDwords = std::max(
-        milo_shared::SearchRayPayloadSignature::numDwords,
-        milo_shared::VisibilityRayPayloadSignature::numDwords);
+        claudia_shared::SearchRayPayloadSignature::numDwords,
+        claudia_shared::VisibilityRayPayloadSignature::numDwords);
     
     // Configure path tracing pipeline options
     pathTracePipeline_->optixPipeline.setPipelineOptions(
         maxPayloadDwords,
         optixu::calcSumDwords<float2>(),  // Attribute dwords for barycentrics
-        "milo_plp",  // Pipeline launch parameters name - matches CUDA code
-        sizeof(milo_shared::PipelineLaunchParameters),
+        "claudia_plp",  // Pipeline launch parameters name - matches CUDA code
+        sizeof(claudia_shared::PipelineLaunchParameters),
         OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
         OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
     
-    LOG(INFO) << "Milo path tracing pipeline configured with max payload dwords: " << maxPayloadDwords;
+    LOG(INFO) << "Claudia path tracing pipeline configured with max payload dwords: " << maxPayloadDwords;
     
     
     // Ray type configuration is now handled in the pipeline setup
@@ -483,9 +483,9 @@ void MiloEngine::setupPipelines()
     createSBT();
 }
 
-void MiloEngine::initializeLightProbabilityKernels()
+void ClaudiaEngine::initializeLightProbabilityKernels()
 {
-    LOG(INFO) << "MiloEngine::initializeLightProbabilityKernels()";
+    LOG(INFO) << "ClaudiaEngine::initializeLightProbabilityKernels()";
     
     if (!ptxManager_ || !renderContext_)
     {
@@ -541,9 +541,9 @@ void MiloEngine::initializeLightProbabilityKernels()
     LOG(INFO) << "Light probability computation kernels initialized successfully";
 }
 
-void MiloEngine::createModules()
+void ClaudiaEngine::createModules()
 {
-    LOG(INFO) << "MiloEngine::createModules()";
+    LOG(INFO) << "ClaudiaEngine::createModules()";
     
     if (!ptxManager_ || !pathTracePipeline_ || !pathTracePipeline_->optixPipeline)
     {
@@ -552,29 +552,29 @@ void MiloEngine::createModules()
     }
     
     
-    // Load PTX for Milo path tracing kernels
-    std::vector<char> miloPtxData = ptxManager_->getPTXData("optix_milo_kernels");
-    if (miloPtxData.empty())
+    // Load PTX for Claudia path tracing kernels
+    std::vector<char> claudiaPtxData = ptxManager_->getPTXData("optix_claudia_kernels");
+    if (claudiaPtxData.empty())
     {
-        LOG(WARNING) << "Failed to load PTX for optix_milo_kernels";
+        LOG(WARNING) << "Failed to load PTX for optix_claudia_kernels";
         return;
     }
     
     // Create module for path tracing pipeline
-    std::string miloPtxString(miloPtxData.begin(), miloPtxData.end());
+    std::string claudiaPtxString(claudiaPtxData.begin(), claudiaPtxData.end());
     pathTracePipeline_->optixModule = pathTracePipeline_->optixPipeline.createModuleFromPTXString(
-        miloPtxString,
+        claudiaPtxString,
         OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
         DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
     
-    LOG(INFO) << "Milo path tracing module created successfully";
+    LOG(INFO) << "Claudia path tracing module created successfully";
     
 }
 
-void MiloEngine::createPrograms()
+void ClaudiaEngine::createPrograms()
 {
-    LOG(INFO) << "MiloEngine::createPrograms()";
+    LOG(INFO) << "ClaudiaEngine::createPrograms()";
     
     // Only check path tracing pipeline since pick pipeline is disabled
     if (!pathTracePipeline_ || !pathTracePipeline_->optixModule || !pathTracePipeline_->optixPipeline)
@@ -616,10 +616,10 @@ void MiloEngine::createPrograms()
         pathTracePipeline_->setEntryPoint(engine_core::PathTracingEntryPoint::PathTrace);
         
         // Configure miss programs for ray types
-        p.setNumMissRayTypes(milo_shared::NumRayTypes);
-        p.setMissProgram(milo_shared::RayType_Search, 
+        p.setNumMissRayTypes(claudia_shared::NumRayTypes);
+        p.setMissProgram(claudia_shared::RayType_Search, 
                          pathTracePipeline_->programs.at(RT_MS_NAME_STR("miss")));
-        p.setMissProgram(milo_shared::RayType_Visibility, 
+        p.setMissProgram(claudia_shared::RayType_Visibility, 
                          pathTracePipeline_->programs.at("emptyMiss"));
         
         LOG(INFO) << "Path tracing pipeline programs created";
@@ -627,9 +627,9 @@ void MiloEngine::createPrograms()
     
 }
 
-void MiloEngine::linkPipelines()
+void ClaudiaEngine::linkPipelines()
 {
-    LOG(INFO) << "MiloEngine::linkPipelines()";
+    LOG(INFO) << "ClaudiaEngine::linkPipelines()";
     
     
     // Link path tracing pipeline with depth 2 (for recursive rays)
@@ -644,9 +644,9 @@ void MiloEngine::linkPipelines()
     
 }
 
-void MiloEngine::createSBT()
+void ClaudiaEngine::createSBT()
 {
-    LOG(INFO) << "MiloEngine::createSBT()";
+    LOG(INFO) << "ClaudiaEngine::createSBT()";
     
     if (!renderContext_)
     {
@@ -701,7 +701,7 @@ void MiloEngine::createSBT()
     }
 }
 
-void MiloEngine::updateMaterialHitGroups(MiloModelPtr model)
+void ClaudiaEngine::updateMaterialHitGroups(ClaudiaModelPtr model)
 {
     // OptiX Hit Groups:
     // A hit group is a collection of programs that execute when a ray intersects geometry.
@@ -718,7 +718,7 @@ void MiloEngine::updateMaterialHitGroups(MiloModelPtr model)
     // This function assigns the appropriate hit groups to each material based on ray type,
     // connecting the material to the actual GPU programs that will execute on ray hits.
     
-    LOG(DBUG) << "MiloEngine::updateMaterialHitGroups() - updating single model";
+    LOG(DBUG) << "ClaudiaEngine::updateMaterialHitGroups() - updating single model";
     
     if (!model)
     {
@@ -726,7 +726,7 @@ void MiloEngine::updateMaterialHitGroups(MiloModelPtr model)
         return;
     }
     
-    auto* triangleModel = dynamic_cast<MiloTriangleModel*>(model.get());
+    auto* triangleModel = dynamic_cast<ClaudiaTriangleModel*>(model.get());
     if (!triangleModel)
     {
         // Not a triangle model - nothing to update
@@ -770,9 +770,9 @@ void MiloEngine::updateMaterialHitGroups(MiloModelPtr model)
     LOG(DBUG) << "Updated hit groups for " << numMaterials << " material(s) in model";
 }
 
-void MiloEngine::updateSBT()
+void ClaudiaEngine::updateSBT()
 {
-    LOG(DBUG) << "MiloEngine::updateSBT()";
+    LOG(DBUG) << "ClaudiaEngine::updateSBT()";
     
     if (!renderContext_)
     {
@@ -811,9 +811,9 @@ void MiloEngine::updateSBT()
     }
 }
 
-void MiloEngine::allocateLaunchParameters()
+void ClaudiaEngine::allocateLaunchParameters()
 {
-    LOG(INFO) << "MiloEngine::allocateLaunchParameters()";
+    LOG(INFO) << "ClaudiaEngine::allocateLaunchParameters()";
     
     if (!renderContext_)
     {
@@ -822,12 +822,12 @@ void MiloEngine::allocateLaunchParameters()
     }
     
     // Allocate path tracing launch parameters
-    CUDADRV_CHECK(cuMemAlloc(&plpOnDevice_, sizeof(milo_shared::PipelineLaunchParameters)));
+    CUDADRV_CHECK(cuMemAlloc(&plpOnDevice_, sizeof(claudia_shared::PipelineLaunchParameters)));
     
     LOG(INFO) << "Launch parameters allocated on device";
 }
 
-void MiloEngine::updateLaunchParameters(const mace::InputEvent& input)
+void ClaudiaEngine::updateLaunchParameters(const mace::InputEvent& input)
 {
     if (!renderContext_ || !plpOnDevice_)
     {
@@ -988,7 +988,7 @@ void MiloEngine::updateLaunchParameters(const mace::InputEvent& input)
     {
         for (int i = 0; i < 2; ++i)
         {
-            plp_.pickInfoBuffer[i] = reinterpret_cast<milo_shared::PickInfo*>(
+            plp_.pickInfoBuffer[i] = reinterpret_cast<claudia_shared::PickInfo*>(
                 renderHandler_->getPickInfoPointer(i));
         }
     }
@@ -1010,12 +1010,12 @@ void MiloEngine::updateLaunchParameters(const mace::InputEvent& input)
     CUDADRV_CHECK(cuMemcpyHtoDAsync(
         plpOnDevice_,
         &plp_,
-        sizeof(milo_shared::PipelineLaunchParameters),
+        sizeof(claudia_shared::PipelineLaunchParameters),
         renderContext_->getCudaStream()));
     
 }
 
-void MiloEngine::updateCameraBody(const mace::InputEvent& input)
+void ClaudiaEngine::updateCameraBody(const mace::InputEvent& input)
 {
     if (!renderContext_)
     {
@@ -1094,7 +1094,7 @@ void MiloEngine::updateCameraBody(const mace::InputEvent& input)
     }
 }
 
-void MiloEngine::updateCameraSensor()
+void ClaudiaEngine::updateCameraSensor()
 {
     // Get camera and check if it has a sensor
     if (!renderContext_)
@@ -1117,7 +1117,7 @@ void MiloEngine::updateCameraSensor()
         return;
     }
     
-    // Use the linear beauty buffer from MiloRenderHandler
+    // Use the linear beauty buffer from ClaudiaRenderHandler
     auto& linearBeautyBuffer = renderHandler_->getLinearBeautyBuffer();
     
     // Since linear buffers are device-only, we need to copy to host

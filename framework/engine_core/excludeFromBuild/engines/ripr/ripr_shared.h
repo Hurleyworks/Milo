@@ -261,12 +261,12 @@ namespace ripr_shared
 #if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
 
 #if defined(PURE_CUDA)
-CUDA_CONSTANT_MEM ripr_shared::PipelineLaunchParameters plp;
+CUDA_CONSTANT_MEM ripr_shared::PipelineLaunchParameters ripr_plp;
 #else
-RT_PIPELINE_LAUNCH_PARAMETERS ripr_shared::PipelineLaunchParameters plp;
+RT_PIPELINE_LAUNCH_PARAMETERS ripr_shared::PipelineLaunchParameters ripr_plp;
 #endif
 
-#include "../../common/common_device.cuh"
+#include "../../common/deviceCommon.h"
 
 namespace ripr_shared
 {
@@ -302,13 +302,13 @@ namespace ripr_shared
     // Check if current pixel is under cursor
     CUDA_DEVICE_FUNCTION CUDA_INLINE bool isCursorPixel()
     {
-        return plp.f->mousePosition == make_int2 (optixGetLaunchIndex());
+        return ripr_plp.f->mousePosition == make_int2 (optixGetLaunchIndex());
     }
 
     // Get debug print status
     CUDA_DEVICE_FUNCTION CUDA_INLINE bool getDebugPrintEnabled()
     {
-        return plp.f->enableDebugPrint;
+        return ripr_plp.f->enableDebugPrint;
     }
 
     // Compute surface point from barycentric coordinates

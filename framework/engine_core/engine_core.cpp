@@ -23,6 +23,7 @@
 // commmon handlers
 #include "excludeFromBuild/handlers/SkyDomeHandler.cpp"
 #include "excludeFromBuild/handlers/TextureHandler.cpp"
+#include "excludeFromBuild/handlers/AreaLightHandler.cpp"
 
 // milo handlers
 #include "excludeFromBuild/engines/milo/handlers/MiloSceneHandler.cpp"
@@ -31,13 +32,12 @@
 #include "excludeFromBuild/engines/milo/handlers/MiloRenderHandler.cpp"
 #include "excludeFromBuild/engines/milo/handlers/MiloDenoiserHandler.cpp"
 
-// shocker handlers
-#include "excludeFromBuild/engines/shocker/handlers/AreaLightHandler.cpp"
-#include "excludeFromBuild/engines/shocker/handlers/ShockerModelHandler.cpp"
-#include "excludeFromBuild/engines/shocker/handlers/ShockerMaterialHandler.cpp"
-#include "excludeFromBuild/engines/shocker/handlers/ShockerSceneHandler.cpp"
-#include "excludeFromBuild/engines/shocker/handlers/ShockerRenderHandler.cpp"
-#include "excludeFromBuild/engines/shocker/handlers/ShockerDenoiserHandler.cpp"
+// claudia handlers
+#include "excludeFromBuild/engines/claudia/handlers/ClaudiaSceneHandler.cpp"
+#include "excludeFromBuild/engines/claudia/handlers/ClaudiaMaterialHandler.cpp"
+#include "excludeFromBuild/engines/claudia/handlers/ClaudiaModelHandler.cpp"
+#include "excludeFromBuild/engines/claudia/handlers/ClaudiaRenderHandler.cpp"
+#include "excludeFromBuild/engines/claudia/handlers/ClaudiaDenoiserHandler.cpp"
 
 // ripr handlers
 #include "excludeFromBuild/engines/ripr/handlers/RiPRModelHandler.cpp"
@@ -50,10 +50,10 @@
 #include "excludeFromBuild/engines/base/BaseRenderingEngine.cpp"
 #include "excludeFromBuild/engines/RenderEngineManager.cpp"
 #include "excludeFromBuild/engines/milo/MiloEngine.cpp"
-#include "excludeFromBuild/engines/shocker/ShockerEngine.cpp"
+#include "excludeFromBuild/engines/claudia/ClaudiaEngine.cpp"
 #include "excludeFromBuild/engines/ripr/RiPREngine.cpp"
 
 // models
 #include "excludeFromBuild/engines/milo/models/MiloModel.cpp"
-#include "excludeFromBuild/engines/shocker/models/ShockerModel.cpp"
+#include "excludeFromBuild/engines/claudia/models/ClaudiaModel.cpp"
 #include "excludeFromBuild/engines/ripr/models/RiPRModel.cpp"

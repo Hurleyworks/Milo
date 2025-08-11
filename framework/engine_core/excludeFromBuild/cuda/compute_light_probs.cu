@@ -1,5 +1,5 @@
 ﻿#define PURE_CUDA
-#include "../common/common_device.cuh"
+#include "../common/deviceCommon.h"
 #include "../material/DeviceDisneyMaterial.h"
 
 #if 1

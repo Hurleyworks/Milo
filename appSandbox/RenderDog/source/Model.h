@@ -212,11 +212,6 @@ class Model : public Observer
         framework.render.getMessenger().send (QMS::setEngine (engineName));
     }
     
-    void setShockerRenderMode (int mode)
-    {
-        framework.render.getMessenger().send (QMS::setShockerRenderMode (mode));
-    }
-    
     void setRiPRRenderMode (int mode)
     {
         framework.render.getMessenger().send (QMS::setRiPRRenderMode (mode));

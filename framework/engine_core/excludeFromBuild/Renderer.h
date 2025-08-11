@@ -37,7 +37,6 @@ class Renderer
     bool setEngine(const std::string& engineName);
     std::string getCurrentEngineName() const;
     std::vector<std::string> getAvailableEngines() const;
-    void setShockerRenderMode(int mode);
     void setRiPRRenderMode(int mode);
     
     // Resource access

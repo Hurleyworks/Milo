@@ -21,7 +21,9 @@ static constexpr T pi_v = std::numbers::pi_v<T>;
 // Use Walker's alias method with initialization by Vose's algorithm
 //#define USE_WALKER_ALIAS_METHOD
 
-#define PROCESS_DYNAMIC_FUNCTIONS \
+// Callable programs disabled for now - not using them yet
+#define PROCESS_DYNAMIC_FUNCTIONS
+/* Commented out callable programs to avoid unresolved symbol errors
     PROCESS_DYNAMIC_FUNCTION(readModifiedNormalFromNormalMap), \
     PROCESS_DYNAMIC_FUNCTION(readModifiedNormalFromNormalMap2ch), \
     PROCESS_DYNAMIC_FUNCTION(readModifiedNormalFromHeightMap), \
@@ -38,32 +40,46 @@ static constexpr T pi_v = std::numbers::pi_v<T>;
     PROCESS_DYNAMIC_FUNCTION(DiffuseAndSpecularBRDF_evaluate), \
     PROCESS_DYNAMIC_FUNCTION(DiffuseAndSpecularBRDF_evaluatePDF), \
     PROCESS_DYNAMIC_FUNCTION(DiffuseAndSpecularBRDF_evaluateDHReflectanceEstimate),
+*/
 
 enum CallableProgram {
-#define PROCESS_DYNAMIC_FUNCTION(Func) CallableProgram_ ## Func
-    PROCESS_DYNAMIC_FUNCTIONS
-#undef PROCESS_DYNAMIC_FUNCTION
-    NumCallablePrograms
+    // Dummy enum values to avoid compilation errors in common_host.cpp
+    // These won't actually be used since we're not creating callable programs
+    CallableProgram_readModifiedNormalFromNormalMap = 0,
+    CallableProgram_readModifiedNormalFromNormalMap2ch = 0,
+    CallableProgram_readModifiedNormalFromHeightMap = 0,
+    CallableProgram_setupLambertBRDF = 0,
+    CallableProgram_LambertBRDF_getSurfaceParameters = 0,
+    CallableProgram_LambertBRDF_sampleThroughput = 0,
+    CallableProgram_LambertBRDF_evaluate = 0,
+    CallableProgram_LambertBRDF_evaluatePDF = 0,
+    CallableProgram_LambertBRDF_evaluateDHReflectanceEstimate = 0,
+    CallableProgram_setupDiffuseAndSpecularBRDF = 0,
+    CallableProgram_setupSimplePBR_BRDF = 0,
+    CallableProgram_DiffuseAndSpecularBRDF_getSurfaceParameters = 0,
+    CallableProgram_DiffuseAndSpecularBRDF_sampleThroughput = 0,
+    CallableProgram_DiffuseAndSpecularBRDF_evaluate = 0,
+    CallableProgram_DiffuseAndSpecularBRDF_evaluatePDF = 0,
+    CallableProgram_DiffuseAndSpecularBRDF_evaluateDHReflectanceEstimate = 0,
+    NumCallablePrograms = 0  // No callable programs for now
 };
 
+// Empty arrays since we have no callable programs
 constexpr const char* callableProgramEntryPoints[] = {
-#define PROCESS_DYNAMIC_FUNCTION(Func) RT_DC_NAME_STR(#Func)
-    PROCESS_DYNAMIC_FUNCTIONS
-#undef PROCESS_DYNAMIC_FUNCTION
+    nullptr  // Placeholder to avoid empty array
 };
 
 #define CUDA_CALLABLE_PROGRAM_POINTER_NAME_STR(name) "ptr_" #name
 constexpr const char* callableProgramPointerNames[] = {
-#define PROCESS_DYNAMIC_FUNCTION(Func) CUDA_CALLABLE_PROGRAM_POINTER_NAME_STR(Func)
-    PROCESS_DYNAMIC_FUNCTIONS
-#undef PROCESS_DYNAMIC_FUNCTION
+    nullptr  // Placeholder to avoid empty array
 };
 #undef CUDA_CALLABLE_PROGRAM_POINTER_NAME_STR
 
 #undef PROCESS_DYNAMIC_FUNCTIONS
 
 #if (defined(__CUDA_ARCH__) && defined(PURE_CUDA)) || defined(OPTIXU_Platform_CodeCompletion)
-CUDA_CONSTANT_MEM void* c_callableToPointerMap[NumCallablePrograms];
+// Need to define this even if empty to avoid compilation errors
+CUDA_CONSTANT_MEM void* c_callableToPointerMap[1];  // Dummy array since NumCallablePrograms = 0
 #endif
 
 #if defined(PURE_CUDA)

@@ -15,7 +15,6 @@ using HDRFileChangeSignal = Nano::Signal<void (const std::filesystem::path&)>;
 using AnimationToggleSignal = Nano::Signal<void (bool)>;
 using AreaLightIntensityChangeSignal = Nano::Signal<void (float)>;
 using AreaLightEnableSignal = Nano::Signal<void (bool)>;
-using ShockerRenderModeChangeSignal = Nano::Signal<void (int)>;
 using RiPRRenderModeChangeSignal = Nano::Signal<void (int)>;
 
 class View : public nanogui::Screen
@@ -31,7 +30,6 @@ class View : public nanogui::Screen
     AnimationToggleSignal onAnimationToggle;
     AreaLightIntensityChangeSignal onAreaLightIntensityChange;
     AreaLightEnableSignal onAreaLightEnable;
-    ShockerRenderModeChangeSignal onShockerRenderModeChange;
     RiPRRenderModeChangeSignal onRiPRRenderModeChange;
 
  public:
@@ -70,6 +68,5 @@ class View : public nanogui::Screen
     nanogui::ComboBox* m_pipelineCombo = nullptr; // Pipeline selection combo box
     nanogui::ComboBox* m_engineCombo = nullptr;   // Engine selection combo box
     nanogui::Label* m_hdrFileLabel = nullptr;     // Label showing current HDR filename
-    nanogui::Window* m_shockerWindow = nullptr;   // Shocker Engine controls window
     nanogui::Window* m_riprWindow = nullptr;      // RiPR Engine controls window
 };

@@ -84,7 +84,6 @@ public:
     bool hasActiveEngine() const { return activeEngine_ != nullptr; }
     
     // Engine-specific controls
-    void setShockerRenderMode(int mode);
     void setRiPRRenderMode(int mode);
     
 private:

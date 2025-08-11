@@ -1,31 +1,31 @@
-// optix_shocker_gbuffer.cu
+// optix_ripr_gbuffer.cu
 // OptiX G-buffer generation kernels for the RiPR engine
 // STUB VERSION - no implementation
 
 #include "principledDisney_ripr.h"
 #include "../ripr_shared.h"
 
-
-
-
 using namespace ripr_shared;
+
+// Global declaration of pipeline launch parameters - must match the name in pipeline configuration
+RT_PIPELINE_LAUNCH_PARAMETERS ripr_shared::PipelineLaunchParameters ripr_plp;
 
 CUDA_DEVICE_KERNEL void RT_RG_NAME(setupGBuffers)() {
     const uint2 launchIndex = make_uint2 (optixGetLaunchIndex().x, optixGetLaunchIndex().y);
-    const uint32_t bufIdx = plp.f->bufferIndex;
+    const uint32_t bufIdx = ripr_plp.f->bufferIndex;
 
-    const PerspectiveCamera& camera = plp.f->camera;
+    const PerspectiveCamera& camera = ripr_plp.f->camera;
     float jx = 0.5f;
     float jy = 0.5f;
-    if (plp.f->enableJittering)
+    if (ripr_plp.f->enableJittering)
     {
-        PCG32RNG rng = plp.s->rngBuffer.read (launchIndex);
+        PCG32RNG rng = ripr_plp.s->rngBuffer.read (launchIndex);
         jx = rng.getFloat0cTo1o();
         jy = rng.getFloat0cTo1o();
-        plp.s->rngBuffer.write (launchIndex, rng);
+        ripr_plp.s->rngBuffer.write (launchIndex, rng);
     }
-    const float x = (launchIndex.x + jx) / plp.s->imageSize.x;
-    const float y = (launchIndex.y + jy) / plp.s->imageSize.y;
+    const float x = (launchIndex.x + jx) / ripr_plp.s->imageSize.x;
+    const float y = (launchIndex.y + jy) / ripr_plp.s->imageSize.y;
     const float vh = 2 * std::tan (camera.fovY * 0.5f);
     const float vw = camera.aspect * vh;
 
@@ -48,7 +48,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(setupGBuffers)() {
     // // Debug: Print traversable handle and ray info for first pixel
     //if (launchIndex.x == 0 && launchIndex.y == 0) {
     //    printf("RiPRGBuffer RG: travHandle=%llu, origin=(%.2f,%.2f,%.2f), dir=(%.2f,%.2f,%.2f)\n",
-    //           plp.f->travHandle, origin.x, origin.y, origin.z, direction.x, direction.y, direction.z);
+    //           ripr_plp.f->travHandle, origin.x, origin.y, origin.z, direction.x, direction.y, direction.z);
     //}
 
     HitPointParams* hitPointParamsPtr = &hitPointParams;
@@ -61,7 +61,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(setupGBuffers)() {
     //}
     
     PrimaryRayPayloadSignature::trace (
-        plp.f->travHandle, origin.toNative(), direction.toNative(),
+        ripr_plp.f->travHandle, origin.toNative(), direction.toNative(),
         0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
         GBufferRayType::Primary, maxNumRayTypes, GBufferRayType::Primary,
         hitPointParamsPtr, pickInfoPtr);
@@ -78,9 +78,9 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(setupGBuffers)() {
 
     const Point2D curRasterPos (launchIndex.x + 0.5f, launchIndex.y + 0.5f);
     const Point2D prevRasterPos =
-        plp.f->prevCamera.calcScreenPosition (hitPointParams.prevPositionInWorld) * Point2D (plp.s->imageSize.x, plp.s->imageSize.y);
+        ripr_plp.f->prevCamera.calcScreenPosition (hitPointParams.prevPositionInWorld) * Point2D (ripr_plp.s->imageSize.x, ripr_plp.s->imageSize.y);
     Vector2D motionVector = curRasterPos - prevRasterPos;
-    if (plp.f->resetFlowBuffer || isnan (hitPointParams.prevPositionInWorld.x))
+    if (ripr_plp.f->resetFlowBuffer || isnan (hitPointParams.prevPositionInWorld.x))
         motionVector = Vector2D (0.0f, 0.0f);
 
     GBuffer0Elements gb0Elems = {};
@@ -92,11 +92,11 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(setupGBuffers)() {
     GBuffer1Elements gb1Elems = {};
     gb1Elems.motionVector = motionVector;
 
-    plp.s->GBuffer0[bufIdx].write (launchIndex, gb0Elems);
-    plp.s->GBuffer1[bufIdx].write (launchIndex, gb1Elems);
+    ripr_plp.s->GBuffer0[bufIdx].write (launchIndex, gb0Elems);
+    ripr_plp.s->GBuffer1[bufIdx].write (launchIndex, gb1Elems);
 
-      if (launchIndex.x == plp.f->mousePosition.x &&
-        launchIndex.y == plp.f->mousePosition.y)
+      if (launchIndex.x == ripr_plp.f->mousePosition.x &&
+        launchIndex.y == ripr_plp.f->mousePosition.y)
     {
         pickInfo.instSlot = hitPointParams.instSlot;
         pickInfo.geomInstSlot = hitPointParams.geomInstSlot;
@@ -104,28 +104,28 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(setupGBuffers)() {
         pickInfo.positionInWorld = hitPointParams.positionInWorld;
         pickInfo.normalInWorld = hitPointParams.shadingNormalInWorld;
         pickInfo.albedo = hitPointParams.albedo;
-        *plp.s->pickInfos[bufIdx] = pickInfo;
+        *ripr_plp.s->pickInfos[bufIdx] = pickInfo;
     }
 
   
     // EN: Output information required for the denoiser.
     RGB prevAlbedoResult (0.0f, 0.0f, 0.0f);
     Normal3D prevNormalResult (0.0f, 0.0f, 0.0f);
-    if (plp.f->numAccumFrames > 0)
+    if (ripr_plp.f->numAccumFrames > 0)
     {
-        prevAlbedoResult = RGB (getXYZ (plp.s->albedoAccumBuffer.read (launchIndex)));
-        prevNormalResult = Normal3D (getXYZ (plp.s->normalAccumBuffer.read (launchIndex)));
+        prevAlbedoResult = RGB (getXYZ (ripr_plp.s->albedoAccumBuffer.read (launchIndex)));
+        prevNormalResult = Normal3D (getXYZ (ripr_plp.s->normalAccumBuffer.read (launchIndex)));
     }
-    const float curWeight = 1.0f / (1 + plp.f->numAccumFrames);
+    const float curWeight = 1.0f / (1 + ripr_plp.f->numAccumFrames);
     const RGB albedoResult = (1 - curWeight) * prevAlbedoResult + curWeight * hitPointParams.albedo;
     const Normal3D normalResult = (1 - curWeight) * prevNormalResult + curWeight * hitPointParams.shadingNormalInWorld;
-    plp.s->albedoAccumBuffer.write (launchIndex, make_float4 (albedoResult.toNative(), 1.0f));
-    plp.s->normalAccumBuffer.write (launchIndex, make_float4 (normalResult.toNative(), 1.0f));
+    ripr_plp.s->albedoAccumBuffer.write (launchIndex, make_float4 (albedoResult.toNative(), 1.0f));
+    ripr_plp.s->normalAccumBuffer.write (launchIndex, make_float4 (normalResult.toNative(), 1.0f));
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME(setupGBuffers)() {
     const uint2 launchIndex = make_uint2 (optixGetLaunchIndex().x, optixGetLaunchIndex().y);
-    const uint32_t bufIdx = plp.f->bufferIndex;
+    const uint32_t bufIdx = ripr_plp.f->bufferIndex;
 
     // Debug: Print for ANY hit to confirm CH is being called
     // Just print for specific pixels to avoid spam
@@ -135,9 +135,9 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(setupGBuffers)() {
     }
 
     const auto sbtr = HitGroupSBTRecordData::get();
-    const ripr::RiPRNodeData& inst = plp.s->instanceDataBufferArray[bufIdx][optixGetInstanceId()];
-    const ripr::RiPRSurfaceData& geomInst = plp.s->geometryInstanceDataBuffer[sbtr.geomInstSlot];
-    const shared::DisneyData& mat = plp.s->disneyMaterialBuffer[geomInst.disneyMaterialSlot];
+    const ripr::RiPRNodeData& inst = ripr_plp.s->instanceDataBufferArray[bufIdx][optixGetInstanceId()];
+    const ripr::RiPRSurfaceData& geomInst = ripr_plp.s->geometryInstanceDataBuffer[sbtr.geomInstSlot];
+    const shared::DisneyData& mat = ripr_plp.s->disneyMaterialBuffer[geomInst.disneyMaterialSlot];
 
     HitPointParams* hitPointParams;
     PickInfo* pickInfo;
@@ -200,7 +200,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(setupGBuffers)() {
     // TODO: Implement Disney BSDF evaluation
     // For now, just use base color as albedo
     ReferenceFrame shadingFrame (shadingNormalInWorld, texCoord0DirInWorld);
-    if (plp.f->enableBumpMapping && mat.normal)
+    if (ripr_plp.f->enableBumpMapping && mat.normal)
     {
         // TODO: Implement bump mapping with Disney normal texture
         // const Normal3D modLocalNormal = readNormalMap(mat.normal, texCoord);
@@ -227,8 +227,8 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(setupGBuffers)() {
 
     // JP: ??????????????????????
     // EN: Export the information of the pixel on which the mouse is.
-    if (launchIndex.x == plp.f->mousePosition.x &&
-        launchIndex.y == plp.f->mousePosition.y)
+    if (launchIndex.x == ripr_plp.f->mousePosition.x &&
+        launchIndex.y == ripr_plp.f->mousePosition.y)
     {
         pickInfo->hit = true;
         pickInfo->matSlot = geomInst.disneyMaterialSlot;
@@ -256,7 +256,7 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(setupGBuffers)() {
     float posPhi, posTheta;
     toPolarYUp (Vector3D (p), &posPhi, &posTheta);
 
-    const float phi = posPhi + plp.f->envLightRotation;
+    const float phi = posPhi + ripr_plp.f->envLightRotation;
 
     float u = phi / (2 * pi_v<float>);
     u -= floorf (u);
@@ -282,17 +282,17 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(setupGBuffers)() {
 
     // JP: ??????????????????????
     // EN: Export the information of the pixel on which the mouse is.
-    if (launchIndex.x == plp.f->mousePosition.x &&
-        launchIndex.y == plp.f->mousePosition.y)
+    if (launchIndex.x == ripr_plp.f->mousePosition.x &&
+        launchIndex.y == ripr_plp.f->mousePosition.y)
     {
         pickInfo->hit = true;
         pickInfo->matSlot = 0xFFFFFFFF;
         RGB emittance (0.0f, 0.0f, 0.0f);
-        if (plp.s->envLightTexture && plp.f->enableEnvLight)
+        if (ripr_plp.s->envLightTexture && ripr_plp.f->enableEnvLight)
         {
-            float4 texValue = tex2DLod<float4> (plp.s->envLightTexture, u, v, 0.0f);
+            float4 texValue = tex2DLod<float4> (ripr_plp.s->envLightTexture, u, v, 0.0f);
             emittance = RGB (getXYZ (texValue));
-            emittance *= pi_v<float> * plp.f->envLightPowerCoeff;
+            emittance *= pi_v<float> * ripr_plp.f->envLightPowerCoeff;
         }
         pickInfo->emittance = emittance;
     }

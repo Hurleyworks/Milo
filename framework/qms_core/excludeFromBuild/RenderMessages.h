@@ -323,19 +323,6 @@ struct enablePipelineSystem
     bool enable;
 };
 
-struct setShockerRenderMode
-{
-    setShockerRenderMode (int mode) :
-        mode (mode)
-    {
-    }
-
-    QmsID id = QmsID::SetShockerRenderMode;
-    QmsID realID = QmsID::SetShockerRenderMode;
-
-    int mode;
-};
-
 struct setRiPRRenderMode
 {
     setRiPRRenderMode (int mode) :

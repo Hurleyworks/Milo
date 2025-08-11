@@ -10,7 +10,7 @@
 //#include "ShockerRenderEngine.h"
 //#include "RiPREngine.h"
 #include "../milo/MiloEngine.h"
-#include "../shocker/ShockerEngine.h"
+#include "../claudia/ClaudiaEngine.h"
 #include "../ripr/RiPREngine.h"
 
 // Register all built-in rendering engines
@@ -66,12 +66,12 @@ inline void registerBuiltInEngines(RenderEngineManager& manager)
                               return std::make_unique<MiloEngine>();
                           });
     
-    // Register Shocker engine
-    manager.registerEngine("shocker",
-                          "Shocker Engine",
-                          "Dual-pipeline ray tracing engine with G-buffer and path tracing modes",
+    // Register Claudia engine
+    manager.registerEngine("claudia",
+                          "Claudia Engine",
+                          "Advanced path tracing engine with adaptive sampling and improved convergence",
                           []() -> std::unique_ptr<IRenderingEngine> {
-                              return std::make_unique<ShockerEngine>();
+                              return std::make_unique<ClaudiaEngine>();
                           });
     
     // Register RiPR engine

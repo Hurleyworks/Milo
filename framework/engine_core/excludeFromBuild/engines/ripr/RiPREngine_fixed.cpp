@@ -69,7 +69,7 @@ void RiPREngine::createSBTs()
         {
             if (hitGroupSbtSize > 0)
             {
-                pathTracePipeline_->hitGroupSbt.initialize(cuContext, cudau::BufferType::Device, 1, hitGroupSbtSize);
+                pathTracePipeline_->hitGroupSbt.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
                 pathTracePipeline_->hitGroupSbt.setMappedMemoryPersistent(true);
             }
         }
@@ -104,12 +104,12 @@ void RiPREngine::updateSBTs()
             if (currentSize < hitGroupSbtSize)
             {
                 LOG(DBUG) << "Resizing G-buffer pipeline hit group SBT from " << currentSize << " to " << hitGroupSbtSize << " bytes";
-                gbufferPipeline_->hitGroupSbt.resize(1, hitGroupSbtSize);
+                gbufferPipeline_->hitGroupSbt.resize(hitGroupSbtSize, 1);
             }
         }
         else
         {
-            gbufferPipeline_->hitGroupSbt.initialize(cuContext, cudau::BufferType::Device, 1, hitGroupSbtSize);
+            gbufferPipeline_->hitGroupSbt.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
             gbufferPipeline_->hitGroupSbt.setMappedMemoryPersistent(true);
         }
         gbufferPipeline_->optixPipeline.setHitGroupShaderBindingTable(
@@ -126,12 +126,12 @@ void RiPREngine::updateSBTs()
             if (currentSize < hitGroupSbtSize)
             {
                 LOG(DBUG) << "Resizing path tracing pipeline hit group SBT from " << currentSize << " to " << hitGroupSbtSize << " bytes";
-                pathTracePipeline_->hitGroupSbt.resize(1, hitGroupSbtSize);
+                pathTracePipeline_->hitGroupSbt.resize(hitGroupSbtSize, 1);
             }
         }
         else
         {
-            pathTracePipeline_->hitGroupSbt.initialize(cuContext, cudau::BufferType::Device, 1, hitGroupSbtSize);
+            pathTracePipeline_->hitGroupSbt.initialize(cuContext, cudau::BufferType::Device, hitGroupSbtSize, 1);
             pathTracePipeline_->hitGroupSbt.setMappedMemoryPersistent(true);
         }
         pathTracePipeline_->optixPipeline.setHitGroupShaderBindingTable(

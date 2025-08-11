@@ -1,4 +1,4 @@
-// optix_shocker_kernels.cu
+// optix_ripr_kernels.cu
 // OptiX ray generation and hit programs for the RiPR engine path tracing
 // STUB VERSION - no implementation
 
@@ -6,6 +6,9 @@
 #include "../ripr_shared.h"
 
 using namespace ripr_shared;
+
+// Global declaration of pipeline launch parameters - must match the name in pipeline configuration
+RT_PIPELINE_LAUNCH_PARAMETERS ripr_shared::PipelineLaunchParameters ripr_plp;
 
 
 CUDA_DEVICE_KERNEL void RT_AH_NAME (visibility)()
@@ -34,11 +37,11 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void sampleLight (
     {
         float u, v;
         float uvPDF;
-        plp.s->envLightImportanceMap.sample (u0, u1, &u, &v, &uvPDF);
+        ripr_plp.s->envLightImportanceMap.sample (u0, u1, &u, &v, &uvPDF);
         const float phi = 2 * pi_v<float> * u;
         const float theta = pi_v<float> * v;
 
-        float posPhi = phi - plp.f->envLightRotation;
+        float posPhi = phi - ripr_plp.f->envLightRotation;
         posPhi = posPhi - floorf (posPhi / (2 * pi_v<float>)) * 2 * pi_v<float>;
 
         const Vector3D direction = fromPolarYUp (posPhi, theta);
@@ -58,10 +61,10 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void sampleLight (
         }
         *areaPDensity = uvPDF / (2 * pi_v<float> * pi_v<float> * sinTheta);
 
-        texEmittance = plp.s->envLightTexture;
+        texEmittance = ripr_plp.s->envLightTexture;
 
         // EN: Multiply a coefficient to make the return value possible to be handled as luminous emittance.
-        emittance = RGB (pi_v<float> * plp.f->envLightPowerCoeff);
+        emittance = RGB (pi_v<float> * ripr_plp.f->envLightPowerCoeff);
         texCoord.x = u;
         texCoord.y = v;
     }
@@ -72,9 +75,9 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void sampleLight (
         // EN: First, sample an instance.
         float instProb;
         float uGeomInst;
-        const uint32_t instSlot = plp.s->lightInstDist.sample (ul, &instProb, &uGeomInst);
+        const uint32_t instSlot = ripr_plp.s->lightInstDist.sample (ul, &instProb, &uGeomInst);
         lightProb *= instProb;
-        const ripr::RiPRNodeData& inst = plp.s->instanceDataBufferArray[plp.f->bufferIndex][instSlot];
+        const ripr::RiPRNodeData& inst = ripr_plp.s->instanceDataBufferArray[ripr_plp.f->bufferIndex][instSlot];
         if (instProb == 0.0f)
         {
             *areaPDensity = 0.0f;
@@ -89,7 +92,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void sampleLight (
         const uint32_t geomInstIndexInInst = inst.lightGeomInstDist.sample (uGeomInst, &geomInstProb, &uPrim);
         const uint32_t geomInstSlot = inst.geomInstSlots[geomInstIndexInInst];
         lightProb *= geomInstProb;
-        const ripr::RiPRSurfaceData& geomInst = plp.s->geometryInstanceDataBuffer[geomInstSlot];
+        const ripr::RiPRSurfaceData& geomInst = ripr_plp.s->geometryInstanceDataBuffer[geomInstSlot];
         if (geomInstProb == 0.0f)
         {
             *areaPDensity = 0.0f;
@@ -105,7 +108,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void sampleLight (
 
         // printf("%u-%u-%u: %g\n", instIndex, geomInstIndex, primIndex, lightProb);
 
-        const shared::DisneyData& mat = plp.s->disneyMaterialBuffer[geomInst.disneyMaterialSlot];
+        const shared::DisneyData& mat = ripr_plp.s->disneyMaterialBuffer[geomInst.disneyMaterialSlot];
 
         const shared::Triangle& tri = geomInst.triangleBuffer[primIndex];
         const shared::Vertex& vA = geomInst.vertexBuffer[tri.index0];
@@ -243,7 +246,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE RGB performDirectLighting (
         if (lightSample.atInfinity)
             dist = 1e+10f;
         ripr_shared::VisibilityRayPayloadSignature::trace (
-            plp.f->travHandle,
+            ripr_plp.f->travHandle,
             shadingPoint.toNative(), shadowRayDir.toNative(), 0.0f, dist * 0.9999f, 0.0f,
             0xFF, OPTIX_RAY_FLAG_NONE,
             RayType::Visibility, ripr_shared::maxNumRayTypes, RayType::Visibility,
@@ -274,9 +277,9 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE RGB performNextEventEstimation (
         float uLight = rng.getFloat0cTo1o();
         bool selectEnvLight = false;
         float probToSampleCurLightType = 1.0f;
-        if (plp.s->envLightTexture && plp.f->enableEnvLight)
+        if (ripr_plp.s->envLightTexture && ripr_plp.f->enableEnvLight)
         {
-            if (plp.s->lightInstDist.integral() > 0.0f)
+            if (ripr_plp.s->lightInstDist.integral() > 0.0f)
             {
                 if (uLight < probToSampleEnvLight)
                 {
@@ -330,23 +333,23 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE RGB performNextEventEstimation (
 CUDA_DEVICE_KERNEL void RT_RG_NAME (raygen)()
 {
     const uint2 launchIndex = make_uint2 (optixGetLaunchIndex().x, optixGetLaunchIndex().y);
-    const uint32_t bufIdx = plp.f->bufferIndex;
+    const uint32_t bufIdx = ripr_plp.f->bufferIndex;
 
-    const GBuffer0Elements gb0Elems = plp.s->GBuffer0[bufIdx].read (launchIndex);
+    const GBuffer0Elements gb0Elems = ripr_plp.s->GBuffer0[bufIdx].read (launchIndex);
     const uint32_t instSlot = gb0Elems.instSlot;
     const float bcB = decodeBarycentric (gb0Elems.qbcB);
     const float bcC = decodeBarycentric (gb0Elems.qbcC);
 
-    const PerspectiveCamera& camera = plp.f->camera;
+    const PerspectiveCamera& camera = ripr_plp.f->camera;
 
-    const bool useEnvLight = plp.s->envLightTexture && plp.f->enableEnvLight;
+    const bool useEnvLight = ripr_plp.s->envLightTexture && ripr_plp.f->enableEnvLight;
     RGB contribution (0.001f, 0.001f, 0.001f);
 
     if (instSlot != 0xFFFFFFFF)
     {
         const uint32_t geomInstSlot = gb0Elems.geomInstSlot;
-        const ripr::RiPRNodeData& inst = plp.s->instanceDataBufferArray[bufIdx][instSlot];
-        const ripr::RiPRSurfaceData& geomInst = plp.s->geometryInstanceDataBuffer[geomInstSlot];
+        const ripr::RiPRNodeData& inst = ripr_plp.s->instanceDataBufferArray[bufIdx][instSlot];
+        const ripr::RiPRSurfaceData& geomInst = ripr_plp.s->geometryInstanceDataBuffer[geomInstSlot];
         Point3D positionInWorld;
         Normal3D geometricNormalInWorld;
         Normal3D shadingNormalInWorld;
@@ -360,12 +363,12 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME (raygen)()
 
         RGB alpha (1.0f);
         const float initImportance = sRGB_calcLuminance (alpha);
-        PCG32RNG rng = plp.s->rngBuffer.read (launchIndex);
+        PCG32RNG rng = ripr_plp.s->rngBuffer.read (launchIndex);
 
         Vector3D vIn;
         float dirPDensity;
         {
-            const shared::DisneyData& mat = plp.s->disneyMaterialBuffer[geomInst.disneyMaterialSlot];
+            const shared::DisneyData& mat = ripr_plp.s->disneyMaterialBuffer[geomInst.disneyMaterialSlot];
 
             const Vector3D vOut = normalize (camera.position - positionInWorld);
             const float frontHit = dot (vOut, geometricNormalInWorld) >= 0.0f ? 1.0f : -1.0f;
@@ -373,7 +376,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME (raygen)()
             positionInWorld = offsetRayOrigin (positionInWorld, frontHit * geometricNormalInWorld);
 
             ReferenceFrame shadingFrame (shadingNormalInWorld, texCoord0DirInWorld);
-            if (plp.f->enableBumpMapping)
+            if (ripr_plp.f->enableBumpMapping)
             {
                 // FIXME
                 // const Normal3D modLocalNormal = mat.readModifiedNormal (mat.normal, mat.normalDimInfo, texCoord, 0.0f);
@@ -429,7 +432,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME (raygen)()
                 break;
 
             ++rwPayload.pathLength;
-            if (rwPayload.pathLength >= plp.f->maxPathLength)
+            if (rwPayload.pathLength >= ripr_plp.f->maxPathLength)
                 rwPayload.maxLengthTerminate = true;
             rwPayload.terminate = true;
 
@@ -449,7 +452,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME (raygen)()
 
             constexpr PathTracingRayType pathTraceRayType = PathTracingRayType::Closest;
             PathTraceRayPayloadSignature::trace (
-                plp.f->travHandle, rayOrg.toNative(), rayDir.toNative(),
+                ripr_plp.f->travHandle, rayOrg.toNative(), rayDir.toNative(),
                 0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
                 pathTraceRayType, maxNumRayTypes, pathTraceRayType,
                 woPayloadPtr, rwPayloadPtr);
@@ -460,33 +463,33 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME (raygen)()
         }
         contribution = rwPayload.contribution;
 
-        plp.s->rngBuffer.write (launchIndex, rwPayload.rng);
+        ripr_plp.s->rngBuffer.write (launchIndex, rwPayload.rng);
     }
     else
     {
         // EN: Accumulate the contribution from the environmental light source directly seeing.
         if (useEnvLight)
         {
-            const float4 texValue = tex2DLod<float4> (plp.s->envLightTexture, bcB, bcC, 0.0f);
-            const RGB luminance = plp.f->envLightPowerCoeff * RGB (getXYZ (texValue));
+            const float4 texValue = tex2DLod<float4> (ripr_plp.s->envLightTexture, bcB, bcC, 0.0f);
+            const RGB luminance = ripr_plp.f->envLightPowerCoeff * RGB (getXYZ (texValue));
             contribution = luminance;
         }
     }
 
     RGB prevColorResult (0.0f, 0.0f, 0.0f);
-    if (plp.f->numAccumFrames > 0)
-        prevColorResult = RGB (getXYZ (plp.s->beautyAccumBuffer.read (launchIndex)));
-    const float curWeight = 1.0f / (1 + plp.f->numAccumFrames);
+    if (ripr_plp.f->numAccumFrames > 0)
+        prevColorResult = RGB (getXYZ (ripr_plp.s->beautyAccumBuffer.read (launchIndex)));
+    const float curWeight = 1.0f / (1 + ripr_plp.f->numAccumFrames);
     const RGB colorResult = (1 - curWeight) * prevColorResult + curWeight * contribution;
-    plp.s->beautyAccumBuffer.write (launchIndex, make_float4 (colorResult.toNative(), 1.0f));
+    ripr_plp.s->beautyAccumBuffer.write (launchIndex, make_float4 (colorResult.toNative(), 1.0f));
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME (shading)()
 {
-    const uint32_t bufIdx = plp.f->bufferIndex;
+    const uint32_t bufIdx = ripr_plp.f->bufferIndex;
     const auto sbtr = HitGroupSBTRecordData::get();
-    const ripr::RiPRNodeData& inst = plp.s->instanceDataBufferArray[bufIdx][optixGetInstanceId()];
-    const ripr::RiPRSurfaceData& geomInst = plp.s->geometryInstanceDataBuffer[sbtr.geomInstSlot];
+    const ripr::RiPRNodeData& inst = ripr_plp.s->instanceDataBufferArray[bufIdx][optixGetInstanceId()];
+    const ripr::RiPRSurfaceData& geomInst = ripr_plp.s->geometryInstanceDataBuffer[sbtr.geomInstSlot];
 
     PathTraceWriteOnlyPayload* woPayload;
     PathTraceReadWritePayload* rwPayload;
@@ -500,7 +503,7 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME (miss)()
 {
     if constexpr (useImplicitLightSampling)
     {
-        if (!plp.s->envLightTexture || !plp.f->enableEnvLight)
+        if (!ripr_plp.s->envLightTexture || !ripr_plp.f->enableEnvLight)
             return;
 
         PathTraceReadWritePayload* rwPayload;
@@ -510,20 +513,20 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME (miss)()
         float posPhi, theta;
         toPolarYUp (rayDir, &posPhi, &theta);
 
-        float phi = posPhi + plp.f->envLightRotation;
+        float phi = posPhi + ripr_plp.f->envLightRotation;
         phi = phi - floorf (phi / (2 * pi_v<float>)) * 2 * pi_v<float>;
         const Point2D texCoord (phi / (2 * pi_v<float>), theta / pi_v<float>);
 
         // Implicit Light Sampling
-        const float4 texValue = tex2DLod<float4> (plp.s->envLightTexture, texCoord.x, texCoord.y, 0.0f);
-        RGB luminance = plp.f->envLightPowerCoeff * RGB (getXYZ (texValue));
+        const float4 texValue = tex2DLod<float4> (ripr_plp.s->envLightTexture, texCoord.x, texCoord.y, 0.0f);
+        RGB luminance = ripr_plp.f->envLightPowerCoeff * RGB (getXYZ (texValue));
         float misWeight = 1.0f;
         if constexpr (useMultipleImportanceSampling)
         {
-            const float uvPDF = plp.s->envLightImportanceMap.evaluatePDF (texCoord.x, texCoord.y);
+            const float uvPDF = ripr_plp.s->envLightImportanceMap.evaluatePDF (texCoord.x, texCoord.y);
             const float hypAreaPDensity = uvPDF / (2 * pi_v<float> * pi_v<float> * std::sin (theta));
             const float lightPDensity =
-                (plp.s->lightInstDist.integral() > 0.0f ? probToSampleEnvLight : 1.0f) *
+                (ripr_plp.s->lightInstDist.integral() > 0.0f ? probToSampleEnvLight : 1.0f) *
                 hypAreaPDensity;
             const float bsdfPDensity = rwPayload->prevDirPDensity;
             misWeight = pow2 (bsdfPDensity) / (pow2 (bsdfPDensity) + pow2 (lightPDensity));

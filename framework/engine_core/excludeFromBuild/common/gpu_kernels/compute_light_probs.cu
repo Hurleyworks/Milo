@@ -1,5 +1,5 @@
 ﻿#define PURE_CUDA
-#include "../common_device.cuh"
+#include "../deviceCommon.h"
 
 using namespace shared;
 

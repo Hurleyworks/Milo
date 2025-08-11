@@ -44,6 +44,31 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE Vector3D halfVector (const Vector3D& a, const V
     return normalize (a + b);
 }
 
+// Encoding/decoding functions for compact storage
+CUDA_DEVICE_FUNCTION CUDA_INLINE uint16_t encodeBarycentric(float bc) {
+    return static_cast<uint16_t>(min(static_cast<uint32_t>(bc * 65535u), 65535u));
+}
+
+CUDA_DEVICE_FUNCTION CUDA_INLINE float decodeBarycentric(uint16_t qbc) {
+    return qbc / 65535.0f;
+}
+
+CUDA_DEVICE_FUNCTION CUDA_INLINE uint32_t encodeVector(const Vector3D &v) {
+    float phi, theta;
+    toPolarYUp(v, &phi, &theta);
+    const uint32_t qPhi = min(static_cast<uint32_t>((phi / (2 * Pi)) * 65535u), 65535u);
+    const uint32_t qTheta = min(static_cast<uint32_t>((theta / Pi) * 65535u), 65535u);
+    return (qTheta << 16) | qPhi;
+}
+
+CUDA_DEVICE_FUNCTION CUDA_INLINE Vector3D decodeVector(uint32_t qv) {
+    const uint32_t qPhi = qv & 0xFFFF;
+    const uint32_t qTheta = qv >> 16;
+    const float phi = 2 * Pi * (qPhi / 65535.0f);
+    const float theta = Pi * (qTheta / 65535.0f);
+    return fromPolarYUp(phi, theta);
+}
+
 // Returns absolute value of dot product between two vectors
 template <bool isNormalA, bool isNormalB>
 CUDA_DEVICE_FUNCTION CUDA_INLINE float absDot (

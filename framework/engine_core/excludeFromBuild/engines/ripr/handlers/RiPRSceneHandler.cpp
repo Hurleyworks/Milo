@@ -4,7 +4,7 @@
 #include "RiPRSceneHandler.h"
 #include "RiPRModelHandler.h"
 #include "RiPRMaterialHandler.h"
-#include "../../shocker/handlers/AreaLightHandler.h"
+#include "../../../handlers/AreaLightHandler.h"
 #include "../models/RiPRModel.h"
 #include "../models/RiPRCore.h"
 
@@ -147,6 +147,21 @@ void RiPRSceneHandler::processRenderableNode(RenderableNode& node)
 void RiPRSceneHandler::clear()
 {
     // Note: AreaLightHandler notifications will be handled separately
+    
+    // Destroy IAS if it exists
+    if (ias_) {
+        ias_.destroy();
+    }
+    
+    // Destroy IAS memory buffer if allocated
+    if (iasMem_.isInitialized()) {
+        iasMem_.finalize();
+    }
+    
+    // Destroy instance buffer if allocated
+    if (instanceBuffer_.isInitialized()) {
+        instanceBuffer_.finalize();
+    }
     
     // Clear nodes (they're owned by model handler)
     nodes_.clear();

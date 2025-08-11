@@ -2,7 +2,7 @@
 // Implementation of material handling for RiPRModels
 
 #include "RiPRMaterialHandler.h"
-#include "../../shocker/handlers/AreaLightHandler.h"
+#include "../../../handlers/AreaLightHandler.h"
 #include "../models/RiPRModel.h"
 #include "../../../handlers/TextureHandler.h"
 #include "../../../handlers/Handlers.h"

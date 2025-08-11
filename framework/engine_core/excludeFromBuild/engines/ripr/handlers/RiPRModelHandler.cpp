@@ -234,6 +234,32 @@ void RiPRModelHandler::clear()
 {
     // Note: AreaLightHandler notifications are handled at scene level
     
+    // Finalize all surfaces to properly destroy OptiX geometry instances
+    for (auto& surface : surfaces_) {
+        if (surface) {
+            surface->finalize();
+        }
+    }
+    
+    // Finalize all nodes to properly destroy OptiX instances
+    for (auto& node : nodes_) {
+        if (node && node->optixInst) {
+            node->optixInst.destroy();
+        }
+    }
+    
+    // Finalize all surface groups to properly destroy GAS and buffers
+    for (auto& surfaceGroup : surfaceGroups_) {
+        if (surfaceGroup) {
+            if (surfaceGroup->optixGas) {
+                surfaceGroup->optixGas.destroy();
+            }
+            if (surfaceGroup->optixGasMem.isInitialized()) {
+                surfaceGroup->optixGasMem.finalize();
+            }
+        }
+    }
+    
     models_.clear();
     surfaces_.clear();
     surfaceGroups_.clear();

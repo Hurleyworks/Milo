@@ -4,11 +4,11 @@
 // Based on MaterialX specifications from the Academy Software Foundation
 // The functions here form the foundation for physically-based rendering calculations
 
-#include "../shocker_shared.h"
+#include "../claudia_shared.h"
 #include "../../../material/DeviceDisneyMaterial.h"
+#include "../../../common/deviceCommon.h"
 
-
-using namespace shocker_shared;
+using namespace claudia_shared;
 using namespace shared;
 
 // Mathematical constants used throughout the rendering calculations
