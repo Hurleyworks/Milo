@@ -16,6 +16,16 @@ void ShockerModelHandler::initialize(RenderContextPtr context)
     geomInstSlotFinder_.initialize(maxGeometryInstances);
     instanceSlotFinder_.initialize(maxInstances);
     
+    // Initialize GPU buffer for geometry instance data
+    if (renderContext_) {
+        CUcontext cudaContext = renderContext_->getCudaContext();
+        // Use mapped buffer following the sample pattern
+        geometryInstanceDataBuffer_.initialize(
+            cudaContext, 
+            cudau::BufferType::Device,  // Still use Device type like the sample
+            maxGeometryInstances);
+    }
+    
     // Handler initialized
 }
 
@@ -233,6 +243,11 @@ void ShockerModelHandler::clear()
     totalTriangles_ = 0;
     totalVertices_ = 0;
     
+    // Finalize GPU buffer
+    if (geometryInstanceDataBuffer_.isInitialized()) {
+        geometryInstanceDataBuffer_.finalize();
+    }
+    
     // Handler cleared
 }
 
@@ -301,4 +316,93 @@ size_t ShockerModelHandler::getShockerSurfaceCount() const
         }
     }
     return totalCount;
+}
+
+void ShockerModelHandler::updateGeometryInstanceDataBuffer()
+{
+    if (!renderContext_) {
+        LOG(WARNING) << "Cannot update geometry instance data buffer: no render context";
+        return;
+    }
+    
+    // Map the buffer for host access (following sample pattern)
+    geometryInstanceDataBuffer_.map();
+    shocker::ShockerSurfaceData* surfaceDataHost = geometryInstanceDataBuffer_.getMappedPointer();
+    
+    if (!surfaceDataHost) {
+        LOG(WARNING) << "Failed to get mapped pointer for geometry instance data buffer";
+        geometryInstanceDataBuffer_.unmap();
+        return;
+    }
+    
+    // Process all surfaces from all models
+    size_t surfaceCount = 0;
+    for (const auto& [name, model] : models_) {
+        if (!model) continue;
+        
+        for (const auto& surface : model->getSurfaces()) {
+            if (!surface) continue;
+            
+            uint32_t slot = surface->geomInstSlot;
+            if (slot >= geometryInstanceDataBuffer_.numElements()) {
+                LOG(WARNING) << "Surface slot " << slot << " exceeds buffer size";
+                continue;
+            }
+            
+            // Create a local ShockerSurfaceData and fill it
+            shocker::ShockerSurfaceData surfaceData = {};
+            
+            // Set geometry buffers based on geometry type
+            if (const TriangleGeometry* triGeom = std::get_if<TriangleGeometry>(&surface->geometry)) {
+                surfaceData.vertexBuffer = triGeom->vertexBuffer.getROBuffer<shared::enableBufferOobCheck>();
+                surfaceData.triangleBuffer = triGeom->triangleBuffer.getROBuffer<shared::enableBufferOobCheck>();
+            } else if (const CurveGeometry* curveGeom = std::get_if<CurveGeometry>(&surface->geometry)) {
+                // TODO: Handle curve geometry when implemented
+                LOG(WARNING) << "Curve geometry not yet supported in geometry instance data buffer";
+                continue;
+            }
+            
+            // Set material slot
+            if (surface->mat && materialHandler_) {
+                // Find the material slot by checking each material in the handler
+                const auto& allMaterials = materialHandler_->getAllMaterials();
+                uint32_t matSlot = 0;
+                bool found = false;
+                
+                for (size_t i = 0; i < allMaterials.size(); ++i) {
+                    if (allMaterials[i].get() == surface->mat) {
+                        matSlot = static_cast<uint32_t>(i);
+                        found = true;
+                        break;
+                    }
+                }
+                
+                if (found) {
+                    surfaceData.disneyMaterialSlot = matSlot;
+                    LOG(DBUG) << "Surface " << slot << " assigned material slot " << matSlot;
+                } else {
+                    surfaceData.disneyMaterialSlot = 0;
+                    LOG(WARNING) << "Surface " << slot << " material not found in handler, using slot 0";
+                }
+            } else {
+                surfaceData.disneyMaterialSlot = 0;
+                LOG(WARNING) << "Surface " << slot << " has no material assigned, using slot 0";
+            }
+            
+            // Set geometry instance slot
+            surfaceData.geomInstSlot = slot;
+            
+            // TODO: Set emitter primitive distribution when area lights are supported
+            // For now, leave emitterPrimDist as default
+            
+            // Write to the mapped buffer (following sample pattern)
+            surfaceDataHost[slot] = surfaceData;
+            surfaceCount++;
+        }
+    }
+    
+    // Unmap the buffer to sync with GPU
+    geometryInstanceDataBuffer_.unmap();
+    
+    LOG(INFO) << "Updated geometry instance data buffer with " << surfaceCount << " surfaces";
 }

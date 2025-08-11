@@ -38,6 +38,7 @@ class Renderer
     std::string getCurrentEngineName() const;
     std::vector<std::string> getAvailableEngines() const;
     void setShockerRenderMode(int mode);
+    void setRiPRRenderMode(int mode);
     
     // Resource access
     CameraHandle getCamera() const { return renderContext_ ? renderContext_->getCamera() : nullptr; }

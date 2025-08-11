@@ -63,6 +63,7 @@ namespace qms
             "SetEngine",
             "EnablePipelineSystem",
             "SetShockerRenderMode",
+            "SetRiPRRenderMode",
 
             // physics messages
             "UpdatePhysics",
@@ -149,6 +150,7 @@ namespace qms
             SetEngine,
             EnablePipelineSystem,
             SetShockerRenderMode,
+            SetRiPRRenderMode,
 
             // physics messages
             UpdatePhysics,

@@ -34,9 +34,6 @@ void ShockerMaterialHandler::initialize(RenderContext* ctx)
     // Initialize slot finder
     materialSlotFinder_.initialize(MaxNumMaterials);
     
-    // Create a default material
-    createDefaultMaterial();
-    
     isInitialized_ = true;
     
     LOG(INFO) << "ShockerMaterialHandler initialized with capacity: " << MaxNumMaterials;

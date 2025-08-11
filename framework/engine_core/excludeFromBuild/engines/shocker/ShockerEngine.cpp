@@ -151,7 +151,19 @@ void ShockerEngine::initialize (RenderContext* ctx)
         staticPlp_.disneyMaterialBuffer = shared::ROBuffer<shared::DisneyData>();
         staticPlp_.instanceDataBufferArray[0] = shared::ROBuffer<shocker::ShockerNodeData>();
         staticPlp_.instanceDataBufferArray[1] = shared::ROBuffer<shocker::ShockerNodeData>();
-        staticPlp_.geometryInstanceDataBuffer = shared::ROBuffer<shocker::ShockerSurfaceData>();
+        
+        // Set geometry instance data buffer if model handler has already initialized it
+        if (modelHandler_) {
+            auto* buffer = modelHandler_->getGeometryInstanceDataBuffer();
+            if (buffer && buffer->isInitialized()) {
+                staticPlp_.geometryInstanceDataBuffer = buffer->getROBuffer<shared::enableBufferOobCheck>();
+                LOG(INFO) << "Set geometry instance data buffer in static launch parameters";
+            } else {
+                staticPlp_.geometryInstanceDataBuffer = shared::ROBuffer<shocker::ShockerSurfaceData>();
+            }
+        } else {
+            staticPlp_.geometryInstanceDataBuffer = shared::ROBuffer<shocker::ShockerSurfaceData>();
+        }
 
         // Initialize light distribution to empty
         staticPlp_.lightInstDist = shared::LightDistribution();
@@ -194,6 +206,11 @@ void ShockerEngine::cleanup()
     }
 
     LOG (DBUG) << "Cleaning up ShockerEngine";
+    
+    // Clean up default material
+    if (defaultMaterial_) {
+        defaultMaterial_.destroy();
+    }
 
     // Clean up pipelines
     if (gbufferPipeline_)
@@ -298,11 +315,17 @@ void ShockerEngine::addGeometry (sabi::RenderableNode node)
     {
         sceneHandler_->processRenderableNode(node);
         
+        // Update geometry instance data buffer with surface data from model handler
+        if (modelHandler_) {
+            modelHandler_->updateGeometryInstanceDataBuffer();
+        }
+        
         // Build/update acceleration structures after adding geometry
         sceneHandler_->buildAccelerationStructures();
         
         // Update SBT to include the new geometry
         updateSBT();
+        
         
         // Update traversable handle from scene
         perFramePlp_.travHandle = sceneHandler_->getTraversableHandle();
@@ -338,6 +361,9 @@ void ShockerEngine::clearScene()
 
     // Reset scene traversable handle  
     perFramePlp_.travHandle = 0;  // Will be 0 after clearing
+    
+    // Update SBT after clearing the scene
+    updateSBT();
 
     // Mark that we need to restart accumulation
     restartRender_ = true;
@@ -485,6 +511,10 @@ void ShockerEngine::render (const mace::InputEvent& input, bool updateMotion, ui
     }
     
     renderGBuffer(stream);
+    
+    // Synchronize to ensure G-buffer is complete before path tracing
+    CUDADRV_CHECK(cuStreamSynchronize(stream));
+    
     renderPathTracing(stream);
     
     // Stop path trace timer
@@ -716,9 +746,9 @@ void ShockerEngine::createPrograms()
             p.createMissProgram (m, RT_MS_NAME_STR ("setupGBuffers"));
 
         // Create hit group for G-buffer generation
-        gbufferPipeline_->hitPrograms[RT_CH_NAME_STR ("setupGBuffers")] =
+        gbufferPipeline_->hitPrograms[RT_CH_NAME_STR("setupGBuffers")] =
             p.createHitProgramGroupForTriangleIS (
-                m, RT_CH_NAME_STR ("setupGBuffers"),
+                m, RT_CH_NAME_STR("setupGBuffers"),
                 emptyModule, nullptr);
 
         // Set the entry point
@@ -733,6 +763,34 @@ void ShockerEngine::createPrograms()
 
         LOG (INFO) << "G-buffer pipeline programs created";
     }
+    
+    // Create default material and set hit groups (following working sample pattern)
+    // This must be done AFTER hit programs are created but BEFORE any geometry is added
+    {
+        optixu::Context optixContext = renderContext_->getOptiXContext();
+        defaultMaterial_ = optixContext.createMaterial();
+        
+        // Create empty hit group for unused ray types (exactly as in sample code)
+        gbufferPipeline_->hitPrograms["emptyHitGroup"] = 
+            gbufferPipeline_->optixPipeline.createEmptyHitProgramGroup();
+        
+        // Set hit group for G-buffer pipeline primary ray type
+        defaultMaterial_.setHitGroup(shocker_shared::GBufferRayType::Primary, 
+                                    gbufferPipeline_->hitPrograms.at(RT_CH_NAME_STR("setupGBuffers")));
+        
+        // Set empty hit groups for all other ray types (exactly as in sample code)
+        for (uint32_t rayType = shocker_shared::GBufferRayType::NumTypes; 
+             rayType < shocker_shared::maxNumRayTypes; ++rayType) {
+            defaultMaterial_.setHitGroup(rayType, gbufferPipeline_->hitPrograms.at("emptyHitGroup"));
+        }
+        
+        // Pass the default material to the scene handler
+        if (sceneHandler_) {
+            sceneHandler_->setDefaultMaterial(defaultMaterial_);
+        }
+        
+        LOG(INFO) << "Created default material with G-buffer hit groups for all ray types";
+    }
 
     // Path Tracing Pipeline Programs
     {
@@ -741,16 +799,16 @@ void ShockerEngine::createPrograms()
 
         // Create ray generation program for path tracing
         pathTracePipeline_->entryPoints[PathTracingEntryPoint::pathTrace] =
-            p.createRayGenProgram (m, RT_RG_NAME_STR ("pathTrace"));
+            p.createRayGenProgram (m, RT_RG_NAME_STR ("raygen"));
 
         // Create miss program for path tracing
-        pathTracePipeline_->programs[RT_MS_NAME_STR ("pathTrace")] =
-            p.createMissProgram (m, RT_MS_NAME_STR ("pathTrace"));
+        pathTracePipeline_->programs[RT_MS_NAME_STR ("miss")] =
+            p.createMissProgram (m, RT_MS_NAME_STR ("miss"));
 
         // Create hit group for path tracing (closest hit)
-        pathTracePipeline_->hitPrograms[RT_CH_NAME_STR ("pathTrace")] =
+        pathTracePipeline_->hitPrograms[RT_CH_NAME_STR ("shading")] =
             p.createHitProgramGroupForTriangleIS (
-                m, RT_CH_NAME_STR ("pathTrace"),
+                m, RT_CH_NAME_STR ("shading"),
                 emptyModule, nullptr);
 
         // Create hit group for visibility rays (any hit only)
@@ -768,11 +826,20 @@ void ShockerEngine::createPrograms()
         // Configure miss programs for ray types
         p.setNumMissRayTypes (shocker_shared::maxNumRayTypes);
         p.setMissProgram (0, // Closest ray type
-                          pathTracePipeline_->programs.at (RT_MS_NAME_STR ("pathTrace")));
+                          pathTracePipeline_->programs.at (RT_MS_NAME_STR ("miss")));
         p.setMissProgram (1, // Visibility ray type
                           pathTracePipeline_->programs.at ("emptyMiss"));
 
         LOG (INFO) << "Path tracing pipeline programs created";
+        
+        // CRITICAL: Set path tracing hit groups on the default material
+        // This was missing and is why the closest hit shader was never called!
+        defaultMaterial_.setHitGroup(shocker_shared::PathTracingRayType::Closest,
+                                    pathTracePipeline_->hitPrograms.at(RT_CH_NAME_STR("shading")));
+        defaultMaterial_.setHitGroup(shocker_shared::PathTracingRayType::Visibility,
+                                    pathTracePipeline_->hitPrograms.at(RT_AH_NAME_STR("visibility")));
+        
+        LOG(INFO) << "Set path tracing hit groups on default material";
     }
 }
 
@@ -983,9 +1050,9 @@ void ShockerEngine::linkPipelines()
     // Link G-buffer pipeline with depth 1 (no recursive rays)
     if (gbufferPipeline_ && gbufferPipeline_->optixPipeline)
     {
-        // Set the scene on the pipeline
+        // Set the scene on the pipeline  
         gbufferPipeline_->optixPipeline.setScene (scene_);
-
+        
         gbufferPipeline_->optixPipeline.link (1);
         LOG (INFO) << "G-buffer pipeline linked successfully";
     }
@@ -995,7 +1062,7 @@ void ShockerEngine::linkPipelines()
     {
         // Set the scene on the pipeline
         pathTracePipeline_->optixPipeline.setScene (scene_);
-
+        
         pathTracePipeline_->optixPipeline.link (2);
         LOG (INFO) << "Path tracing pipeline linked successfully";
     }
@@ -1005,8 +1072,47 @@ void ShockerEngine::updateMaterialHitGroups (ShockerModelPtr model)
 {
     LOG (DBUG) << "Updating material hit groups";
 
-    // TODO: Set hit groups on model's materials
-    // This will be implemented with the full ShockerModel integration
+    if (!model) {
+        // If no specific model, update all models
+        if (!modelHandler_) {
+            return;
+        }
+        
+        // Get all models and update their hit groups
+        auto models = modelHandler_->getAllModels();
+        for (const auto& [id, m] : models) {
+            if (m) {
+                updateMaterialHitGroups(m);
+            }
+        }
+        return;
+    }
+
+    // Get the hit program for G-buffer
+    if (!gbufferPipeline_ || !gbufferPipeline_->optixPipeline) {
+        LOG(WARNING) << "G-buffer pipeline not ready yet";
+        return;
+    }
+    
+    auto it = gbufferPipeline_->hitPrograms.find(RT_CH_NAME_STR("setupGBuffers"));
+    if (it == gbufferPipeline_->hitPrograms.end()) {
+        LOG(WARNING) << "setupGBuffers hit program not found";
+        return;
+    }
+    
+    optixu::HitProgramGroup hitProgram = it->second;
+
+    // Set the hit group on all surfaces' materials
+    for (const auto& surface : model->getSurfaces()) {
+        if (!surface || !surface->optixGeomInst) continue;
+        
+        // Get the material and set the hit group
+        optixu::Material mat = surface->optixGeomInst.getMaterial(0, 0);
+        if (mat) {
+            mat.setHitGroup(0, hitProgram);  // Ray type 0 for primary rays
+            LOG(DBUG) << "Set hit group for surface material";
+        }
+    }
 }
 
 void ShockerEngine::updateLaunchParameters (const mace::InputEvent& input)

@@ -6,6 +6,7 @@
 
 #include "../models/ShockerModel.h"
 #include "../models/ShockerCore.h"
+#include "../models/ShockerDeviceCore.h"
 #include "../../../common/common_host.h"
 #include "../../milo/milo_shared.h"
 #include <unordered_map>
@@ -71,6 +72,15 @@ public:
     // Set area light handler
     void setAreaLightHandler(AreaLightHandlerPtr handler) { areaLightHandler_ = handler; }
     
+    // Get the geometry instance data buffer for GPU upload
+    cudau::TypedBuffer<shocker::ShockerSurfaceData>* getGeometryInstanceDataBuffer()
+    {
+        return &geometryInstanceDataBuffer_;
+    }
+    
+    // Update the geometry instance data buffer with all surface data
+    void updateGeometryInstanceDataBuffer();
+    
 private:
     // Helper to determine geometry type from CgModel
     ShockerGeometryType determineGeometryType(const sabi::CgModelPtr& model) const;
@@ -127,6 +137,9 @@ private:
     // Slot management
     SlotFinder geomInstSlotFinder_;
     SlotFinder instanceSlotFinder_;
+    
+    // GPU buffers
+    cudau::TypedBuffer<shocker::ShockerSurfaceData> geometryInstanceDataBuffer_;
     
     // Dependencies
     RenderContextPtr renderContext_;

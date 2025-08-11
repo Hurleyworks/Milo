@@ -94,7 +94,12 @@ void ActiveRender::waitingForMessages()
         .handle<QMS::setShockerRenderMode> ([&] (QMS::setShockerRenderMode const& msg)
                                             {
                                                 shockerRenderMode = msg.mode;
-                                                state = &ActiveRender::setShockerRenderMode; });
+                                                state = &ActiveRender::setShockerRenderMode; })
+        
+        .handle<QMS::setRiPRRenderMode> ([&] (QMS::setRiPRRenderMode const& msg)
+                                         {
+                                             riprRenderMode = msg.mode;
+                                             state = &ActiveRender::setRiPRRenderMode; });
 }
 
 // init
@@ -248,6 +253,28 @@ void ActiveRender::setShockerRenderMode()
     {
         impl->setShockerRenderMode(shockerRenderMode);
         LOG(DBUG) << "Set Shocker render mode to: " << shockerRenderMode;
+    }
+    catch (std::exception& e)
+    {
+        done();
+        LOG(DBUG) << e.what();
+        messengers.dreamer.send(QMS::onError(e.what() + std::string(" ActiveRender thread is shutting down")));
+    }
+    catch (...)
+    {
+        done();
+        LOG(DBUG) << "Caught unknown exception!";
+        messengers.dreamer.send(QMS::onError("Caught unknown exception!"));
+    }
+    state = &ActiveRender::waitingForMessages;
+}
+
+void ActiveRender::setRiPRRenderMode()
+{
+    try
+    {
+        impl->setRiPRRenderMode(riprRenderMode);
+        LOG(DBUG) << "Set RiPR render mode to: " << riprRenderMode;
     }
     catch (std::exception& e)
     {

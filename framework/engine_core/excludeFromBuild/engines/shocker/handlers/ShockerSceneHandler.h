@@ -97,6 +97,9 @@ public:
     
     // Set the scene (must be called before building acceleration structures)
     void setScene(optixu::Scene* scene) { scene_ = scene; }
+    
+    // Set the default material to use for all geometry (following working sample pattern)
+    void setDefaultMaterial(optixu::Material mat) { defaultMaterial_ = mat; }
 
 private:
     // Render context
@@ -126,4 +129,7 @@ private:
     cudau::Buffer iasMem_;
     cudau::TypedBuffer<OptixInstance> instanceBuffer_;
     OptixTraversableHandle travHandle_ = 0;  // 0 is valid for empty scene
+    
+    // Default material with hit groups already set (following working sample pattern)
+    optixu::Material defaultMaterial_;
 };

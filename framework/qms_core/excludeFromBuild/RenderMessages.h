@@ -335,3 +335,16 @@ struct setShockerRenderMode
 
     int mode;
 };
+
+struct setRiPRRenderMode
+{
+    setRiPRRenderMode (int mode) :
+        mode (mode)
+    {
+    }
+
+    QmsID id = QmsID::SetRiPRRenderMode;
+    QmsID realID = QmsID::SetRiPRRenderMode;
+
+    int mode;
+};

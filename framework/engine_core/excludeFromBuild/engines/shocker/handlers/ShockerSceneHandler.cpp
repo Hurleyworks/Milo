@@ -248,13 +248,23 @@ void ShockerSceneHandler::buildAccelerationStructures()
                             surface->optixGeomInst.setVertexBuffer(triGeom->vertexBuffer);
                             surface->optixGeomInst.setTriangleBuffer(triGeom->triangleBuffer);
                             surface->optixGeomInst.setNumMaterials(1, optixu::BufferView());
-                            surface->optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-                            surface->optixGeomInst.setUserData(surface->geomInstSlot);
+                            // NOTE: Don't set geometry flags - working sample doesn't do this
+                            // surface->optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
                             
-                            // Create and set a default material for now
-                            // TODO: Use actual materials from the material handler
-                            optixu::Material defaultMat = ctx_->getOptiXContext().createMaterial();
-                            surface->optixGeomInst.setMaterial(0, 0, defaultMat);
+                            // Set material BEFORE setUserData (following exact working sample order)
+                            // Use the default material with hit groups already set
+                            if (defaultMaterial_) {
+                                surface->optixGeomInst.setMaterial(0, 0, defaultMaterial_);
+                                LOG(INFO) << "Set material on geometry instance for surface " << surface->geomInstSlot 
+                                         << " with default material";
+                            } else {
+                                LOG(WARNING) << "No default material set! Geometry will not have hit groups!";
+                                // Fallback: create a material without hit groups (rays will miss)
+                                optixu::Material fallbackMat = ctx_->getOptiXContext().createMaterial();
+                                surface->optixGeomInst.setMaterial(0, 0, fallbackMat);
+                            }
+                            
+                            surface->optixGeomInst.setUserData(surface->geomInstSlot);
                         }
                     }
                 }
@@ -297,12 +307,6 @@ void ShockerSceneHandler::buildAccelerationStructures()
     
     // Build IAS if we have nodes and scene is set
     if (!nodes_.empty() && scene_) {
-        // Generate shader binding table layout before building IAS
-        // This is required to avoid "Shader binding table layout generation has not been done" error
-        size_t hitGroupSbtSize;
-        scene_->generateShaderBindingTableLayout(&hitGroupSbtSize);
-        LOG(DBUG) << "Generated scene SBT layout, size: " << hitGroupSbtSize << " bytes";
-        
         // Create IAS if not already created
         if (!ias_) {
             try {
@@ -398,11 +402,34 @@ void ShockerSceneHandler::buildAccelerationStructures()
                     if (node && node->geomGroupInst.geomGroup && node->geomGroupInst.geomGroup->optixGas) {
                         // Set the child using the GeometryAccelerationStructure object
                         inst.setChild(node->geomGroupInst.geomGroup->optixGas);
+                        
+                        // Set instance ID (used to index into instance data buffer)
+                        inst.setID(static_cast<uint32_t>(i));
+                        
+                        // Set transform - use the node's model-to-world matrix
+                        // OptiX expects row-major 3x4 matrix
+                        // Matrix4x4_T stores data in column-major format (c0, c1, c2, c3)
+                        float transform[12] = {
+                            node->matM2W.c0.x, node->matM2W.c1.x, node->matM2W.c2.x, node->matM2W.c3.x,  // Row 0
+                            node->matM2W.c0.y, node->matM2W.c1.y, node->matM2W.c2.y, node->matM2W.c3.y,  // Row 1
+                            node->matM2W.c0.z, node->matM2W.c1.z, node->matM2W.c2.z, node->matM2W.c3.z   // Row 2
+                        };
+                        
+                        inst.setTransform(transform);
+                        
+                        LOG(DBUG) << "Instance " << i << " set with GAS handle " 
+                                  << node->geomGroupInst.geomGroup->optixGas.getHandle();
                     } else {
                         LOG(WARNING) << "Instance " << i << " has no GAS object";
                     }
                     ias_.addChild(inst);
                 }
+                
+                // CRITICAL: Generate SBT layout AFTER instances are added to the scene
+                // This ensures the scene knows about all geometry for proper SBT generation
+                size_t hitGroupSbtSize;
+                scene_->generateShaderBindingTableLayout(&hitGroupSbtSize);
+                LOG(INFO) << "Generated scene SBT layout after adding instances, size: " << hitGroupSbtSize << " bytes";
                 
                 // Prepare for build
                 OptixAccelBufferSizes bufferSizes;

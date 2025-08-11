@@ -215,6 +215,23 @@ void ShockerTriangleModel::createGeometryForSurface(
             triGeom.vertexBuffer.write(vertices.data(), vertices.size());
             triGeom.triangleBuffer.write(triangles.data(), triangles.size());
             
+            // Debug: Print first few vertices to see where geometry is located
+            if (vertices.size() > 0) {
+                LOG(INFO) << "Geometry bounds for surface " << surfaceIndex << ":";
+                float minX = FLT_MAX, minY = FLT_MAX, minZ = FLT_MAX;
+                float maxX = -FLT_MAX, maxY = -FLT_MAX, maxZ = -FLT_MAX;
+                for (const auto& v : vertices) {
+                    minX = std::min(minX, v.position.x);
+                    minY = std::min(minY, v.position.y);
+                    minZ = std::min(minZ, v.position.z);
+                    maxX = std::max(maxX, v.position.x);
+                    maxY = std::max(maxY, v.position.y);
+                    maxZ = std::max(maxZ, v.position.z);
+                }
+                LOG(INFO) << "  Min: (" << minX << ", " << minY << ", " << minZ << ")";
+                LOG(INFO) << "  Max: (" << maxX << ", " << maxY << ", " << maxZ << ")";
+            }
+            
             // Note: OptiX geometry instance will be created later in ShockerSceneHandler
             // when building the acceleration structures
             

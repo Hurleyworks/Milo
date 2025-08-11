@@ -48,6 +48,9 @@ class Application : public Jahley::App
         // view to model connection for Shocker render mode changes
         view->onShockerRenderModeChange.connect<Model, &Model::setShockerRenderMode> (&model);
         
+        // view to model connection for RiPR render mode changes
+        view->onRiPRRenderModeChange.connect<Model, &Model::setRiPRRenderMode> (&model);
+        
         // model to view connection for HDR loading
         model.hdrLoadedEmitter.connect<Application, &Application::onHDRLoaded>(this);
 
@@ -121,7 +124,7 @@ class Application : public Jahley::App
         std::string ground = "E:/common_content/models/static_gound/static_ground.gltf";
      //  model.loadGLTF (ground);
    // model.loadGLTF (helmet);
-   // model.loadGLTF (box);
+    model.loadGLTF (box);
       //  model.loadGLTF (box);
        // model.loadGLTF (scifi);
        // model.loadGLTF (warrior);

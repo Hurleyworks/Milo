@@ -85,6 +85,7 @@ public:
     
     // Engine-specific controls
     void setShockerRenderMode(int mode);
+    void setRiPRRenderMode(int mode);
     
 private:
     // The currently active rendering engine (only one at a time)

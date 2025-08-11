@@ -45,13 +45,36 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(setupGBuffers)() {
 
     PickInfo pickInfo = {};
 
-     HitPointParams* hitPointParamsPtr = &hitPointParams;
+    // // Debug: Print traversable handle and ray info for first pixel
+    //if (launchIndex.x == 0 && launchIndex.y == 0) {
+    //    printf("ShockerGBuffer RG: travHandle=%llu, origin=(%.2f,%.2f,%.2f), dir=(%.2f,%.2f,%.2f)\n",
+    //           plp.f->travHandle, origin.x, origin.y, origin.z, direction.x, direction.y, direction.z);
+    //}
+
+    HitPointParams* hitPointParamsPtr = &hitPointParams;
     PickInfo* pickInfoPtr = &pickInfo;
+    
+    //// Debug: Print ray type values
+    //if (launchIndex.x == 0 && launchIndex.y == 0) {
+    //    printf("ShockerGBuffer RG: Ray types - SBT offset=%u, SBT stride=%u, miss index=%u\n",
+    //           (uint32_t)GBufferRayType::Primary, (uint32_t)maxNumRayTypes, (uint32_t)GBufferRayType::Primary);
+    //}
+    
     PrimaryRayPayloadSignature::trace (
         plp.f->travHandle, origin.toNative(), direction.toNative(),
         0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
         GBufferRayType::Primary, maxNumRayTypes, GBufferRayType::Primary,
         hitPointParamsPtr, pickInfoPtr);
+
+    // Debug: ONLY print if there's a hit
+    if (hitPointParams.instSlot != 0xFFFFFFFF) {
+        // Found a hit! Print details for sampled pixels
+        if (launchIndex.x % 50 == 0 && launchIndex.y % 50 == 0) {
+            printf("ShockerGBuffer RG: HIT at [%u,%u]! instSlot=%u, primIndex=%u, pos=(%.2f,%.2f,%.2f)\n",
+                   launchIndex.x, launchIndex.y, hitPointParams.instSlot, hitPointParams.primIndex,
+                   hitPointParams.positionInWorld.x, hitPointParams.positionInWorld.y, hitPointParams.positionInWorld.z);
+        }
+    }
 
     const Point2D curRasterPos (launchIndex.x + 0.5f, launchIndex.y + 0.5f);
     const Point2D prevRasterPos =
@@ -104,6 +127,13 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(setupGBuffers)() {
     const uint2 launchIndex = make_uint2 (optixGetLaunchIndex().x, optixGetLaunchIndex().y);
     const uint32_t bufIdx = plp.f->bufferIndex;
 
+    // Debug: Print for ANY hit to confirm CH is being called
+    // Just print for specific pixels to avoid spam
+    if (launchIndex.x % 100 == 0 && launchIndex.y % 100 == 0) {
+        printf("ShockerGBuffer CH: HIT DETECTED! pixel (%u, %u), instance %u, ray t=%.3f\n", 
+               launchIndex.x, launchIndex.y, optixGetInstanceId(), optixGetRayTmax());
+    }
+
     const auto sbtr = HitGroupSBTRecordData::get();
     const shocker::ShockerNodeData& inst = plp.s->instanceDataBufferArray[bufIdx][optixGetInstanceId()];
     const shocker::ShockerSurfaceData& geomInst = plp.s->geometryInstanceDataBuffer[sbtr.geomInstSlot];
@@ -117,6 +147,12 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(setupGBuffers)() {
     hitPointParams->instSlot = optixGetInstanceId();
     hitPointParams->geomInstSlot = sbtr.geomInstSlot;
     hitPointParams->primIndex = hp.primIndex;
+
+    // Debug: Print hit information for specific pixels
+    if (launchIndex.x == 400 && launchIndex.y == 300) {
+        printf("ShockerGBuffer CH Detail: primIndex=%u, geomInstSlot=%u, bcB=%.3f, bcC=%.3f\n",
+               hp.primIndex, sbtr.geomInstSlot, hp.bcB, hp.bcC);
+    }
 
     Point3D positionInWorld;
     Point3D prevPositionInWorld;
@@ -149,6 +185,13 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(setupGBuffers)() {
             shadingNormalInWorld = Normal3D (0, 0, 1);
             texCoord0DirInWorld = Vector3D (1, 0, 0);
         }
+
+        // Debug: Print world position for center pixel
+        if (launchIndex.x == 400 && launchIndex.y == 300) {
+            printf("ShockerGBuffer CH: World pos=(%.2f, %.2f, %.2f), normal=(%.2f, %.2f, %.2f)\n",
+                   positionInWorld.x, positionInWorld.y, positionInWorld.z,
+                   shadingNormalInWorld.x, shadingNormalInWorld.y, shadingNormalInWorld.z);
+        }
     }
 
     hitPointParams->positionInWorld = positionInWorld;
@@ -173,6 +216,14 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(setupGBuffers)() {
         albedo = RGB(texValue.x, texValue.y, texValue.z);
     }
     hitPointParams->albedo = albedo;
+
+    // Debug: Print albedo for first hit
+    static bool firstHit = true;
+    if (firstHit && launchIndex.x < 10 && launchIndex.y < 10) {
+        printf("ShockerGBuffer CH: Albedo set to (%.2f, %.2f, %.2f) at pixel (%u, %u)\n",
+               albedo.r, albedo.g, albedo.b, launchIndex.x, launchIndex.y);
+        firstHit = false;
+    }
 
     // JP: ??????????????????????
     // EN: Export the information of the pixel on which the mouse is.
@@ -215,11 +266,19 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(setupGBuffers)() {
     PickInfo* pickInfo;
     PrimaryRayPayloadSignature::get (&hitPointParams, &pickInfo);
 
+    // Debug: Confirm miss shader is setting values  
+    if (launchIndex.x == 400 && launchIndex.y == 300) {
+        printf("ShockerGBuffer MS: Setting miss values for pixel (%u,%u)\n", launchIndex.x, launchIndex.y);
+    }
+
     hitPointParams->positionInWorld = p;
     hitPointParams->prevPositionInWorld = p;
     hitPointParams->shadingNormalInWorld = Normal3D (vOut);
     hitPointParams->qbcB = encodeBarycentric (u);
     hitPointParams->qbcC = encodeBarycentric (v);
+    
+    // IMPORTANT: Miss shader should keep instSlot as 0xFFFFFFFF to indicate no hit!
+    // The ray gen was detecting "hits" because miss shader wasn't leaving this unchanged
 
     // JP: ??????????????????????
     // EN: Export the information of the pixel on which the mouse is.

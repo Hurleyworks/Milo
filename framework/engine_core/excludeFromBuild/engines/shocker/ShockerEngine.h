@@ -83,7 +83,7 @@ private:
     void createSBT();
     void updateSBT();  // Update SBT after scene changes
     void linkPipelines();
-    void updateMaterialHitGroups(ShockerModelPtr model);  // Set hit groups on model's materials
+    void updateMaterialHitGroups(ShockerModelPtr model = nullptr);  // Set hit groups on model's materials (nullptr = all models)
     
     // Launch parameter management
     void updateLaunchParameters(const mace::InputEvent& input);
@@ -100,6 +100,9 @@ private:
     // Dual pipelines
     std::shared_ptr<engine_core::RenderPipeline<GBufferEntryPoint>> gbufferPipeline_;
     std::shared_ptr<engine_core::RenderPipeline<PathTracingEntryPoint>> pathTracePipeline_;
+    
+    // Default material with hit groups set (following working sample pattern)
+    optixu::Material defaultMaterial_;
     
     // Scene management (Shocker-specific handlers)
     std::shared_ptr<class ShockerSceneHandler> sceneHandler_;

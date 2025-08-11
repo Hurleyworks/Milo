@@ -1,0 +1,135 @@
+#pragma once
+
+// RiPRSceneHandler.h
+// Manages the scene graph for the RiPR rendering system
+// Coordinates between RiPRModelHandler and RiPRMaterialHandler
+
+#include "../../../RenderContext.h"
+#include "../../../common/common_host.h"
+#include "../models/RiPRCore.h"
+
+using sabi::RenderableNode;
+using sabi::RenderableWeakRef;
+using sabi::WeakRenderableList;
+
+// Forward declarations
+class RiPRModelHandler;
+class RiPRMaterialHandler;
+class AreaLightHandler;
+using RiPRSceneHandlerPtr = std::shared_ptr<class RiPRSceneHandler>;
+using RiPRModelHandlerPtr = std::shared_ptr<RiPRModelHandler>;
+using RiPRMaterialHandlerPtr = std::shared_ptr<RiPRMaterialHandler>;
+using AreaLightHandlerPtr = std::shared_ptr<AreaLightHandler>;
+
+class RiPRSceneHandler
+{
+public:
+    // Factory function for creating RiPRSceneHandler objects
+    static RiPRSceneHandlerPtr create(RenderContextPtr ctx) 
+    { 
+        return std::make_shared<RiPRSceneHandler>(ctx); 
+    }
+
+    // Map type for tracking scene nodes by instance index
+    using NodeMap = std::unordered_map<uint32_t, RenderableWeakRef>;
+
+public:
+    // Constructor initializes the scene handler with a render context
+    RiPRSceneHandler(RenderContextPtr ctx);
+    
+    // Destructor handles cleanup of scene resources
+    ~RiPRSceneHandler();
+
+    // Initialize the scene handler
+    void initialize();
+
+    // Set the model handler (must be called before using model operations)
+    void setModelHandler(RiPRModelHandlerPtr modelHandler) { modelHandler_ = modelHandler; }
+    
+    // Set the material handler (must be called before using material operations)  
+    void setMaterialHandler(RiPRMaterialHandlerPtr materialHandler) { materialHandler_ = materialHandler; }
+    
+    // Set the area light handler
+    void setAreaLightHandler(AreaLightHandlerPtr areaLightHandler) { areaLightHandler_ = areaLightHandler; }
+
+    // Get handlers
+    RiPRModelHandlerPtr getModelHandler() const { return modelHandler_; }
+    RiPRMaterialHandlerPtr getMaterialHandler() const { return materialHandler_; }
+    AreaLightHandlerPtr getAreaLightHandler() const { return areaLightHandler_; }
+
+    // Creates a node from a renderable node (replaces createInstance)
+    ripr::RiPRNode* createRiPRNode(RenderableWeakRef& weakNode);
+
+    // Creates multiple nodes from a list of renderable nodes
+    void createNodeList(const WeakRenderableList& weakNodeList);
+
+    // Process a renderable node (creates model and node)
+    void processRenderableNode(RenderableNode& node);
+
+    // Clear all nodes and models
+    void clear();
+
+    // Get all nodes
+    const std::vector<ripr::RiPRNode*>& getRiPRNodes() const { return nodes_; }
+
+    // Get node by index
+    ripr::RiPRNode* getRiPRNode(uint32_t index) const;
+
+    // Get renderable node by node index
+    RenderableWeakRef getRenderableNode(uint32_t nodeIndex) const;
+
+    // Build acceleration structures
+    void buildAccelerationStructures();
+
+    // Update acceleration structures
+    void updateAccelerationStructures();
+    
+    // Find node that contains a given surface
+    ripr::RiPRNode* findNodeForSurface(ripr::RiPRSurface* surface) const;
+
+    // Get statistics
+    size_t getNodeCount() const { return nodes_.size(); }
+    size_t getSurfaceCount() const;
+    size_t getMaterialCount() const;
+    
+    // Get the traversable handle for the scene
+    OptixTraversableHandle getTraversableHandle() const { return travHandle_; }
+    
+    // Set the scene (must be called before building acceleration structures)
+    void setScene(optixu::Scene* scene) { scene_ = scene; }
+    
+    // Set the default material to use for all geometry (following working sample pattern)
+    void setDefaultMaterial(optixu::Material mat) { defaultMaterial_ = mat; }
+
+private:
+    // Render context
+    RenderContextPtr ctx_;
+    
+    // Handlers
+    RiPRModelHandlerPtr modelHandler_;
+    RiPRMaterialHandlerPtr materialHandler_;
+    AreaLightHandlerPtr areaLightHandler_;
+    
+    // Scene data
+    std::vector<ripr::RiPRNode*> nodes_;
+    NodeMap nodeMap_;
+    
+    // Instance slot management
+    SlotFinder instanceSlotFinder_;
+    
+    // Initialization flag
+    bool isInitialized_ = false;
+    
+    // Maximum number of instances
+    static constexpr size_t MaxNumInstances = 100000;
+    
+    // OptiX scene and IAS
+    optixu::Scene* scene_ = nullptr;  // Not owned, set by engine
+    optixu::InstanceAccelerationStructure ias_;
+    cudau::Buffer iasMem_;
+    cudau::TypedBuffer<OptixInstance> instanceBuffer_;
+    OptixTraversableHandle travHandle_ = 0;  // 0 is valid for empty scene
+    
+    // Default material with hit groups already set (following working sample pattern)
+    optixu::Material defaultMaterial_;
+};

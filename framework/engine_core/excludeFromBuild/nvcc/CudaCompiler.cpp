@@ -73,6 +73,16 @@ std::vector<std::filesystem::path> CudaCompiler::getCudaFilesForEngine(
             }
         }
         
+        // RiPR engine files
+        std::filesystem::path riprPath = baseFolder / "engines" / "ripr" / "cuda";
+        if (std::filesystem::exists(riprPath)) {
+            for (const auto& entry : std::filesystem::directory_iterator(riprPath)) {
+                if (entry.path().extension() == ".cu") {
+                    result.push_back(entry.path());
+                }
+            }
+        }
+        
         // Common GPU kernels
         std::filesystem::path commonPath = baseFolder / "common" / "gpu_kernels";
         if (std::filesystem::exists(commonPath)) {
@@ -129,6 +139,27 @@ std::vector<std::filesystem::path> CudaCompiler::getCudaFilesForEngine(
         std::filesystem::path commonPath = baseFolder / "common" / "gpu_kernels";
         if (std::filesystem::exists(commonPath)) {
             // Add compute_light_probs.cu if it exists (used by Shocker)
+            auto lightProbs = commonPath / "compute_light_probs.cu";
+            if (std::filesystem::exists(lightProbs)) {
+                result.push_back(lightProbs);
+            }
+        }
+    }
+    else if (engineFilter == "ripr") {
+        // Only RiPR engine files
+        std::filesystem::path riprPath = baseFolder / "engines" / "ripr" / "cuda";
+        if (std::filesystem::exists(riprPath)) {
+            for (const auto& entry : std::filesystem::directory_iterator(riprPath)) {
+                if (entry.path().extension() == ".cu") {
+                    result.push_back(entry.path());
+                }
+            }
+        }
+        
+        // Add common files that RiPR uses
+        std::filesystem::path commonPath = baseFolder / "common" / "gpu_kernels";
+        if (std::filesystem::exists(commonPath)) {
+            // Add compute_light_probs.cu if it exists (used by RiPR)
             auto lightProbs = commonPath / "compute_light_probs.cu";
             if (std::filesystem::exists(lightProbs)) {
                 result.push_back(lightProbs);

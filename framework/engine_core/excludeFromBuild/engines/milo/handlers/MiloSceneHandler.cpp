@@ -1040,7 +1040,7 @@ void MiloSceneHandler::updateEmissiveInstances()
     }
     
     lightDistributionDirty_ = true;
-    LOG(DBUG) << "Found " << emissiveInstances_.size() << " emissive instances";
+   // LOG(DBUG) << "Found " << emissiveInstances_.size() << " emissive instances";
 }
 
 void MiloSceneHandler::buildLightInstanceDistribution()

@@ -1,6 +1,7 @@
 #include "RenderEngineManager.h"
 #include "base/BaseRenderingEngine.h"
 #include "shocker/ShockerEngine.h"
+#include "ripr/RiPREngine.h"
 #include "../RenderContext.h"
 
 RenderEngineManager::RenderEngineManager() :
@@ -285,5 +286,33 @@ void RenderEngineManager::setShockerRenderMode(int mode)
     else
     {
         LOG(WARNING) << "Shocker render mode can only be set when ShockerEngine is active. Current engine: " << currentEngineName_;
+    }
+}
+
+void RenderEngineManager::setRiPRRenderMode(int mode)
+{
+    if (!activeEngine_)
+    {
+        LOG(WARNING) << "No active engine to set render mode";
+        return;
+    }
+    
+    // Check if it's the RiPREngine
+    if (currentEngineName_ == "ripr")
+    {
+        // Cast to RiPREngine and set render mode
+        if (auto riprEngine = dynamic_cast<RiPREngine*>(activeEngine_.get()))
+        {
+            riprEngine->setRenderMode(static_cast<RiPREngine::RenderMode>(mode));
+            LOG(INFO) << "Set RiPR render mode to: " << mode;
+        }
+        else
+        {
+            LOG(WARNING) << "Failed to cast to RiPREngine";
+        }
+    }
+    else
+    {
+        LOG(WARNING) << "RiPR render mode can only be set when RiPREngine is active. Current engine: " << currentEngineName_;
     }
 }

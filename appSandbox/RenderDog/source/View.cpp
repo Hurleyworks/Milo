@@ -103,26 +103,31 @@ View::View (const DesktopWindowSettings& settings) :
     // Engine selection combo box
     new Label (engineWindow, "Render Engine:", "sans-bold");
     m_engineCombo = new ComboBox (engineWindow,
-                                  {"Milo Engine", "Shocker Engine"});
+                                  {"Milo Engine", "Shocker Engine", "RiPR Engine"});
     m_engineCombo->set_selected_index (0); // Default to Milo Engine
     m_engineCombo->set_tooltip ("Select the rendering engine to use");
     m_engineCombo->set_callback ([this] (int index)
                                  {
         const std::vector<std::string> engineNames = {
             "milo",
-            "shocker"
+            "shocker",
+            "ripr"
         };
         const std::vector<std::string> engineDescriptions = {
             "High-performance path tracing engine based on RiPR architecture",
+            "Dual-pipeline ray tracing engine with G-buffer and path tracing modes",
             "Dual-pipeline ray tracing engine with G-buffer and path tracing modes"
         };
         if (index >= 0 && index < engineNames.size()) {
             LOG(INFO) << "Switching to engine: " << engineNames[index];
             onEngineChange.fire(engineNames[index]);
             
-            // Show/hide Shocker-specific controls
+            // Show/hide engine-specific controls
             if (m_shockerWindow) {
                 m_shockerWindow->set_visible(engineNames[index] == "shocker");
+            }
+            if (m_riprWindow) {
+                m_riprWindow->set_visible(engineNames[index] == "ripr");
             }
             
             // Update the info label
@@ -164,6 +169,27 @@ View::View (const DesktopWindowSettings& settings) :
     
     // Store reference to Shocker window for visibility control
     m_shockerWindow = shockerWindow;
+
+    // Create RiPR Engine controls window (initially hidden, shown when RiPR is selected)
+    Window* riprWindow = new Window (this, "RiPR Engine Controls");
+    riprWindow->set_position (Vector2i (15, 190)); // Position below engine window (same as Shocker)
+    riprWindow->set_layout (new GroupLayout());
+    riprWindow->set_visible(false); // Hidden by default
+    
+    // Render mode selection for RiPR Engine
+    new Label (riprWindow, "Render Mode:", "sans-bold");
+    ComboBox* riprRenderModeCombo = new ComboBox (riprWindow,
+                                              {"Path Tracing", "G-Buffer Preview", "Debug Normals", 
+                                               "Debug Albedo", "Debug Depth", "Debug Motion"});
+    riprRenderModeCombo->set_selected_index (0); // Default to Path Tracing
+    riprRenderModeCombo->set_tooltip ("Select the render mode for RiPR Engine");
+    riprRenderModeCombo->set_callback ([this] (int index)
+                                   {
+        // Fire event for render mode change
+        onRiPRRenderModeChange.fire(index); });
+    
+    // Store reference to RiPR window for visibility control
+    m_riprWindow = riprWindow;
 
     // Create environment controls window
     Window* envWindow = new Window (this, "Environment Controls");

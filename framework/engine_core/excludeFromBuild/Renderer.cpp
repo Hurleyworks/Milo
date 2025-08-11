@@ -245,7 +245,7 @@ void Renderer::initializeEngine (CameraHandle camera, ImageCacheHandlerPtr image
         }
         
         // Start with basic path tracer as default
-        engineManager_->switchEngine("milo");
+        engineManager_->switchEngine("ripr");
 
         // Step 7: Pipeline Handler is already initialized for geometry support
         // The scene pipeline is active by default for model creation
@@ -487,4 +487,16 @@ void Renderer::setShockerRenderMode(int mode)
     
     // Delegate to the engine manager
     engineManager_->setShockerRenderMode(mode);
+}
+
+void Renderer::setRiPRRenderMode(int mode)
+{
+    if (!engineManager_)
+    {
+        LOG(WARNING) << "Cannot set RiPR render mode: Engine manager not initialized";
+        return;
+    }
+    
+    // Delegate to the engine manager
+    engineManager_->setRiPRRenderMode(mode);
 }

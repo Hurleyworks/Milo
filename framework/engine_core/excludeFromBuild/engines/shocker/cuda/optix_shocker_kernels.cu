@@ -327,7 +327,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE RGB performNextEventEstimation (
     return ret;
 }
 
-CUDA_DEVICE_KERNEL void RT_RG_NAME (pathTrace)()
+CUDA_DEVICE_KERNEL void RT_RG_NAME (raygen)()
 {
     const uint2 launchIndex = make_uint2 (optixGetLaunchIndex().x, optixGetLaunchIndex().y);
     const uint32_t bufIdx = plp.f->bufferIndex;
@@ -481,12 +481,22 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME (pathTrace)()
     plp.s->beautyAccumBuffer.write (launchIndex, make_float4 (colorResult.toNative(), 1.0f));
 }
 
-CUDA_DEVICE_KERNEL void RT_CH_NAME (pathTrace)()
+CUDA_DEVICE_KERNEL void RT_CH_NAME (shading)()
 {
-    // STUB
+    const uint32_t bufIdx = plp.f->bufferIndex;
+    const auto sbtr = HitGroupSBTRecordData::get();
+    const shocker::ShockerNodeData& inst = plp.s->instanceDataBufferArray[bufIdx][optixGetInstanceId()];
+    const shocker::ShockerSurfaceData& geomInst = plp.s->geometryInstanceDataBuffer[sbtr.geomInstSlot];
+
+    PathTraceWriteOnlyPayload* woPayload;
+    PathTraceReadWritePayload* rwPayload;
+    PathTraceRayPayloadSignature::get (&woPayload, &rwPayload);
+    PCG32RNG& rng = rwPayload->rng;
+
+    const Point3D rayOrigin (optixGetWorldRayOrigin());
 }
 
-CUDA_DEVICE_KERNEL void RT_MS_NAME (pathTrace)()
+CUDA_DEVICE_KERNEL void RT_MS_NAME (miss)()
 {
     if constexpr (useImplicitLightSampling)
     {
