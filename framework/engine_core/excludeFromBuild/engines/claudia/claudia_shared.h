@@ -218,6 +218,10 @@ namespace claudia_shared
         };
     };
 
+    // Primary ray payload for GBuffer generation
+    using PrimaryRayPayloadSignature = optixu::PayloadSignature<HitPointParams*, PickInfo*>;
+    
+    // Path tracing payloads
     using SearchRayPayloadSignature = optixu::PayloadSignature<shared::PCG32RNG, SearchRayPayload*, HitPointParams*, RGB*, Normal3D*>;
     using VisibilityRayPayloadSignature = optixu::PayloadSignature<float>;
 

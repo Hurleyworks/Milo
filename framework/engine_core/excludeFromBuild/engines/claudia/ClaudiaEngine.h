@@ -44,6 +44,13 @@ public:
     
     // Accessor for light probability computation kernels
     const ComputeProbTex& getComputeProbTex() const { return computeProbTex_; }
+    
+    // GBuffer entry points
+    enum GBufferEntryPoint
+    {
+        GBufferEntryPoint_SetupGBuffers = 0,
+        GBufferEntryPoint_Count
+    };
 
 private:
     // Pipeline setup methods
@@ -56,6 +63,9 @@ private:
     void updateMaterialHitGroups(ClaudiaModelPtr model);  // Set hit groups on a specific model's materials
     void initializeLightProbabilityKernels();  // Initialize CUDA kernels for light probability computation
     
+    // GBuffer rendering
+    void renderGBuffer(CUstream stream);
+    
     // Launch parameter management
     void updateLaunchParameters(const mace::InputEvent& input);
     void allocateLaunchParameters();
@@ -64,8 +74,9 @@ private:
     void updateCameraBody(const mace::InputEvent& input);
     void updateCameraSensor();
     
-    // Pipeline
+    // Pipelines
     std::shared_ptr<engine_core::RenderPipeline<engine_core::PathTracingEntryPoint>> pathTracePipeline_;
+    std::shared_ptr<engine_core::RenderPipeline<GBufferEntryPoint>> gbufferPipeline_;
     
     // Scene management
     std::shared_ptr<class ClaudiaSceneHandler> sceneHandler_;
