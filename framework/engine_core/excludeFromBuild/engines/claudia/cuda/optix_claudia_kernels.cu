@@ -520,11 +520,11 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME (pathTracing)()
         direction = normalize (camera.orientation * Vector3D (vw * (0.5f - x), vh * (0.5f - y), 1));
     }
     
-    // Debug: Print traversable handle and ray info for first pixel (similar to Shocker)
-    if (launchIndex.x == 0 && launchIndex.y == 0) {
-        printf("ClaudiaEngine RG: travHandle=%llu, origin=(%.2f,%.2f,%.2f), dir=(%.2f,%.2f,%.2f)\n",
-               claudia_plp.s->travHandle, origin.x, origin.y, origin.z, direction.x, direction.y, direction.z);
-    }
+    //// Debug: Print traversable handle and ray info for first pixel (similar to Shocker)
+    //if (launchIndex.x == 0 && launchIndex.y == 0) {
+    //    printf("ClaudiaEngine RG: travHandle=%llu, origin=(%.2f,%.2f,%.2f), dir=(%.2f,%.2f,%.2f)\n",
+    //           claudia_plp.s->travHandle, origin.x, origin.y, origin.z, direction.x, direction.y, direction.z);
+    //}
 
     // Initialize ray payload
     SearchRayPayload payload;

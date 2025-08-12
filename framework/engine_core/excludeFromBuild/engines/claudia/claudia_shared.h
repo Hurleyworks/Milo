@@ -10,13 +10,13 @@ namespace claudia_shared
 {
     static constexpr float probToSampleEnvLight = 0.25f;
 
-   /* enum PickRayType
-    {
-        PickRayType_Primary = 0,
-        PickRayType_Visibility,
-        NumPickRayTypes
-    };
-    */
+    /* enum PickRayType
+     {
+         PickRayType_Primary = 0,
+         PickRayType_Visibility,
+         NumPickRayTypes
+     };
+     */
     enum RayType
     {
         RayType_Search = 0,
@@ -24,7 +24,6 @@ namespace claudia_shared
         NumRayTypes
     };
 
-    
     struct GBufferRayType
     {
         enum Value
@@ -42,23 +41,23 @@ namespace claudia_shared
         }
     };
 
-   /* struct PathTracingRayType
-    {
-        enum Value
-        {
-            Closest,
-            Visibility,
-            NumTypes
-        } value;
+    /* struct PathTracingRayType
+     {
+         enum Value
+         {
+             Closest,
+             Visibility,
+             NumTypes
+         } value;
 
-        CUDA_DEVICE_FUNCTION constexpr PathTracingRayType (Value v = Closest) :
-            value (v) {}
+         CUDA_DEVICE_FUNCTION constexpr PathTracingRayType (Value v = Closest) :
+             value (v) {}
 
-        CUDA_DEVICE_FUNCTION operator uint32_t() const
-        {
-            return static_cast<uint32_t> (value);
-        }
-    };*/
+         CUDA_DEVICE_FUNCTION operator uint32_t() const
+         {
+             return static_cast<uint32_t> (value);
+         }
+     };*/
 
     constexpr uint32_t maxNumRayTypes = 2;
 
@@ -121,21 +120,38 @@ namespace claudia_shared
         uint16_t qbcC;
     };
 
+    struct GBuffer0Elements
+    {
+        uint32_t instSlot;
+        uint32_t geomInstSlot;
+        uint32_t primIndex;
+        uint16_t qbcB;
+        uint16_t qbcC;
+    };
+
+    struct GBuffer1Elements
+    {
+        Vector2D motionVector;
+    };
+
     struct StaticPipelineLaunchParameters
     {
         OptixTraversableHandle travHandle;
         int2 imageSize;
         uint32_t numAccumFrames;
-        uint32_t bufferIndex; // TODO: Temporarily commented to debug crash
+        uint32_t bufferIndex;
+
         optixu::BlockBuffer2D<shared::PCG32RNG, 1> rngBuffer;
         optixu::NativeBlockBuffer2D<float4> colorAccumBuffer;
         optixu::NativeBlockBuffer2D<float4> albedoAccumBuffer;
         optixu::NativeBlockBuffer2D<float4> normalAccumBuffer;
         optixu::NativeBlockBuffer2D<float4> flowAccumBuffer;
+
         PerspectiveCamera camera;
         PerspectiveCamera prevCamera; // Previous frame camera for temporal reprojection
         uint32_t useCameraSpaceNormal : 1;
         uint32_t bounceLimit; // Maximum path length for path tracing
+
         // Experimental
         uint32_t makeAllGlass : 1;
         uint32_t globalGlassType : 1;
@@ -170,6 +186,10 @@ namespace claudia_shared
         // Pick info buffer
         PickInfo* pickInfoBuffer[2]; // Double buffered
 
+        // geometry buffers 
+        optixu::NativeBlockBuffer2D<GBuffer0Elements> geoBuffer0[2];
+        optixu::NativeBlockBuffer2D<GBuffer1Elements> geoBuffer1[2];
+
         // Firefly reduction
         float maxRadiance; // Maximum radiance value to clamp fireflies
     };
@@ -177,7 +197,7 @@ namespace claudia_shared
     {
     };
 
-     struct PipelineLaunchParameters
+    struct PipelineLaunchParameters
     {
         StaticPipelineLaunchParameters* s;
         PerFramePipelineLaunchParameters* f;
@@ -197,9 +217,6 @@ namespace claudia_shared
             uint32_t deltaSampled : 1;
         };
     };
-
-
-
 
     using SearchRayPayloadSignature = optixu::PayloadSignature<shared::PCG32RNG, SearchRayPayload*, HitPointParams*, RGB*, Normal3D*>;
     using VisibilityRayPayloadSignature = optixu::PayloadSignature<float>;
@@ -266,18 +283,18 @@ namespace claudia_shared
     // Check if current pixel is under cursor
     CUDA_DEVICE_FUNCTION CUDA_INLINE bool isCursorPixel()
     {
-       // return claudia_plp.f->mousePosition == make_int2 (optixGetLaunchIndex());
+        // return claudia_plp.f->mousePosition == make_int2 (optixGetLaunchIndex());
         return false;
     }
 
     // Get debug print status
     CUDA_DEVICE_FUNCTION CUDA_INLINE bool getDebugPrintEnabled()
     {
-        //return claudia_plp.f->enableDebugPrint;
+        // return claudia_plp.f->enableDebugPrint;
         return false;
     }
 
-   // This function calculates various attributes of a surface point
+    // This function calculates various attributes of a surface point
     // given its barycentric coordinates (b1, b2) and the index (primIndex)
     // of the triangle it belongs to. It computes the world-space position,
     // shading normal, texture coordinates, and so forth for this surface point.
@@ -355,7 +372,6 @@ namespace claudia_shared
         // Compute the hypothetical area PDF
         *hypAreaPDensity = lightProb / area;
     }
-
 
 } // namespace claudia_shared
 
