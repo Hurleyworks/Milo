@@ -10,19 +10,57 @@ namespace claudia_shared
 {
     static constexpr float probToSampleEnvLight = 0.25f;
 
-    enum PickRayType
+   /* enum PickRayType
     {
         PickRayType_Primary = 0,
         PickRayType_Visibility,
         NumPickRayTypes
     };
-
+    */
     enum RayType
     {
         RayType_Search = 0,
         RayType_Visibility,
         NumRayTypes
     };
+
+    
+    struct GBufferRayType
+    {
+        enum Value
+        {
+            Primary,
+            NumTypes
+        } value;
+
+        CUDA_DEVICE_FUNCTION constexpr GBufferRayType (Value v = Primary) :
+            value (v) {}
+
+        CUDA_DEVICE_FUNCTION operator uint32_t() const
+        {
+            return static_cast<uint32_t> (value);
+        }
+    };
+
+   /* struct PathTracingRayType
+    {
+        enum Value
+        {
+            Closest,
+            Visibility,
+            NumTypes
+        } value;
+
+        CUDA_DEVICE_FUNCTION constexpr PathTracingRayType (Value v = Closest) :
+            value (v) {}
+
+        CUDA_DEVICE_FUNCTION operator uint32_t() const
+        {
+            return static_cast<uint32_t> (value);
+        }
+    };*/
+
+    constexpr uint32_t maxNumRayTypes = 2;
 
     // In PerspectiveCamera struct in shared.h
     struct PerspectiveCamera
