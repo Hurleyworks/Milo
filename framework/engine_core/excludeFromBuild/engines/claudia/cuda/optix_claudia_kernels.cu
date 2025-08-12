@@ -467,6 +467,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE RGB performNextEventEstimation (
     return ret; // Return the final lighting contribution
 }
 
+#if 0
 // This function calculates various attributes of a surface point
 // given its barycentric coordinates (b1, b2) and the index (primIndex)
 // of the triangle it belongs to. It computes the world-space position,
@@ -546,6 +547,9 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void computeSurfacePoint (
     *hypAreaPDensity = lightProb / area;
 }
 
+
+
+
 // Define a struct called HitPointParameter to hold hit point info
 struct HitPointParameter
 {
@@ -587,6 +591,8 @@ struct HitGroupSBTRecordData
         return *reinterpret_cast<HitGroupSBTRecordData*> (optixGetSbtDataPointer());
     }
 };
+
+#endif
 
 // Define the ray generating kernel for path tracing
 CUDA_DEVICE_KERNEL void RT_RG_NAME (pathTracing)()

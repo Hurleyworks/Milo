@@ -31,7 +31,7 @@ namespace claudia_shared
         float fovY;
         Point3D position;
         Matrix3x3 orientation;
-        float lensSize = 0.0f; // Size of camera aperture
+        float lensSize = 0.0f;      // Size of camera aperture
         float focusDistance = 5.0f; // Distance to focal plane
 
         CUDA_COMMON_FUNCTION Point2D calcScreenPosition (const Point3D& posInWorld) const
@@ -88,14 +88,14 @@ namespace claudia_shared
         OptixTraversableHandle travHandle;
         int2 imageSize;
         uint32_t numAccumFrames;
-        uint32_t bufferIndex;  // TODO: Temporarily commented to debug crash
+        uint32_t bufferIndex; // TODO: Temporarily commented to debug crash
         optixu::BlockBuffer2D<shared::PCG32RNG, 1> rngBuffer;
         optixu::NativeBlockBuffer2D<float4> colorAccumBuffer;
         optixu::NativeBlockBuffer2D<float4> albedoAccumBuffer;
         optixu::NativeBlockBuffer2D<float4> normalAccumBuffer;
         optixu::NativeBlockBuffer2D<float4> flowAccumBuffer;
         PerspectiveCamera camera;
-        PerspectiveCamera prevCamera;  // Previous frame camera for temporal reprojection
+        PerspectiveCamera prevCamera; // Previous frame camera for temporal reprojection
         uint32_t useCameraSpaceNormal : 1;
         uint32_t bounceLimit; // Maximum path length for path tracing
         // Experimental
@@ -113,27 +113,27 @@ namespace claudia_shared
 
         // Area light support
         shared::LightDistribution lightInstDist;
-        uint32_t numLightInsts;                   // Number of emissive instances
-        uint32_t enableAreaLights : 1;            // Enable/disable area lights
-        float areaLightPowerCoeff;                // Area light power multiplier
-        
+        uint32_t numLightInsts;        // Number of emissive instances
+        uint32_t enableAreaLights : 1; // Enable/disable area lights
+        float areaLightPowerCoeff;     // Area light power multiplier
+
         shared::RegularConstantContinuousDistribution2D envLightImportanceMap;
         CUtexObject envLightTexture;
-        
+
         // Material data buffer
         shared::ROBuffer<shared::DisneyData> materialDataBuffer;
-        
+
         // Geometry instance data buffer
         shared::ROBuffer<shared::GeometryInstanceData> geometryInstanceDataBuffer;
-        
+
         // Instance data buffer array (double buffered for async updates)
         shared::ROBuffer<shared::InstanceData> instanceDataBufferArray[2];
-        
+
         // Pick info buffer
-        PickInfo* pickInfoBuffer[2];  // Double buffered
-        
+        PickInfo* pickInfoBuffer[2]; // Double buffered
+
         // Firefly reduction
-        float maxRadiance;  // Maximum radiance value to clamp fireflies
+        float maxRadiance; // Maximum radiance value to clamp fireflies
     };
 
     struct SearchRayPayload
@@ -142,7 +142,7 @@ namespace claudia_shared
         RGB contribution;
         Point3D origin;
         Vector3D direction;
-        float prevDirPDensity;  // PDF of the previous direction for MIS
+        float prevDirPDensity; // PDF of the previous direction for MIS
         struct
         {
             uint32_t pathLength : 30;
@@ -151,8 +151,162 @@ namespace claudia_shared
         };
     };
 
- 
     using SearchRayPayloadSignature = optixu::PayloadSignature<shared::PCG32RNG, SearchRayPayload*, HitPointParams*, RGB*, Normal3D*>;
     using VisibilityRayPayloadSignature = optixu::PayloadSignature<float>;
 
 } // namespace claudia_shared
+
+// Global launch parameters for device code
+#if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
+
+#if defined(PURE_CUDA)
+CUDA_CONSTANT_MEM claudia_shared::PipelineLaunchParameters claudia_plp;
+#else
+RT_PIPELINE_LAUNCH_PARAMETERS claudia_shared::PipelineLaunchParameters claudia_plp;
+#endif
+
+#include "../../common/deviceCommon.h"
+
+namespace claudia_shared
+{
+    using namespace shared;
+
+    // This struct is used to fetch geometry instance and material data from
+    // the Shader Binding Table (SBT) in OptiX.
+    struct HitGroupSBTRecordData
+    {
+        uint32_t geomInstSlot; // Geometry instance slot index in the global buffer
+        uint32_t materialSlot; // Material slot index in the material buffer
+
+        // Static member function to retrieve the SBT record data
+        CUDA_DEVICE_FUNCTION CUDA_INLINE static const HitGroupSBTRecordData& get()
+        {
+            // Use optixGetSbtDataPointer() to get the pointer to the SBT data
+            // Cast the pointer to type HitGroupSBTRecordData and dereference it
+            return *reinterpret_cast<HitGroupSBTRecordData*> (optixGetSbtDataPointer());
+        }
+    };
+
+    // Define a struct called HitPointParameter to hold hit point info
+    struct HitPointParameter
+    {
+        float b1, b2;      // Barycentric coordinates
+        int32_t primIndex; // Index of the primitive hit by the ray
+
+        // Static member function to get hit point parameters
+        CUDA_DEVICE_FUNCTION CUDA_INLINE static HitPointParameter get()
+        {
+            HitPointParameter ret; // Create an instance of the struct
+
+            // Get barycentric coordinates from OptiX API
+            float2 bc = optixGetTriangleBarycentrics();
+
+            // Store the barycentric coordinates in the struct
+            ret.b1 = bc.x;
+            ret.b2 = bc.y;
+
+            // Get the index of the primitive hit by the ray from OptiX API
+            ret.primIndex = optixGetPrimitiveIndex();
+
+            // Return the populated struct
+            return ret;
+        }
+    };
+
+    // Check if current pixel is under cursor
+    CUDA_DEVICE_FUNCTION CUDA_INLINE bool isCursorPixel()
+    {
+       // return claudia_plp.f->mousePosition == make_int2 (optixGetLaunchIndex());
+        return false;
+    }
+
+    // Get debug print status
+    CUDA_DEVICE_FUNCTION CUDA_INLINE bool getDebugPrintEnabled()
+    {
+        //return claudia_plp.f->enableDebugPrint;
+        return false;
+    }
+
+   // This function calculates various attributes of a surface point
+    // given its barycentric coordinates (b1, b2) and the index (primIndex)
+    // of the triangle it belongs to. It computes the world-space position,
+    // shading normal, texture coordinates, and so forth for this surface point.
+    // It also computes a hypothetical area PDF (hypAreaPDensity) that could
+    // be used in light sampling.
+    CUDA_DEVICE_FUNCTION CUDA_INLINE void computeSurfacePoint (
+        const shared::GeometryInstanceData& geomInst,
+        uint32_t primIndex, float b1, float b2,
+        const Point3D& referencePoint,
+        Point3D* positionInWorld, Normal3D* shadingNormalInWorld, Vector3D* texCoord0DirInWorld,
+        Normal3D* geometricNormalInWorld, Point2D* texCoord,
+        float* hypAreaPDensity)
+    {
+        // Fetch the vertices of the triangle given its index
+        const Triangle& tri = geomInst.triangleBuffer[primIndex];
+        const Vertex& v0 = geomInst.vertexBuffer[tri.index0];
+        const Vertex& v1 = geomInst.vertexBuffer[tri.index1];
+        const Vertex& v2 = geomInst.vertexBuffer[tri.index2];
+
+        // Transform vertex positions to world space
+        const Point3D p[3] = {
+            transformPointFromObjectToWorldSpace (v0.position),
+            transformPointFromObjectToWorldSpace (v1.position),
+            transformPointFromObjectToWorldSpace (v2.position),
+        };
+
+        // Calculate barycentric coordinates
+        float b0 = 1 - (b1 + b2);
+
+        // Compute the position in world space using barycentric coordinates
+        *positionInWorld = b0 * p[0] + b1 * p[1] + b2 * p[2];
+
+        // Compute interpolated shading normal and texture direction
+        Normal3D shadingNormal = b0 * v0.normal + b1 * v1.normal + b2 * v2.normal;
+        Vector3D texCoord0Dir = b0 * v0.texCoord0Dir + b1 * v1.texCoord0Dir + b2 * v2.texCoord0Dir;
+
+        // Compute geometric normal and area of the triangle
+        Normal3D geometricNormal (cross (p[1] - p[0], p[2] - p[0]));
+        float area = 0.5f * length (geometricNormal);
+
+        // Compute the texture coordinates
+        *texCoord = b0 * v0.texCoord + b1 * v1.texCoord + b2 * v2.texCoord;
+
+        // Transform shading normal and texture direction to world space
+        *shadingNormalInWorld = normalize (transformNormalFromObjectToWorldSpace (shadingNormal));
+        *texCoord0DirInWorld = normalize (transformVectorFromObjectToWorldSpace (texCoord0Dir));
+        *geometricNormalInWorld = normalize (geometricNormal);
+
+        // Check for invalid normals and give them a default value
+        if (!shadingNormalInWorld->allFinite())
+        {
+            *shadingNormalInWorld = Normal3D (0, 0, 1);
+            *texCoord0DirInWorld = Vector3D (1, 0, 0);
+        }
+
+        // Check for invalid texture directions and correct them
+        if (!texCoord0DirInWorld->allFinite())
+        {
+            Vector3D bitangent;
+            makeCoordinateSystem (*shadingNormalInWorld, texCoord0DirInWorld, &bitangent);
+        }
+
+        // Compute the probability of sampling this light
+        float lightProb = 1.0f;
+        if (claudia_plp.envLightTexture && claudia_plp.enableEnvLight)
+            lightProb *= (1 - probToSampleEnvLight);
+
+        // Check for invalid probabilities
+        if (!isfinite (lightProb))
+        {
+            *hypAreaPDensity = 0.0f;
+            return;
+        }
+
+        // Compute the hypothetical area PDF
+        *hypAreaPDensity = lightProb / area;
+    }
+
+
+} // namespace claudia_shared
+
+#endif // __CUDA_ARCH__
