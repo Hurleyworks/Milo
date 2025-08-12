@@ -79,8 +79,18 @@ private:
     std::shared_ptr<class ClaudiaDenoiserHandler> denoiserHandler_;
     
     // Launch parameters
+   // claudia_shared::PipelineLaunchParameters plp_;
+   // CUdeviceptr plpOnDevice_ = 0;
+
+     // Pipeline parameter structures
+    claudia_shared::StaticPipelineLaunchParameters static_plp_;
+    claudia_shared::PerFramePipelineLaunchParameters per_frame_plp_;
     claudia_shared::PipelineLaunchParameters plp_;
-    CUdeviceptr plpOnDevice_ = 0;
+
+    // Device memory for pipeline parameters
+    CUdeviceptr static_plp_on_device_ = 0;
+    CUdeviceptr per_frame_plp_on_device_ = 0;
+    CUdeviceptr plp_on_device_ = 0;
     
     // Camera state
     claudia_shared::PerspectiveCamera lastCamera_;

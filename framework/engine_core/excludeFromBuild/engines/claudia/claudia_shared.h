@@ -121,7 +121,7 @@ namespace claudia_shared
         uint16_t qbcC;
     };
 
-    struct PipelineLaunchParameters
+    struct StaticPipelineLaunchParameters
     {
         OptixTraversableHandle travHandle;
         int2 imageSize;
@@ -173,6 +173,15 @@ namespace claudia_shared
         // Firefly reduction
         float maxRadiance; // Maximum radiance value to clamp fireflies
     };
+    struct PerFramePipelineLaunchParameters
+    {
+    };
+
+     struct PipelineLaunchParameters
+    {
+        StaticPipelineLaunchParameters* s;
+        PerFramePipelineLaunchParameters* f;
+    };
 
     struct SearchRayPayload
     {
@@ -188,6 +197,9 @@ namespace claudia_shared
             uint32_t deltaSampled : 1;
         };
     };
+
+
+
 
     using SearchRayPayloadSignature = optixu::PayloadSignature<shared::PCG32RNG, SearchRayPayload*, HitPointParams*, RGB*, Normal3D*>;
     using VisibilityRayPayloadSignature = optixu::PayloadSignature<float>;

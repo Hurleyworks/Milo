@@ -25,6 +25,22 @@ void ClaudiaEngine::initialize(RenderContext* ctx)
     // Call base class initialization
     // This will set up renderContext_, context_, ptxManager_ and initialize dimensions
     BaseRenderingEngine::initialize(ctx);
+
+
+    // Allocate device memory for pipeline parameters
+    CUDADRV_CHECK (cuMemAlloc (&static_plp_on_device_, sizeof (static_plp_)));
+    CUDADRV_CHECK (cuMemAlloc (&per_frame_plp_on_device_, sizeof (per_frame_plp_)));
+    CUDADRV_CHECK (cuMemAlloc (&plp_on_device_, sizeof (plp_)));
+
+     // Set up the pipeline parameter pointers
+    plp_.s = reinterpret_cast<claudia_shared::StaticPipelineLaunchParameters*> (static_plp_on_device_);
+    plp_.f = reinterpret_cast<claudia_shared::PerFramePipelineLaunchParameters*> (per_frame_plp_on_device_);
+
+
+     // Initialize parameter structures to defaults
+    static_plp_ = {};
+    per_frame_plp_ = {};
+
     
     if (!isInitialized_)
     {
@@ -122,15 +138,32 @@ void ClaudiaEngine::cleanup()
     
     LOG(INFO) << "ClaudiaEngine::cleanup()";
     
-    // Clean up device memory
-    if (plpOnDevice_)
+    //// Clean up device memory
+    //if (plpOnDevice_)
+    //{
+    //    try {
+    //        CUDADRV_CHECK(cuMemFree(plpOnDevice_));
+    //    } catch (...) {
+    //        LOG(WARNING) << "Failed to free plpOnDevice_";
+    //    }
+    //    plpOnDevice_ = 0;
+    //}
+
+    // Free device memory
+    if (static_plp_on_device_)
     {
-        try {
-            CUDADRV_CHECK(cuMemFree(plpOnDevice_));
-        } catch (...) {
-            LOG(WARNING) << "Failed to free plpOnDevice_";
-        }
-        plpOnDevice_ = 0;
+        CUDADRV_CHECK (cuMemFree (static_plp_on_device_));
+        static_plp_on_device_ = 0;
+    }
+    if (per_frame_plp_on_device_)
+    {
+        CUDADRV_CHECK (cuMemFree (per_frame_plp_on_device_));
+        per_frame_plp_on_device_ = 0;
+    }
+    if (plp_on_device_)
+    {
+        CUDADRV_CHECK (cuMemFree (plp_on_device_));
+        plp_on_device_ = 0;
     }
     
     
@@ -348,7 +381,7 @@ void ClaudiaEngine::render(const mace::InputEvent& input, bool updateMotion, uin
        /* LOG(DBUG) << "Launching OptiX pipeline:"
                   << " dimensions=" << renderWidth_ << "x" << renderHeight_
                   << " numAccumFrames=" << numAccumFrames_
-                  << " IAS handle=" << plp_.travHandle;*/
+                  << " IAS handle=" << plp_.s->travHandle;*/
         
         // Launch the path tracing pipeline with exact render dimensions
         try
@@ -835,80 +868,80 @@ void ClaudiaEngine::updateLaunchParameters(const mace::InputEvent& input)
     }
     
     // Update path tracing launch parameters
-    plp_.travHandle = 0;  // Default to 0
+    plp_.s->travHandle = 0;  // Default to 0
     if (sceneHandler_)
     {
         // Get IAS handle from scene handler
-        plp_.travHandle = sceneHandler_->getHandle();
+        plp_.s->travHandle = sceneHandler_->getHandle();
     }
     
-    plp_.imageSize = make_int2(renderWidth_, renderHeight_);
-    plp_.numAccumFrames = numAccumFrames_;
-    plp_.bufferIndex = frameCounter_ & 1;  // TODO: Temporarily commented to debug crash
-    plp_.camera = lastCamera_;
-    plp_.prevCamera = prevCamera_;  // For temporal reprojection
-    plp_.useCameraSpaceNormal = 1;
-    plp_.bounceLimit = 8;  // Maximum path length
+    plp_.s->imageSize = make_int2(renderWidth_, renderHeight_);
+    plp_.s->numAccumFrames = numAccumFrames_;
+    plp_.s->bufferIndex = frameCounter_ & 1;  // TODO: Temporarily commented to debug crash
+    plp_.s->camera = lastCamera_;
+    plp_.s->prevCamera = prevCamera_;  // For temporal reprojection
+    plp_.s->useCameraSpaceNormal = 1;
+    plp_.s->bounceLimit = 8;  // Maximum path length
     
     // Experimental glass parameters (disabled)
-    plp_.makeAllGlass = 0;
-    plp_.globalGlassType = 1;
-    plp_.globalGlassIOR = 1.52f;
-    plp_.globalTransmittanceDist = 1.0f;
+    plp_.s->makeAllGlass = 0;
+    plp_.s->globalGlassType = 1;
+    plp_.s->globalGlassIOR = 1.52f;
+    plp_.s->globalTransmittanceDist = 1.0f;
     
     // Firefly reduction parameter
-    plp_.maxRadiance = DEFAULT_MAX_RADIANCE;  // Default value
+    plp_.s->maxRadiance = DEFAULT_MAX_RADIANCE;  // Default value
     
     // Environment light parameters from property system
     const PropertyService& properties = renderContext_->getPropertyService();
     if (properties.renderProps)
     {
         // Get firefly reduction parameter
-        plp_.maxRadiance = properties.renderProps->getValOr<float>(RenderKey::MaxRadiance, DEFAULT_MAX_RADIANCE);
+        plp_.s->maxRadiance = properties.renderProps->getValOr<float>(RenderKey::MaxRadiance, DEFAULT_MAX_RADIANCE);
         
         // Check if environment rendering is enabled
-        plp_.enableEnvLight = properties.renderProps->getValOr<bool>(RenderKey::RenderEnviro, DEFAULT_RENDER_ENVIRO) ? 1 : 0;
+        plp_.s->enableEnvLight = properties.renderProps->getValOr<bool>(RenderKey::RenderEnviro, DEFAULT_RENDER_ENVIRO) ? 1 : 0;
         
         // EnviroIntensity is already a coefficient (0-2 range)
-        plp_.envLightPowerCoeff = properties.renderProps->getValOr<float>(RenderKey::EnviroIntensity, DEFAULT_ENVIRO_INTENSITY_PERCENT);
+        plp_.s->envLightPowerCoeff = properties.renderProps->getValOr<float>(RenderKey::EnviroIntensity, DEFAULT_ENVIRO_INTENSITY_PERCENT);
         
         // EnviroRotation is in degrees, convert to radians for the shader
         float envRotationDegrees = properties.renderProps->getValOr<float>(RenderKey::EnviroRotation, DEFAULT_ENVIRO_ROTATION);
-        plp_.envLightRotation = envRotationDegrees * (M_PI / 180.0f);
+        plp_.s->envLightRotation = envRotationDegrees * (M_PI / 180.0f);
         
         // Use solid background when environment rendering is disabled
-        plp_.useSolidBackground = properties.renderProps->getValOr<bool>(RenderKey::RenderEnviro, DEFAULT_RENDER_ENVIRO) ? 0 : 1;
+        plp_.s->useSolidBackground = properties.renderProps->getValOr<bool>(RenderKey::RenderEnviro, DEFAULT_RENDER_ENVIRO) ? 0 : 1;
         
         // Background color when not using environment
         Eigen::Vector3d bgColor = properties.renderProps->getValOr<Eigen::Vector3d>(RenderKey::BackgroundColor, DEFAULT_BACKGROUND_COLOR);
-        plp_.backgroundColor = make_float3(bgColor.x(), bgColor.y(), bgColor.z());
+        plp_.s->backgroundColor = make_float3(bgColor.x(), bgColor.y(), bgColor.z());
     }
     else
     {
         // Fallback to defaults if properties not available
-        plp_.enableEnvLight = DEFAULT_RENDER_ENVIRO ? 1 : 0;
-        plp_.envLightPowerCoeff = DEFAULT_ENVIRO_INTENSITY_PERCENT;
-        plp_.envLightRotation = DEFAULT_ENVIRO_ROTATION * (M_PI / 180.0f);
-        plp_.useSolidBackground = DEFAULT_RENDER_ENVIRO ? 0 : 1;
-        plp_.backgroundColor = make_float3(DEFAULT_BACKGROUND_COLOR.x(), DEFAULT_BACKGROUND_COLOR.y(), DEFAULT_BACKGROUND_COLOR.z());
+        plp_.s->enableEnvLight = DEFAULT_RENDER_ENVIRO ? 1 : 0;
+        plp_.s->envLightPowerCoeff = DEFAULT_ENVIRO_INTENSITY_PERCENT;
+        plp_.s->envLightRotation = DEFAULT_ENVIRO_ROTATION * (M_PI / 180.0f);
+        plp_.s->useSolidBackground = DEFAULT_RENDER_ENVIRO ? 0 : 1;
+        plp_.s->backgroundColor = make_float3(DEFAULT_BACKGROUND_COLOR.x(), DEFAULT_BACKGROUND_COLOR.y(), DEFAULT_BACKGROUND_COLOR.z());
     }
     
     // Set environment texture if available
-    plp_.envLightTexture = 0;
+    plp_.s->envLightTexture = 0;
     if (renderContext_)
     {
         auto& handlers = renderContext_->getHandlers();
         if (handlers.skyDomeHandler && handlers.skyDomeHandler->hasEnvironmentTexture())
         {
-            plp_.envLightTexture = handlers.skyDomeHandler->getEnvironmentTexture();
+            plp_.s->envLightTexture = handlers.skyDomeHandler->getEnvironmentTexture();
             
             // Get the environment light importance map
-            handlers.skyDomeHandler->getImportanceMap().getDeviceType(&plp_.envLightImportanceMap);
+            handlers.skyDomeHandler->getImportanceMap().getDeviceType(&plp_.s->envLightImportanceMap);
         }
         else
         {
             // Initialize with empty distribution
-            plp_.envLightImportanceMap = shared::RegularConstantContinuousDistribution2D();
+            plp_.s->envLightImportanceMap = shared::RegularConstantContinuousDistribution2D();
         }
     }
     
@@ -920,67 +953,67 @@ void ClaudiaEngine::updateLaunchParameters(const mace::InputEvent& input)
         sceneHandler_->buildLightInstanceDistribution();
         
         // Get the device representation of the light distribution
-        sceneHandler_->getLightInstDistribution().getDeviceType(&plp_.lightInstDist);
-        plp_.numLightInsts = sceneHandler_->getNumEmissiveInstances();
+        sceneHandler_->getLightInstDistribution().getDeviceType(&plp_.s->lightInstDist);
+        plp_.s->numLightInsts = sceneHandler_->getNumEmissiveInstances();
         
         // Read area light settings from properties
         if (properties.renderProps)
         {
             bool enableAreaLights = properties.renderProps->getValOr<bool>(RenderKey::EnableAreaLights, DEFAULT_ENABLE_AREA_LIGHTS);
-            plp_.enableAreaLights = (enableAreaLights && plp_.numLightInsts > 0) ? 1 : 0;
-            plp_.areaLightPowerCoeff = properties.renderProps->getValOr<float>(RenderKey::AreaLightPower, DEFAULT_AREA_LIGHT_POWER);
+            plp_.s->enableAreaLights = (enableAreaLights && plp_.s->numLightInsts > 0) ? 1 : 0;
+            plp_.s->areaLightPowerCoeff = properties.renderProps->getValOr<float>(RenderKey::AreaLightPower, DEFAULT_AREA_LIGHT_POWER);
         }
         else
         {
             // Fallback to defaults
-            plp_.enableAreaLights = plp_.numLightInsts > 0 ? 1 : 0;
-            plp_.areaLightPowerCoeff = DEFAULT_AREA_LIGHT_POWER;
+            plp_.s->enableAreaLights = plp_.s->numLightInsts > 0 ? 1 : 0;
+            plp_.s->areaLightPowerCoeff = DEFAULT_AREA_LIGHT_POWER;
         }
     }
     else
     {
         // Set to empty distribution if no scene handler
-        plp_.lightInstDist = shared::LightDistribution();
-        plp_.numLightInsts = 0;
-        plp_.enableAreaLights = 0;
-        plp_.areaLightPowerCoeff = 1.0f;
+        plp_.s->lightInstDist = shared::LightDistribution();
+        plp_.s->numLightInsts = 0;
+        plp_.s->enableAreaLights = 0;
+        plp_.s->areaLightPowerCoeff = 1.0f;
     }
     
     // Set material data buffer from material handler
     if (materialHandler_ && materialHandler_->getMaterialDataBuffer())
     {
-        plp_.materialDataBuffer = materialHandler_->getMaterialDataBuffer()->getROBuffer<shared::enableBufferOobCheck>();
+        plp_.s->materialDataBuffer = materialHandler_->getMaterialDataBuffer()->getROBuffer<shared::enableBufferOobCheck>();
     }
     else
     {
         // Set to empty buffer if no material handler
-        plp_.materialDataBuffer = shared::ROBuffer<shared::DisneyData>();
+        plp_.s->materialDataBuffer = shared::ROBuffer<shared::DisneyData>();
     }
     
     // Set geometry instance data buffer from model handler
     if (modelHandler_ && modelHandler_->getGeometryInstanceDataBuffer())
     {
-        plp_.geometryInstanceDataBuffer = modelHandler_->getGeometryInstanceDataBuffer()->getROBuffer<shared::enableBufferOobCheck>();
+        plp_.s->geometryInstanceDataBuffer = modelHandler_->getGeometryInstanceDataBuffer()->getROBuffer<shared::enableBufferOobCheck>();
     }
     else
     {
         // Set to empty buffer if no model handler
-        plp_.geometryInstanceDataBuffer = shared::ROBuffer<shared::GeometryInstanceData>();
+        plp_.s->geometryInstanceDataBuffer = shared::ROBuffer<shared::GeometryInstanceData>();
     }
     
     // Set buffer pointers from RenderHandler
     if (renderHandler_)
     {
-        plp_.colorAccumBuffer = renderHandler_->getBeautyAccumSurfaceObject();
-        plp_.albedoAccumBuffer = renderHandler_->getAlbedoAccumSurfaceObject();
-        plp_.normalAccumBuffer = renderHandler_->getNormalAccumSurfaceObject();
-        plp_.flowAccumBuffer = renderHandler_->getFlowAccumSurfaceObject();
+        plp_.s->colorAccumBuffer = renderHandler_->getBeautyAccumSurfaceObject();
+        plp_.s->albedoAccumBuffer = renderHandler_->getAlbedoAccumSurfaceObject();
+        plp_.s->normalAccumBuffer = renderHandler_->getNormalAccumSurfaceObject();
+        plp_.s->flowAccumBuffer = renderHandler_->getFlowAccumSurfaceObject();
     }
     
     // Set RNG buffer
     if (rngBuffer_.isInitialized())
     {
-        plp_.rngBuffer = rngBuffer_.getBlockBuffer2D();
+        plp_.s->rngBuffer = rngBuffer_.getBlockBuffer2D();
     }
     
     // Set pick info buffer pointers
@@ -988,7 +1021,7 @@ void ClaudiaEngine::updateLaunchParameters(const mace::InputEvent& input)
     {
         for (int i = 0; i < 2; ++i)
         {
-            plp_.pickInfoBuffer[i] = reinterpret_cast<claudia_shared::PickInfo*>(
+            plp_.s->pickInfoBuffer[i] = reinterpret_cast<claudia_shared::PickInfo*>(
                 renderHandler_->getPickInfoPointer(i));
         }
     }
@@ -1001,7 +1034,7 @@ void ClaudiaEngine::updateLaunchParameters(const mace::InputEvent& input)
             auto* buffer = sceneHandler_->getInstanceDataBuffer(i);
             if (buffer && buffer->isInitialized())
             {
-                plp_.instanceDataBufferArray[i] = buffer->getROBuffer<shared::enableBufferOobCheck>();
+                plp_.s->instanceDataBufferArray[i] = buffer->getROBuffer<shared::enableBufferOobCheck>();
             }
         }
     }
