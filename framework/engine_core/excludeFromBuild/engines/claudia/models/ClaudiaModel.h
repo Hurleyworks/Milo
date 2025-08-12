@@ -59,6 +59,9 @@ public:
     // Virtual method to populate geometry instance data in the global buffer
     // Derived classes should implement this based on their geometry type
     virtual void populateGeometryInstanceData(shared::GeometryInstanceData* geomInstData) {}
+    
+    // Update material slot in geometry instance data
+    virtual void updateMaterialSlot(uint32_t slot, shared::GeometryInstanceData* geomInstData) {}
 
 protected:
     optixu::Instance instance;
@@ -189,8 +192,8 @@ public:
         geomInstData->geomInstSlot = geomInstSlot_;
     }
     
-    // Update material slot in geometry instance data
-    void updateMaterialSlot(uint32_t slot, shared::GeometryInstanceData* geomInstData)
+    // Override to update material slot in geometry instance data
+    void updateMaterialSlot(uint32_t slot, shared::GeometryInstanceData* geomInstData) override
     {
         if (geomInstData)
         {

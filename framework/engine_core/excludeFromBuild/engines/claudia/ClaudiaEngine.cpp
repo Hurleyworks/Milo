@@ -964,7 +964,7 @@ void ClaudiaEngine::updateSBT()
     scene_.generateShaderBindingTableLayout(&hitGroupSbtSize);
     LOG(DBUG) << "Updated scene hit group SBT size: " << hitGroupSbtSize << " bytes";
     
-    #if 0
+    #if 1
     
     // Update hit group SBT for GBuffer pipeline
     if (gbufferPipeline_ && gbufferPipeline_->optixPipeline && hitGroupSbtSize > 0)
@@ -1560,7 +1560,14 @@ void ClaudiaEngine::updateCameraSensor()
 
 void ClaudiaEngine::renderGBuffer(CUstream stream)
 {
-    return;
+   // return;
+
+    // Skip G-buffer rendering if scene is empty
+    if (!sceneHandler_ || sceneHandler_->getHandle() == 0)
+    {
+        LOG(DBUG) << "Skipping G-buffer rendering - empty scene";
+        return;
+    }
 
     if (!gbufferPipeline_ || !gbufferPipeline_->optixPipeline)
     {

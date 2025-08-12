@@ -315,6 +315,7 @@ namespace claudia_shared
     struct HitGroupSBTRecordData
     {
         uint32_t geomInstSlot;
+        uint32_t materialSlot;
 
         CUDA_DEVICE_FUNCTION CUDA_INLINE static const HitGroupSBTRecordData& get()
         {

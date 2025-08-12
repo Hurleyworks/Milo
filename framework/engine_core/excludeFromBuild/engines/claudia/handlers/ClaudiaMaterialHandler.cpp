@@ -344,6 +344,22 @@ optixu::Material ClaudiaMaterialHandler::createDisneyMaterial (const CgMaterial&
     return mat;
 }
 
+// Get the material slot index for a given material
+uint32_t ClaudiaMaterialHandler::getMaterialSlot(const optixu::Material& mat) const
+{
+    // The material slot is stored in the material's user data
+    uint32_t materialSlot = SlotFinder::InvalidSlotIndex;
+    uint32_t size = 0;
+    mat.getUserData(&materialSlot, &size);
+    
+    if (size == sizeof(uint32_t))
+    {
+        return materialSlot;
+    }
+    
+    return SlotFinder::InvalidSlotIndex;
+}
+
 // Process texture information to load and configure a texture
 void ClaudiaMaterialHandler::processTextureInfo (
     const std::optional<CgTextureInfo>& texInfo,

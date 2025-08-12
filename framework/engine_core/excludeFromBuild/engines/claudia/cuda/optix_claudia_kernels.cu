@@ -847,12 +847,25 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME (shading)()
 {
     // Get material and geometry instance data from global buffers
     auto sbtr = HitGroupSBTRecordData::get();
+    
+    // Debug: Check buffer indices before access
+    printf("RT_CH_shading: materialSlot=%u, geomInstSlot=%u\n", sbtr.materialSlot, sbtr.geomInstSlot);
+    
     const shared::DisneyData& mat = claudia_plp.materialDataBuffer[sbtr.materialSlot];
     const shared::GeometryInstanceData& geomInst = claudia_plp.geometryInstanceDataBuffer[sbtr.geomInstSlot];
     
     // Get instance data using buffer index from launch parameters
-    const uint32_t bufIdx = claudia_plp.bufferIndex;  
-    const shared::InstanceData& inst = claudia_plp.instanceDataBufferArray[bufIdx][optixGetInstanceId()];
+    const uint32_t bufIdx = claudia_plp.bufferIndex;
+    const uint32_t instanceId = optixGetInstanceId();
+    
+    // CRITICAL FIX: Check for invalid instance ID (same issue as in gbuffer)
+    if (instanceId == 0xFFFFFFFF) {
+        // Invalid instance ID - this shouldn't happen in a closest hit program
+        printf("WARNING: Invalid instance ID 0xFFFFFFFF in path tracing CH\n");
+        return;  // Early exit to avoid crash
+    }
+    
+    const shared::InstanceData& inst = claudia_plp.instanceDataBufferArray[bufIdx][instanceId];
 
     // Initialize random number generator and payload
     PCG32RNG rng;

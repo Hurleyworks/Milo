@@ -484,9 +484,13 @@ void ClaudiaSceneHandler::createInstance (RenderableWeakRef& weakNode)
 {
     // debug_assert (false);
 
-    if (weakNode.expired()) return;
+    if (weakNode.expired()) {
+        LOG(WARNING) << "createInstance called with expired node";
+        return;
+    }
 
     RenderableNode node = weakNode.lock();
+    LOG(DBUG) << "Creating instance for node: " << node->getName() << " (clientID: " << node->getClientID() << ")";
 
     if (travHandle == 0)
         init();
@@ -513,7 +517,17 @@ void ClaudiaSceneHandler::createInstance (RenderableWeakRef& weakNode)
     node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
 
     uint32_t index = ias.findChildIndex (instance);
+    if (index == 0xFFFFFFFF) {
+        LOG(CRITICAL) << "Failed to find instance in IAS after adding it!";
+        return;
+    }
     nodeMap[index] = weakNode;
+    
+    // Set the instance ID to match the index in the IAS
+    // This is what optixGetInstanceId() will return in the CUDA kernels
+    instance.setID(index);
+    
+    LOG(INFO) << "Successfully created instance with index " << index << " for " << node->getName();
 
     GAS* gasData = optiXModel->getGAS();
     gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, ctx->getASBuildScratchMem());
@@ -528,6 +542,8 @@ void ClaudiaSceneHandler::createInstance (RenderableWeakRef& weakNode)
 
 void ClaudiaSceneHandler::populateInstanceData(uint32_t instanceIndex, const RenderableNode& node)
 {
+    LOG(DBUG) << "Populating instance data at index " << instanceIndex << " for " << node->getName();
+    
     if (instanceIndex >= maxNumInstances)
     {
         LOG(WARNING) << "Instance index " << instanceIndex << " exceeds max instances " << maxNumInstances;
@@ -642,7 +658,15 @@ void ClaudiaSceneHandler::createGeometryInstance (RenderableWeakRef& weakNode)
     node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
 
     uint32_t index = ias.findChildIndex (instance);
+    if (index == 0xFFFFFFFF) {
+        LOG(CRITICAL) << "Failed to find instance in IAS after adding it!";
+        return;
+    }
     nodeMap[index] = weakNode;
+    
+    // Set the instance ID to match the index in the IAS
+    // This is what optixGetInstanceId() will return in the CUDA kernels
+    instance.setID(index);
 
     prepareForBuild();
 
@@ -692,6 +716,9 @@ void ClaudiaSceneHandler::createPhysicsPhantom (RenderableWeakRef& weakNode)
 
         uint32_t index = ias.findChildIndex (instance);
         nodeMap[index] = weakNode;
+        
+        // CRITICAL: Set the instance ID so OptiX can properly identify it
+        instance.setID(index);
 
         prepareForBuild();
 
@@ -745,7 +772,15 @@ void ClaudiaSceneHandler::createInstanceList (const WeakRenderableList& weakNode
             node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
 
             uint32_t index = ias.findChildIndex (instance);
+            if (index == 0xFFFFFFFF) {
+                LOG(CRITICAL) << "Failed to find instance in IAS after adding it!";
+                continue;  // Skip this instance
+            }
             nodeMap[index] = weakNode;
+            
+            // Set the instance ID to match the index in the IAS
+            // This is what optixGetInstanceId() will return in the CUDA kernels
+            instance.setID(index);
             
             // Store index for later instance data population
             populateInstanceData(index, node);
@@ -780,7 +815,15 @@ void ClaudiaSceneHandler::createInstanceList (const WeakRenderableList& weakNode
             node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
 
             uint32_t index = ias.findChildIndex (instance);
+            if (index == 0xFFFFFFFF) {
+                LOG(CRITICAL) << "Failed to find instance in IAS after adding it!";
+                continue;  // Skip this instance
+            }
             nodeMap[index] = weakNode;
+            
+            // Set the instance ID to match the index in the IAS
+            // This is what optixGetInstanceId() will return in the CUDA kernels
+            instance.setID(index);
 
             GAS* gasData = optiXModel->getGAS();
             gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, ctx->getASBuildScratchMem());

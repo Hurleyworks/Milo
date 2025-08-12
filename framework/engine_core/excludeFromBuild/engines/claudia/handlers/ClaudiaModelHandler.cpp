@@ -194,6 +194,7 @@ void ClaudiaModelHandler::addCgModel(RenderableWeakRef weakNode)
 
         // Now create materials for each surface
         ClaudiaTriangleModel* triangleModel = dynamic_cast<ClaudiaTriangleModel*>(claudiaModel.get());
+        uint32_t primaryMaterialSlot = SlotFinder::InvalidSlotIndex;
         if (triangleModel)
         {
             sabi::CgModelPtr model = node->getModel();
@@ -207,6 +208,10 @@ void ClaudiaModelHandler::addCgModel(RenderableWeakRef weakNode)
                     optixu::Material mat = materialHandler_->createDisneyMaterial(
                         model->S[i].cgMaterial, contentFolder, model);
                     triangleModel->getGeometryInstance()->setMaterial(0, i, mat);
+                    // Store the first material slot as the primary one
+                    if (i == 0) {
+                        primaryMaterialSlot = materialHandler_->getMaterialSlot(mat);
+                    }
                 }
             }
             else
@@ -214,6 +219,8 @@ void ClaudiaModelHandler::addCgModel(RenderableWeakRef weakNode)
                 optixu::Material mat = materialHandler_->createDisneyMaterial(
                     model->S[0].cgMaterial, contentFolder, model);
                 triangleModel->getGeometryInstance()->setMaterial(0, 0, mat);
+                // Get the material slot
+                primaryMaterialSlot = materialHandler_->getMaterialSlot(mat);
             }
         }
 
@@ -225,6 +232,15 @@ void ClaudiaModelHandler::addCgModel(RenderableWeakRef weakNode)
         {
             shared::GeometryInstanceData* geomInstDataOnHost = geometryInstanceDataBuffer_.map();
             claudiaModel->populateGeometryInstanceData(&geomInstDataOnHost[geomInstSlot]);
+            
+            // Update the material slot with the actual material index
+            if (primaryMaterialSlot != SlotFinder::InvalidSlotIndex) {
+                claudiaModel->updateMaterialSlot(primaryMaterialSlot, &geomInstDataOnHost[geomInstSlot]);
+                LOG(DBUG) << "Updated material slot to " << primaryMaterialSlot << " for geometry instance " << geomInstSlot;
+            } else {
+                LOG(WARNING) << "No valid material slot for geometry instance " << geomInstSlot;
+            }
+            
             geometryInstanceDataBuffer_.unmap();
             LOG(DBUG) << "Populated geometry instance data for slot " << geomInstSlot;
         }

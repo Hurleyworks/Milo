@@ -40,6 +40,9 @@ class ClaudiaMaterialHandler
         const CgMaterial& material,              // Source material data
         const std::filesystem::path& materialFolder, // Folder containing texture files
         CgModelPtr model);                       // Model this material is associated with
+    
+    // Get the material slot index for a given material
+    uint32_t getMaterialSlot(const optixu::Material& mat) const;
 
     // Updates an existing material with new properties
     // Allows dynamic modification of material parameters during rendering
