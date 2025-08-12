@@ -83,6 +83,125 @@ namespace claudia_shared
         uint16_t qbcC;
     };
 
+    // GBuffer ray types
+    struct GBufferRayType {
+        enum Value {
+            Primary,
+            NumTypes
+        } value;
+        
+        CUDA_DEVICE_FUNCTION constexpr GBufferRayType(Value v = Primary) : value(v) {}
+        CUDA_DEVICE_FUNCTION operator uint32_t() const { return static_cast<uint32_t>(value); }
+    };
+    
+    // GBuffer data elements (matching RiPR exactly)
+    struct GBuffer0Elements {
+        uint32_t instSlot;
+        uint32_t geomInstSlot;
+        uint32_t primIndex;
+        uint16_t qbcB;  // Quantized barycentric B
+        uint16_t qbcC;  // Quantized barycentric C
+    };
+    
+    struct GBuffer1Elements {
+        Vector2D motionVector;
+    };
+    
+    // GBuffer hit information
+    struct GBufferHitInfo {
+        Point3D positionInWorld;
+        Point3D prevPositionInWorld;
+        Normal3D geometricNormal;
+        Normal3D shadingNormal;
+        Vector3D tangent;
+        Point2D texCoord;
+        uint32_t objectID;
+        uint32_t primitiveID;
+    };
+
+    // NEW: Split parameter structures for better performance and organization
+    // Static parameters - rarely change, contain buffers and textures
+    struct StaticPipelineLaunchParameters
+    {
+        // Image dimensions
+        int2 imageSize;
+        
+        // RNG and accumulation buffers
+        optixu::BlockBuffer2D<shared::PCG32RNG, 1> rngBuffer;
+        optixu::NativeBlockBuffer2D<float4> colorAccumBuffer;
+        optixu::NativeBlockBuffer2D<float4> albedoAccumBuffer;
+        optixu::NativeBlockBuffer2D<float4> normalAccumBuffer;
+        optixu::NativeBlockBuffer2D<float4> flowAccumBuffer;
+        
+        // Environment texture and importance sampling
+        CUtexObject envLightTexture;
+        shared::RegularConstantContinuousDistribution2D envLightImportanceMap;
+        
+        // Material and geometry buffers
+        shared::ROBuffer<shared::DisneyData> materialDataBuffer;
+        shared::ROBuffer<shared::GeometryInstanceData> geometryInstanceDataBuffer;
+        shared::ROBuffer<shared::InstanceData> instanceDataBufferArray[2];
+        
+        // Light distribution for area lights
+        shared::LightDistribution lightInstDist;
+        
+        // GBuffer storage (double buffered)
+        optixu::NativeBlockBuffer2D<GBuffer0Elements> GBuffer0[2];
+        optixu::NativeBlockBuffer2D<GBuffer1Elements> GBuffer1[2];
+        
+        // Pick info buffers
+        PickInfo* pickInfos[2];  // Note: renamed to match RiPR convention
+    };
+
+    // Per-frame parameters - change frequently
+    struct PerFramePipelineLaunchParameters
+    {
+        // Traversable and frame info
+        OptixTraversableHandle travHandle;
+        uint32_t numAccumFrames;
+        uint32_t frameIndex;
+        
+        // Camera state
+        PerspectiveCamera camera;
+        PerspectiveCamera prevCamera;
+        
+        // Mouse interaction
+        int2 mousePosition;
+        
+        // Environment light settings
+        float envLightPowerCoeff;
+        float envLightRotation;
+        
+        // Area light settings
+        uint32_t numLightInsts;
+        float areaLightPowerCoeff;
+        
+        // Render settings (bit flags)
+        uint32_t maxPathLength : 4;
+        uint32_t bufferIndex : 1;
+        uint32_t resetFlowBuffer : 1;
+        uint32_t enableJittering : 1;
+        uint32_t enableEnvLight : 1;
+        uint32_t enableBumpMapping : 1;
+        uint32_t enableAreaLights : 1;
+        uint32_t enableGBuffer : 1;
+        uint32_t useSolidBackground : 1;
+        uint32_t useCameraSpaceNormal : 1;
+        uint32_t enableDebugPrint : 1;
+        uint32_t enableDenoiser : 1;
+        
+        // Experimental glass settings
+        uint32_t makeAllGlass : 1;
+        uint32_t globalGlassType : 1;
+        float globalGlassIOR;
+        float globalTransmittanceDist;
+        
+        // Background and firefly control
+        float3 backgroundColor;
+        float maxRadiance;
+    };
+
+    // OLD: Keep for backward compatibility during migration
     struct PipelineLaunchParameters
     {
         OptixTraversableHandle travHandle;
@@ -134,6 +253,21 @@ namespace claudia_shared
         
         // Firefly reduction
         float maxRadiance;  // Maximum radiance value to clamp fireflies
+        
+        // GBuffer storage (double buffered)
+        optixu::NativeBlockBuffer2D<GBuffer0Elements> GBuffer0[2];
+        optixu::NativeBlockBuffer2D<GBuffer1Elements> GBuffer1[2];
+        
+        // GBuffer control
+        uint32_t enableGBuffer : 1;
+        uint32_t resetMotionBuffer : 1;  // Reset motion vectors for temporal effects
+    };
+
+    // NEW: Split version of PipelineLaunchParameters (like RiPR)
+    struct PipelineLaunchParametersSplit
+    {
+        StaticPipelineLaunchParameters* s;
+        PerFramePipelineLaunchParameters* f;
     };
 
     struct SearchRayPayload
@@ -154,5 +288,138 @@ namespace claudia_shared
  
     using SearchRayPayloadSignature = optixu::PayloadSignature<shared::PCG32RNG, SearchRayPayload*, HitPointParams*, RGB*, Normal3D*>;
     using VisibilityRayPayloadSignature = optixu::PayloadSignature<float>;
+    
+    // GBuffer payload signatures
+    using GBufferRayPayloadSignature = optixu::PayloadSignature<HitPointParams*, PickInfo*>;
+    
+    // Maximum number of ray types for SBT configuration
+    constexpr uint32_t maxNumRayTypes = 2;
 
 } // namespace claudia_shared
+
+// Device-only code section
+#if defined(__CUDA_ARCH__) || defined(OPTIXU_Platform_CodeCompletion)
+
+#if defined(PURE_CUDA)
+CUDA_CONSTANT_MEM claudia_shared::PipelineLaunchParametersSplit claudia_plp_split;
+#else
+RT_PIPELINE_LAUNCH_PARAMETERS claudia_shared::PipelineLaunchParametersSplit claudia_plp_split;
+#endif
+
+#include "../../common/deviceCommon.h"
+
+namespace claudia_shared
+{
+
+    // Hit group SBT record data
+    struct HitGroupSBTRecordData
+    {
+        uint32_t geomInstSlot;
+
+        CUDA_DEVICE_FUNCTION CUDA_INLINE static const HitGroupSBTRecordData& get()
+        {
+            return *reinterpret_cast<HitGroupSBTRecordData*>(optixGetSbtDataPointer());
+        }
+    };
+
+    // Hit point parameter helper
+    struct HitPointParameter
+    {
+        float bcB, bcC;
+        int32_t primIndex;
+
+        CUDA_DEVICE_FUNCTION CUDA_INLINE static HitPointParameter get()
+        {
+            HitPointParameter ret;
+            const float2 bc = optixGetTriangleBarycentrics();
+            ret.bcB = bc.x;
+            ret.bcC = bc.y;
+            ret.primIndex = optixGetPrimitiveIndex();
+            return ret;
+        }
+    };
+
+    // Check if current pixel is under cursor
+    CUDA_DEVICE_FUNCTION CUDA_INLINE bool isCursorPixel()
+    {
+        return claudia_plp_split.f->mousePosition == make_int2(optixGetLaunchIndex());
+    }
+
+    // Get debug print status
+    CUDA_DEVICE_FUNCTION CUDA_INLINE bool getDebugPrintEnabled()
+    {
+        return claudia_plp_split.f->enableDebugPrint;
+    }
+
+    // Compute surface point from barycentric coordinates
+    CUDA_DEVICE_FUNCTION CUDA_INLINE void computeSurfacePoint(
+        const shared::InstanceData& inst,
+        const shared::GeometryInstanceData& geomInst,
+        uint32_t primIndex, float bcB, float bcC,
+        Point3D* positionInWorld,
+        Normal3D* shadingNormalInWorld,
+        Vector3D* texCoord0DirInWorld,
+        Normal3D* geometricNormalInWorld,
+        Point2D* texCoord)
+    {
+        const shared::Triangle& tri = geomInst.triangleBuffer[primIndex];
+        const shared::Vertex& vA = geomInst.vertexBuffer[tri.index0];
+        const shared::Vertex& vB = geomInst.vertexBuffer[tri.index1];
+        const shared::Vertex& vC = geomInst.vertexBuffer[tri.index2];
+        const float bcA = 1 - (bcB + bcC);
+
+        // Compute position in world space
+        const Point3D positionInObj = bcA * vA.position + bcB * vB.position + bcC * vC.position;
+        *positionInWorld = transformPointFromObjectToWorldSpace(positionInObj);
+
+        // Compute geometric normal
+        *geometricNormalInWorld = normalize(
+            transformNormalFromObjectToWorldSpace(Normal3D(cross(vB.position - vA.position, vC.position - vA.position))));
+
+        // Interpolate shading normal
+        const Normal3D shadingNormalInObj = bcA * vA.normal + bcB * vB.normal + bcC * vC.normal;
+        *shadingNormalInWorld = normalize(transformNormalFromObjectToWorldSpace(shadingNormalInObj));
+
+        // Interpolate texture coordinates
+        *texCoord = bcA * vA.texCoord + bcB * vB.texCoord + bcC * vC.texCoord;
+
+        // Compute texture coordinate direction
+        const Vector3D texCoord0DirInObj = bcA * vA.texCoord0Dir + bcB * vB.texCoord0Dir + bcC * vC.texCoord0Dir;
+        *texCoord0DirInWorld = transformVectorFromObjectToWorldSpace(texCoord0DirInObj);
+        *texCoord0DirInWorld = normalize(
+            *texCoord0DirInWorld - dot(*shadingNormalInWorld, *texCoord0DirInWorld) * *shadingNormalInWorld);
+
+        // Handle degenerate cases
+        if (!shadingNormalInWorld->allFinite())
+        {
+            *geometricNormalInWorld = Normal3D(0, 0, 1);
+            *shadingNormalInWorld = Normal3D(0, 0, 1);
+            *texCoord0DirInWorld = Vector3D(1, 0, 0);
+        }
+        if (!texCoord0DirInWorld->allFinite())
+        {
+            Vector3D bitangent;
+            makeCoordinateSystem(*shadingNormalInWorld, texCoord0DirInWorld, &bitangent);
+        }
+    }
+
+    // Normal map reading helper (to be implemented)
+    CUDA_DEVICE_FUNCTION CUDA_INLINE Normal3D readNormalMap(CUtexObject normalMap, const Point2D& texCoord)
+    {
+        // TODO: Implement normal map reading
+        // For now, return neutral normal
+        return Normal3D(0.5f, 0.5f, 1.0f);
+    }
+
+    // Apply bump mapping to shading frame
+    CUDA_DEVICE_FUNCTION CUDA_INLINE void applyBumpMapping(
+        const Normal3D& modLocalNormal,
+        ReferenceFrame* shadingFrame)
+    {
+        // TODO: Implement bump mapping
+        // For now, do nothing
+    }
+
+} // namespace claudia_shared
+
+#endif // __CUDA_ARCH__

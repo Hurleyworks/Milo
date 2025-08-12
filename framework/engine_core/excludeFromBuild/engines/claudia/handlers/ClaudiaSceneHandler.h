@@ -41,6 +41,9 @@ class ClaudiaSceneHandler
     
     // Get the scene
     optixu::Scene* getScene() { return scene_; }
+    
+    // Set the default material for GBuffer pipeline
+    void setDefaultMaterial(optixu::Material mat) { defaultMaterial_ = mat; }
 
     // Creates an instance from a renderable node in the OptiX scene
     void createInstance (RenderableWeakRef& weakNode);
@@ -179,6 +182,9 @@ class ClaudiaSceneHandler
 
     // Scene reference (not owned)
     optixu::Scene* scene_ = nullptr;
+    
+    // Default material for GBuffer pipeline
+    optixu::Material defaultMaterial_;
 
     // Maps instance indices to renderable nodes
     NodeMap nodeMap;

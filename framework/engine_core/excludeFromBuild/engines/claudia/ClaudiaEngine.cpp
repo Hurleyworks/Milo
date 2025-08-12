@@ -103,7 +103,23 @@ void ClaudiaEngine::initialize(RenderContext* ctx)
         }
         rngBuffer_.unmap();
         
-        LOG(INFO) << "RNG buffer initialized for " << renderWidth_ << "x" << renderHeight_;
+        // Initialize GBuffers (double buffered) - following RiPR pattern
+        CUcontext cuContext = renderContext_->getCudaContext();
+        for (int i = 0; i < 2; ++i)
+        {
+            gbuffer0_[i].initialize2D(
+                cuContext, cudau::ArrayElementType::UInt32,
+                (sizeof(claudia_shared::GBuffer0Elements) + 3) / 4,
+                cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+                renderWidth_, renderHeight_, 1);
+            gbuffer1_[i].initialize2D(
+                cuContext, cudau::ArrayElementType::UInt32,
+                (sizeof(claudia_shared::GBuffer1Elements) + 3) / 4,
+                cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+                renderWidth_, renderHeight_, 1);
+        }
+        
+        LOG(INFO) << "RNG buffer and GBuffers initialized for " << renderWidth_ << "x" << renderHeight_;
     }
     else
     {
@@ -196,6 +212,12 @@ void ClaudiaEngine::cleanup()
         rngBuffer_.finalize();
     }
     
+    // Clean up GBuffers
+    for (int i = 0; i < 2; ++i)
+    {
+        gbuffer0_[i].finalize();
+        gbuffer1_[i].finalize();
+    }
     
     // Clean up Claudia-specific denoiser handler
     if (denoiserHandler_)
@@ -338,36 +360,22 @@ void ClaudiaEngine::render(const mace::InputEvent& input, bool updateMotion, uin
         
     }
     
-    // Update launch parameters with current state
-    updateLaunchParameters(input);
+    // Update split parameters
+    updateStaticParameters();  // Could be called less frequently in the future
+    updatePerFrameParameters(input);
     
-    // Launch path tracing kernel - it will handle empty scenes and render the environment
+    // Launch G-buffer generation first
     timer->pathTrace.start(stream);
-    {
-        // Log launch parameters for debugging
-       /* LOG(DBUG) << "Launching OptiX pipeline:"
-                  << " dimensions=" << renderWidth_ << "x" << renderHeight_
-                  << " numAccumFrames=" << numAccumFrames_
-                  << " IAS handle=" << plp_.travHandle;*/
-        
-        // Launch the path tracing pipeline with exact render dimensions
-        try
-        {
-            pathTracePipeline_->optixPipeline.launch(
-                stream,
-                plpOnDevice_,
-                renderWidth_,   // Use exact width, not rounded
-                renderHeight_,  // Use exact height, not rounded
-                1  // depth
-            );
-        }
-        catch (const std::exception& e)
-        {
-            LOG(WARNING) << "OptiX launch failed: " << e.what();
-            timer->frame.stop(stream);
-            return;
-        }
-    }
+    
+    // Render G-buffer
+    renderGBuffer(stream);
+    
+    // Synchronize to ensure G-buffer is complete before path tracing
+    CUDADRV_CHECK(cuStreamSynchronize(stream));
+    
+    // Render path tracing (will be disabled for now)
+    // renderPathTracing(stream);
+    
     timer->pathTrace.stop(stream);
     
     // TODO: Run temporal resampling
@@ -436,6 +444,21 @@ void ClaudiaEngine::setupPipelines()
     
     optixu::Context optixContext = renderContext_->getOptiXContext();
     
+    // Create G-buffer pipeline (matching RiPR)
+    gbufferPipeline_ = std::make_shared<engine_core::RenderPipeline<GBufferEntryPoint>>();
+    gbufferPipeline_->optixPipeline = optixContext.createPipeline();
+    
+    // Configure G-buffer pipeline options
+    gbufferPipeline_->optixPipeline.setPipelineOptions(
+        claudia_shared::GBufferRayPayloadSignature::numDwords, // Payload dwords for G-buffer
+        optixu::calcSumDwords<float2>(),  // Attribute dwords for barycentrics
+        "claudia_plp_split",  // Pipeline launch parameters name - matches CUDA code split structure
+        sizeof(claudia_shared::PipelineLaunchParametersSplit),
+        OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+        OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
+        OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
+    
+    LOG(INFO) << "Claudia G-buffer pipeline configured with payload dwords: " << claudia_shared::GBufferRayPayloadSignature::numDwords;
     
     // Create path tracing pipeline
     pathTracePipeline_ = std::make_shared<engine_core::RenderPipeline<engine_core::PathTracingEntryPoint>>();
@@ -545,12 +568,30 @@ void ClaudiaEngine::createModules()
 {
     LOG(INFO) << "ClaudiaEngine::createModules()";
     
-    if (!ptxManager_ || !pathTracePipeline_ || !pathTracePipeline_->optixPipeline)
+    if (!ptxManager_ || !pathTracePipeline_ || !pathTracePipeline_->optixPipeline || 
+        !gbufferPipeline_ || !gbufferPipeline_->optixPipeline)
     {
         LOG(WARNING) << "PTXManager or Pipelines not ready";
         return;
     }
     
+    // Load PTX for GBuffer pipeline
+    std::vector<char> gbufferPtxData = ptxManager_->getPTXData("optix_claudia_gbuffer");
+    if (gbufferPtxData.empty())
+    {
+        LOG(WARNING) << "Failed to load PTX for optix_claudia_gbuffer";
+        return;
+    }
+    
+    // Create module for GBuffer pipeline (must be created from GBuffer pipeline due to different launch params)
+    std::string gbufferPtxString(gbufferPtxData.begin(), gbufferPtxData.end());
+    gbufferPipeline_->optixModule = gbufferPipeline_->optixPipeline.createModuleFromPTXString(
+        gbufferPtxString,
+        OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+        DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+        DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+    
+    LOG(INFO) << "Claudia GBuffer module created successfully";
     
     // Load PTX for Claudia path tracing kernels
     std::vector<char> claudiaPtxData = ptxManager_->getPTXData("optix_claudia_kernels");
@@ -576,15 +617,52 @@ void ClaudiaEngine::createPrograms()
 {
     LOG(INFO) << "ClaudiaEngine::createPrograms()";
     
-    // Only check path tracing pipeline since pick pipeline is disabled
+    // Check both pipelines
     if (!pathTracePipeline_ || !pathTracePipeline_->optixModule || !pathTracePipeline_->optixPipeline)
     {
         LOG(WARNING) << "Path tracing pipeline not ready";
         return;
     }
     
+    if (!gbufferPipeline_ || !gbufferPipeline_->optixPipeline)
+    {
+        LOG(WARNING) << "GBuffer pipeline not ready";
+        return;
+    }
+    
     optixu::Module emptyModule;  // For empty programs
     
+    // G-Buffer Pipeline Programs (matching RiPR)
+    {
+        auto& p = gbufferPipeline_->optixPipeline;
+        auto& m = gbufferPipeline_->optixModule;  // Use GBuffer's own module
+        
+        // Create ray generation program for G-buffer setup
+        gbufferPipeline_->entryPoints[GBufferEntryPoint::setupGBuffers] =
+            p.createRayGenProgram(m, RT_RG_NAME_STR("setupGBuffers"));
+        
+        // Create miss program for G-buffer
+        gbufferPipeline_->programs[RT_MS_NAME_STR("setupGBuffers")] =
+            p.createMissProgram(m, RT_MS_NAME_STR("setupGBuffers"));
+        
+        // Create hit group for G-buffer (closest hit only)
+        gbufferPipeline_->hitPrograms[RT_CH_NAME_STR("setupGBuffers")] = 
+            p.createHitProgramGroupForTriangleIS(
+                m, RT_CH_NAME_STR("setupGBuffers"),
+                emptyModule, nullptr);
+        
+        // Set the entry point
+        gbufferPipeline_->setEntryPoint(GBufferEntryPoint::setupGBuffers);
+        
+        // Configure miss programs for ray types
+        p.setNumMissRayTypes(claudia_shared::maxNumRayTypes);
+        p.setMissProgram(0, // Primary ray type
+                         gbufferPipeline_->programs.at(RT_MS_NAME_STR("setupGBuffers")));
+        p.setMissProgram(1, // Ray type 1 (not used in G-buffer but needs to be set)
+                         gbufferPipeline_->programs.at(RT_MS_NAME_STR("setupGBuffers")));
+        
+        LOG(INFO) << "G-buffer pipeline programs created";
+    }
     
     // Path Tracing Pipeline Programs
     {
@@ -625,12 +703,48 @@ void ClaudiaEngine::createPrograms()
         LOG(INFO) << "Path tracing pipeline programs created";
     }
     
+    // Create default material for G-buffer pipeline (matching RiPR)
+    {
+        optixu::Context optixContext = renderContext_->getOptiXContext();
+        defaultMaterial_ = optixContext.createMaterial();
+        
+        // Create empty hit group for unused ray types
+        gbufferPipeline_->hitPrograms["emptyHitGroup"] = 
+            gbufferPipeline_->optixPipeline.createEmptyHitProgramGroup();
+        
+        // Set hit group for G-buffer pipeline primary ray type
+        defaultMaterial_.setHitGroup(claudia_shared::GBufferRayType::Primary, 
+                                    gbufferPipeline_->hitPrograms.at(RT_CH_NAME_STR("setupGBuffers")));
+        
+        // Set empty hit groups for all other ray types
+        for (uint32_t rayType = claudia_shared::GBufferRayType::NumTypes; 
+             rayType < claudia_shared::maxNumRayTypes; ++rayType) {
+            defaultMaterial_.setHitGroup(rayType, gbufferPipeline_->hitPrograms.at("emptyHitGroup"));
+        }
+        
+        // Pass the default material to the scene handler
+        if (sceneHandler_) {
+            sceneHandler_->setDefaultMaterial(defaultMaterial_);
+        }
+        
+        LOG(INFO) << "Created default material with G-buffer hit groups for all ray types";
+    }
+    
 }
 
 void ClaudiaEngine::linkPipelines()
 {
     LOG(INFO) << "ClaudiaEngine::linkPipelines()";
     
+    // Link G-buffer pipeline with depth 1 (no recursive rays needed)
+    if (gbufferPipeline_ && gbufferPipeline_->optixPipeline)
+    {
+        // Set the scene on the pipeline
+        gbufferPipeline_->optixPipeline.setScene(scene_);
+        
+        gbufferPipeline_->optixPipeline.link(1);
+        LOG(INFO) << "G-buffer pipeline linked successfully";
+    }
     
     // Link path tracing pipeline with depth 2 (for recursive rays)
     if (pathTracePipeline_ && pathTracePipeline_->optixPipeline)
@@ -661,6 +775,47 @@ void ClaudiaEngine::createSBT()
     scene_.generateShaderBindingTableLayout(&hitGroupSbtSize);
     LOG(INFO) << "Scene hit group SBT size: " << hitGroupSbtSize << " bytes";
     
+    // Create SBT for G-buffer pipeline
+    if (gbufferPipeline_ && gbufferPipeline_->optixPipeline)
+    {
+        auto& p = gbufferPipeline_->optixPipeline;
+        size_t sbtSize;
+        p.generateShaderBindingTableLayout(&sbtSize);
+        
+        LOG(INFO) << "G-buffer pipeline SBT size: " << sbtSize << " bytes";
+        
+        if (sbtSize > 0)
+        {
+            gbufferPipeline_->sbt.initialize(
+                cuContext, cudau::BufferType::Device, sbtSize, 1);
+            gbufferPipeline_->sbt.setMappedMemoryPersistent(true);
+            p.setShaderBindingTable(gbufferPipeline_->sbt, gbufferPipeline_->sbt.getMappedPointer());
+        }
+        
+        // Set hit group SBT for G-buffer pipeline
+        if (!gbufferPipeline_->hitGroupSbt.isInitialized())
+        {
+            // Calculate required size for hit groups
+            // We need space for all ray types * all geometry instances
+            size_t requiredSbtSize = hitGroupSbtSize;
+            if (requiredSbtSize == 0)
+            {
+                // Ensure minimum size for at least one material with all ray types
+                requiredSbtSize = OPTIX_SBT_RECORD_HEADER_SIZE * claudia_shared::maxNumRayTypes;
+            }
+            
+            gbufferPipeline_->hitGroupSbt.initialize(cuContext, cudau::BufferType::Device, 1, requiredSbtSize);
+            gbufferPipeline_->hitGroupSbt.setMappedMemoryPersistent(true);
+        }
+        
+        if (hitGroupSbtSize > 0)
+        {
+            gbufferPipeline_->optixPipeline.setHitGroupShaderBindingTable(
+                gbufferPipeline_->hitGroupSbt, gbufferPipeline_->hitGroupSbt.getMappedPointer());
+        }
+        
+        LOG(INFO) << "G-buffer pipeline SBT created";
+    }
     
     // Create SBT for path tracing pipeline
     if (pathTracePipeline_ && pathTracePipeline_->optixPipeline)
@@ -748,6 +903,28 @@ void ClaudiaEngine::updateMaterialHitGroups(ClaudiaModelPtr model)
         if (!mat)
             continue;
             
+        // Set hit groups for GBuffer pipeline
+        if (gbufferPipeline_ && gbufferPipeline_->optixPipeline)
+        {
+            // Set setupGBuffers hit group for primary rays (ray type 0)
+            auto gbufferIt = gbufferPipeline_->hitPrograms.find(RT_CH_NAME_STR("setupGBuffers"));
+            if (gbufferIt != gbufferPipeline_->hitPrograms.end())
+            {
+                mat.setHitGroup(claudia_shared::GBufferRayType::Primary, gbufferIt->second);
+            }
+            
+            // Set empty hit group for unused ray types
+            auto emptyIt = gbufferPipeline_->hitPrograms.find("emptyHitGroup");
+            if (emptyIt != gbufferPipeline_->hitPrograms.end())
+            {
+                for (uint32_t rayType = claudia_shared::GBufferRayType::NumTypes; 
+                     rayType < claudia_shared::maxNumRayTypes; ++rayType)
+                {
+                    mat.setHitGroup(rayType, emptyIt->second);
+                }
+            }
+        }
+        
         // Set hit groups for path tracing pipeline
         if (pathTracePipeline_ && pathTracePipeline_->optixPipeline)
         {
@@ -787,6 +964,30 @@ void ClaudiaEngine::updateSBT()
     scene_.generateShaderBindingTableLayout(&hitGroupSbtSize);
     LOG(DBUG) << "Updated scene hit group SBT size: " << hitGroupSbtSize << " bytes";
     
+    #if 0
+    
+    // Update hit group SBT for GBuffer pipeline
+    if (gbufferPipeline_ && gbufferPipeline_->optixPipeline && hitGroupSbtSize > 0)
+    {
+        // Resize if needed
+        if (gbufferPipeline_->hitGroupSbt.isInitialized())
+        {
+            size_t currentSize = gbufferPipeline_->hitGroupSbt.sizeInBytes();
+            if (currentSize < hitGroupSbtSize)
+            {
+                LOG(DBUG) << "Resizing GBuffer pipeline hit group SBT from " << currentSize << " to " << hitGroupSbtSize << " bytes";
+                gbufferPipeline_->hitGroupSbt.resize(1, hitGroupSbtSize);
+            }
+        }
+        else
+        {
+            gbufferPipeline_->hitGroupSbt.initialize(cuContext, cudau::BufferType::Device, 1, hitGroupSbtSize);
+            gbufferPipeline_->hitGroupSbt.setMappedMemoryPersistent(true);
+        }
+        gbufferPipeline_->optixPipeline.setHitGroupShaderBindingTable(
+            gbufferPipeline_->hitGroupSbt, gbufferPipeline_->hitGroupSbt.getMappedPointer());
+    }
+    #endif
     
     // Update hit group SBT for path tracing pipeline
     if (pathTracePipeline_ && pathTracePipeline_->optixPipeline && hitGroupSbtSize > 0)
@@ -821,12 +1022,218 @@ void ClaudiaEngine::allocateLaunchParameters()
         return;
     }
     
-    // Allocate path tracing launch parameters
-    CUDADRV_CHECK(cuMemAlloc(&plpOnDevice_, sizeof(claudia_shared::PipelineLaunchParameters)));
+    // OLD: Allocate path tracing launch parameters - COMMENTED OUT
+    // CUDADRV_CHECK(cuMemAlloc(&plpOnDevice_, sizeof(claudia_shared::PipelineLaunchParameters)));
+    // LOG(INFO) << "Launch parameters allocated on device";
     
-    LOG(INFO) << "Launch parameters allocated on device";
+    // Also allocate split parameters
+    CUDADRV_CHECK(cuMemAlloc(&staticParamsOnDevice_, sizeof(claudia_shared::StaticPipelineLaunchParameters)));
+    CUDADRV_CHECK(cuMemAlloc(&perFrameParamsOnDevice_, sizeof(claudia_shared::PerFramePipelineLaunchParameters)));
+    CUDADRV_CHECK(cuMemAlloc(&plpSplitOnDevice_, sizeof(claudia_shared::PipelineLaunchParametersSplit)));
+    
+    // Set up the split structure pointers
+    plpSplit_.s = reinterpret_cast<claudia_shared::StaticPipelineLaunchParameters*>(staticParamsOnDevice_);
+    plpSplit_.f = reinterpret_cast<claudia_shared::PerFramePipelineLaunchParameters*>(perFrameParamsOnDevice_);
+    
+    // Upload the split structure with pointers
+    CUDADRV_CHECK(cuMemcpyHtoDAsync(
+        plpSplitOnDevice_,
+        &plpSplit_,
+        sizeof(claudia_shared::PipelineLaunchParametersSplit),
+        renderContext_->getCudaStream()));
+    
+    LOG(INFO) << "Split launch parameters allocated on device";
 }
 
+void ClaudiaEngine::updateStaticParameters()
+{
+    if (!renderContext_ || !staticParamsOnDevice_)
+    {
+        return;
+    }
+    
+    // Set static params directly - these are set once or rarely change
+    
+    // Image dimensions
+    staticParams_.imageSize = make_int2(renderWidth_, renderHeight_);
+    
+    // Set buffers from their actual sources
+    
+    // RNG buffer
+    if (rngBuffer_.isInitialized())
+    {
+        staticParams_.rngBuffer = rngBuffer_.getBlockBuffer2D();
+    }
+    
+    // Accumulation buffers from render handler
+    if (renderHandler_)
+    {
+        staticParams_.colorAccumBuffer = renderHandler_->getBeautyAccumSurfaceObject();
+        staticParams_.albedoAccumBuffer = renderHandler_->getAlbedoAccumSurfaceObject();
+        staticParams_.normalAccumBuffer = renderHandler_->getNormalAccumSurfaceObject();
+        staticParams_.flowAccumBuffer = renderHandler_->getFlowAccumSurfaceObject();
+    }
+    
+    // Environment texture and importance map (TODO: get from environment handler when implemented)
+    staticParams_.envLightTexture = 0;  // Will be set when environment is loaded
+    staticParams_.envLightImportanceMap = shared::RegularConstantContinuousDistribution2D();
+    
+    // Material data buffer from material handler
+    if (materialHandler_ && materialHandler_->getMaterialDataBuffer())
+    {
+        staticParams_.materialDataBuffer = materialHandler_->getMaterialDataBuffer()->getROBuffer<shared::enableBufferOobCheck>();
+    }
+    else
+    {
+        staticParams_.materialDataBuffer = shared::ROBuffer<shared::DisneyData>();
+    }
+    
+    // Geometry instance data buffer from model handler
+    if (modelHandler_ && modelHandler_->getGeometryInstanceDataBuffer())
+    {
+        staticParams_.geometryInstanceDataBuffer = modelHandler_->getGeometryInstanceDataBuffer()->getROBuffer<shared::enableBufferOobCheck>();
+    }
+    else
+    {
+        staticParams_.geometryInstanceDataBuffer = shared::ROBuffer<shared::GeometryInstanceData>();
+    }
+    
+    // Instance data buffer array from scene handler
+    if (sceneHandler_)
+    {
+        for (int i = 0; i < 2; ++i)
+        {
+            auto* buffer = sceneHandler_->getInstanceDataBuffer(i);
+            if (buffer && buffer->isInitialized())
+            {
+                staticParams_.instanceDataBufferArray[i] = buffer->getROBuffer<shared::enableBufferOobCheck>();
+            }
+            else
+            {
+                staticParams_.instanceDataBufferArray[i] = shared::ROBuffer<shared::InstanceData>();
+            }
+        }
+    }
+    
+    // Light distribution from scene handler
+    if (sceneHandler_ && sceneHandler_->getLightInstDistribution().isInitialized())
+    {
+        sceneHandler_->getLightInstDistribution().getDeviceType(&staticParams_.lightInstDist);
+    }
+    else
+    {
+        staticParams_.lightInstDist = shared::LightDistribution();
+    }
+    
+    // GBuffer storage (double buffered)
+    for (int i = 0; i < 2; ++i)
+    {
+        staticParams_.GBuffer0[i] = gbuffer0_[i].getSurfaceObject(0);
+        staticParams_.GBuffer1[i] = gbuffer1_[i].getSurfaceObject(0);
+    }
+    
+    // Pick info buffers - TODO: implement properly like RiPR with engine-owned buffers
+    // For now, set to nullptr since pick info isn't critical for basic rendering
+    for (int i = 0; i < 2; ++i)
+    {
+        staticParams_.pickInfos[i] = nullptr;
+    }
+    
+    // Upload to device
+    CUDADRV_CHECK(cuMemcpyHtoDAsync(
+        staticParamsOnDevice_,
+        &staticParams_,
+        sizeof(claudia_shared::StaticPipelineLaunchParameters),
+        renderContext_->getCudaStream()));
+}
+
+void ClaudiaEngine::updatePerFrameParameters(const mace::InputEvent& input)
+{
+    if (!renderContext_ || !perFrameParamsOnDevice_)
+    {
+        return;
+    }
+    
+    // Set per-frame params directly from source data
+    
+    // Traversable handle from scene
+    perFrameParams_.travHandle = 0;  // Default to 0
+    if (sceneHandler_)
+    {
+        perFrameParams_.travHandle = sceneHandler_->getHandle();
+    }
+    
+    // Frame counters
+    perFrameParams_.numAccumFrames = numAccumFrames_;
+    perFrameParams_.frameIndex = frameCounter_;
+    perFrameParams_.bufferIndex = frameCounter_ & 1;
+    
+    // Camera state
+    perFrameParams_.camera = lastCamera_;
+    perFrameParams_.prevCamera = prevCamera_;
+    
+    // Mouse position from input
+    perFrameParams_.mousePosition = make_int2(static_cast<int>(input.getX()), static_cast<int>(input.getY()));
+    
+    // Get properties from property system
+    const PropertyService& properties = renderContext_->getPropertyService();
+    if (properties.renderProps)
+    {
+        // Environment settings
+        perFrameParams_.enableEnvLight = properties.renderProps->getValOr<bool>(RenderKey::RenderEnviro, DEFAULT_RENDER_ENVIRO) ? 1 : 0;
+        perFrameParams_.envLightPowerCoeff = properties.renderProps->getValOr<float>(RenderKey::EnviroIntensity, DEFAULT_ENVIRO_INTENSITY_PERCENT);
+        float envRotationDegrees = properties.renderProps->getValOr<float>(RenderKey::EnviroRotation, DEFAULT_ENVIRO_ROTATION);
+        perFrameParams_.envLightRotation = envRotationDegrees * (pi_v<float> / 180.0f);
+        
+        // Background settings (solid background is inverse of render enviro)
+        perFrameParams_.useSolidBackground = perFrameParams_.enableEnvLight ? 0 : 1;
+        Eigen::Vector3d bgColor = properties.renderProps->getValOr<Eigen::Vector3d>(RenderKey::BackgroundColor, DEFAULT_BACKGROUND_COLOR);
+        perFrameParams_.backgroundColor = make_float3(bgColor.x(), bgColor.y(), bgColor.z());
+        
+        // Firefly reduction
+        perFrameParams_.maxRadiance = properties.renderProps->getValOr<float>(RenderKey::MaxRadiance, DEFAULT_MAX_RADIANCE);
+    }
+    else
+    {
+        // Defaults if no properties
+        perFrameParams_.enableEnvLight = 1;
+        perFrameParams_.envLightPowerCoeff = DEFAULT_ENVIRO_INTENSITY_PERCENT;
+        perFrameParams_.envLightRotation = 0.0f;
+        perFrameParams_.useSolidBackground = 0;
+        perFrameParams_.backgroundColor = make_float3(0.2f, 0.2f, 0.2f);
+        perFrameParams_.maxRadiance = DEFAULT_MAX_RADIANCE;
+    }
+    
+    // Area light settings (TODO: get from scene when area lights are implemented)
+    perFrameParams_.numLightInsts = 0;
+    perFrameParams_.areaLightPowerCoeff = 1.0f;
+    perFrameParams_.enableAreaLights = 0;
+    
+    // Render settings
+    perFrameParams_.maxPathLength = 8;  // Default path length
+    perFrameParams_.resetFlowBuffer = restartRender_ ? 1 : 0;
+    perFrameParams_.enableJittering = 1;
+    perFrameParams_.enableBumpMapping = 1;
+    perFrameParams_.enableGBuffer = gbufferEnabled_ ? 1 : 0;
+    perFrameParams_.useCameraSpaceNormal = 1;
+    perFrameParams_.enableDebugPrint = 0;
+    
+    // Experimental glass settings (disabled for now)
+    perFrameParams_.makeAllGlass = 0;
+    perFrameParams_.globalGlassType = 1;
+    perFrameParams_.globalGlassIOR = 1.52f;
+    perFrameParams_.globalTransmittanceDist = 1.0f;
+    
+    // Upload to device
+    CUDADRV_CHECK(cuMemcpyHtoDAsync(
+        perFrameParamsOnDevice_,
+        &perFrameParams_,
+        sizeof(claudia_shared::PerFramePipelineLaunchParameters),
+        renderContext_->getCudaStream()));
+}
+
+// COMMENTED OUT - using split parameters instead
+#if 0
 void ClaudiaEngine::updateLaunchParameters(const mace::InputEvent& input)
 {
     if (!renderContext_ || !plpOnDevice_)
@@ -983,6 +1390,17 @@ void ClaudiaEngine::updateLaunchParameters(const mace::InputEvent& input)
         plp_.rngBuffer = rngBuffer_.getBlockBuffer2D();
     }
     
+    // Set GBuffer surface objects (double buffered) - following sample code pattern
+    for (int i = 0; i < 2; ++i)
+    {
+        plp_.GBuffer0[i] = gbuffer0_[i].getSurfaceObject(0);
+        plp_.GBuffer1[i] = gbuffer1_[i].getSurfaceObject(0);
+    }
+    
+    // Set GBuffer control flags
+    plp_.enableGBuffer = gbufferEnabled_;
+    plp_.resetMotionBuffer = (frameCounter_ == 0);  // Reset on first frame
+    
     // Set pick info buffer pointers
     if (renderHandler_)
     {
@@ -1014,6 +1432,7 @@ void ClaudiaEngine::updateLaunchParameters(const mace::InputEvent& input)
         renderContext_->getCudaStream()));
     
 }
+#endif // 0 - END OF COMMENTED OUT updateLaunchParameters
 
 void ClaudiaEngine::updateCameraBody(const mace::InputEvent& input)
 {
@@ -1096,6 +1515,8 @@ void ClaudiaEngine::updateCameraBody(const mace::InputEvent& input)
 
 void ClaudiaEngine::updateCameraSensor()
 {
+  
+
     // Get camera and check if it has a sensor
     if (!renderContext_)
     {
@@ -1134,5 +1555,71 @@ void ClaudiaEngine::updateCameraSensor()
     if (!success)
     {
         LOG(WARNING) << "Failed to update camera sensor with rendered image";
+    }
+}
+
+void ClaudiaEngine::renderGBuffer(CUstream stream)
+{
+    return;
+
+    if (!gbufferPipeline_ || !gbufferPipeline_->optixPipeline)
+    {
+        LOG(WARNING) << "G-buffer pipeline not ready";
+        return;
+    }
+    
+    if (!plpSplitOnDevice_ || !staticParamsOnDevice_ || !perFrameParamsOnDevice_)
+    {
+        LOG(WARNING) << "Split launch parameters not allocated for G-buffer pipeline";
+        return;
+    }
+    
+    uint32_t width = renderHandler_->getWidth();
+    uint32_t height = renderHandler_->getHeight();
+    
+    // Launch the G-buffer pipeline with split parameters
+    try
+    {
+        gbufferPipeline_->optixPipeline.launch(stream, plpSplitOnDevice_, width, height, 1);
+    }
+    catch (const std::exception& e)
+    {
+        LOG(WARNING) << "G-buffer pipeline launch failed: " << e.what();
+    }
+}
+
+void ClaudiaEngine::renderPathTracing(CUstream stream)
+{
+    if (!pathTracePipeline_ || !pathTracePipeline_->optixPipeline)
+    {
+        LOG(WARNING) << "Path tracing pipeline not ready";
+        return;
+    }
+    
+    uint32_t width = renderHandler_->getWidth();
+    uint32_t height = renderHandler_->getHeight();
+    
+    // Set the entry point
+    pathTracePipeline_->setEntryPoint(engine_core::PathTracingEntryPoint::PathTrace);
+    
+    // Launch path tracing pipeline (still using old flat parameters for now)
+    try
+    {
+        pathTracePipeline_->optixPipeline.launch(stream, plpOnDevice_, width, height, 1);
+    }
+    catch (const std::exception& e)
+    {
+        LOG(WARNING) << "Path tracing pipeline launch failed: " << e.what();
+    }
+    
+    // Copy accumulation buffers to linear buffers for display
+    renderHandler_->copyAccumToLinearBuffers(stream);
+    
+    // Apply denoising if enabled
+    if (denoiserHandler_ && perFrameParams_.enableDenoiser)
+    {
+        bool isNewSequence = (perFrameParams_.numAccumFrames == 0);
+        auto timer = getCurrentTimer();
+        renderHandler_->denoise(stream, isNewSequence, denoiserHandler_.get(), timer);
     }
 }

@@ -11,6 +11,13 @@ using ClaudiaModelPtr = std::shared_ptr<class ClaudiaModel>;
 class ClaudiaEngine : public BaseRenderingEngine
 {
 public:
+    // Entry point enums for dual pipeline architecture (matching RiPR)
+    enum class GBufferEntryPoint
+    {
+        setupGBuffers = 0,
+        NumEntryPoints
+    };
+    
     ClaudiaEngine();
     ~ClaudiaEngine() override;
 
@@ -25,6 +32,7 @@ public:
     std::string getDescription() const override { return "Claudia Path Tracing with adaptive sampling and improved convergence"; }
     
     // Pipeline accessors for material handler
+    std::shared_ptr<engine_core::RenderPipeline<GBufferEntryPoint>> getGBufferPipeline() const { return gbufferPipeline_; }
     std::shared_ptr<engine_core::RenderPipeline<engine_core::PathTracingEntryPoint>> getPathTracePipeline() const { return pathTracePipeline_; }
     
     // Light probability computation kernels structure
@@ -60,12 +68,24 @@ private:
     void updateLaunchParameters(const mace::InputEvent& input);
     void allocateLaunchParameters();
     
+    // Split parameter updates
+    void updateStaticParameters();  // Update static params (buffers, textures)
+    void updatePerFrameParameters(const mace::InputEvent& input);  // Update per-frame params (camera, etc)
+    
     // Camera update methods
     void updateCameraBody(const mace::InputEvent& input);
     void updateCameraSensor();
     
-    // Pipeline
+    // Rendering methods for dual pipelines
+    void renderGBuffer(CUstream stream);
+    void renderPathTracing(CUstream stream);
+    
+    // Dual pipelines (matching RiPR)
+    std::shared_ptr<engine_core::RenderPipeline<GBufferEntryPoint>> gbufferPipeline_;
     std::shared_ptr<engine_core::RenderPipeline<engine_core::PathTracingEntryPoint>> pathTracePipeline_;
+    
+    // Default material for GBuffer pipeline
+    optixu::Material defaultMaterial_;
     
     // Scene management
     std::shared_ptr<class ClaudiaSceneHandler> sceneHandler_;
@@ -78,9 +98,18 @@ private:
     // Denoiser handler (Claudia-specific to avoid conflicts with other engines)
     std::shared_ptr<class ClaudiaDenoiserHandler> denoiserHandler_;
     
-    // Launch parameters
-    claudia_shared::PipelineLaunchParameters plp_;
-    CUdeviceptr plpOnDevice_ = 0;
+    // Launch parameters (OLD - for backward compatibility)
+    // COMMENTED OUT to ensure we're not using the flat structure anymore
+    // claudia_shared::PipelineLaunchParameters plp_;
+    // CUdeviceptr plpOnDevice_ = 0;
+    
+    // NEW: Split launch parameters (like RiPR)
+    claudia_shared::StaticPipelineLaunchParameters staticParams_;
+    claudia_shared::PerFramePipelineLaunchParameters perFrameParams_;
+    claudia_shared::PipelineLaunchParametersSplit plpSplit_;
+    CUdeviceptr staticParamsOnDevice_ = 0;
+    CUdeviceptr perFrameParamsOnDevice_ = 0;
+    CUdeviceptr plpSplitOnDevice_ = 0;
     
     // Camera state
     claudia_shared::PerspectiveCamera lastCamera_;
@@ -94,6 +123,13 @@ private:
     
     // RNG buffer
     optixu::HostBlockBuffer2D<shared::PCG32RNG, 1> rngBuffer_;
+    
+    // GBuffer storage (using cudau::Array like in RiPR and sample code patterns)
+    cudau::Array gbuffer0_[2];
+    cudau::Array gbuffer1_[2];
+    
+    // GBuffer state
+    bool gbufferEnabled_ = false;
     
     // Environment light state
     bool environmentDirty_ = true;

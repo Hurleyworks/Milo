@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claudia Engine GBuffer Implementation Plan</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 30px;
+            border-left: 4px solid #3498db;
+            padding-left: 10px;
+        }
+        h3 {
+            color: #5d6d7e;
+            margin-top: 20px;
+        }
+        .overview {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        .phase {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .phase h3 {
+            color: #2c3e50;
+            border-bottom: 2px solid #ecf0f1;
+            padding-bottom: 10px;
+        }
+        .task-list {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        .task-list li {
+            padding: 10px;
+            margin-bottom: 10px;
+            background: #ecf0f1;
+            border-left: 4px solid #3498db;
+            border-radius: 4px;
+        }
+        .code-block {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            margin: 10px 0;
+        }
+        .file-path {
+            color: #e74c3c;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            background: #ffeaa7;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .priority-high {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        .priority-medium {
+            color: #f39c12;
+            font-weight: bold;
+        }
+        .priority-low {
+            color: #27ae60;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>🚀 Claudia Engine GBuffer Implementation Plan</h1>
+    
+    <div class="overview">
+        <h2>Executive Summary</h2>
+        <p>This document outlines the comprehensive plan for implementing GBuffer support in the Claudia Engine, based on the successful implementation found in the RiPR Engine. The GBuffer system will enable advanced rendering techniques including deferred shading, motion vectors for temporal effects, and improved denoising capabilities.</p>
+        
+        <h3>Key Benefits</h3>
+        <ul>
+            <li><strong>Deferred Rendering:</strong> Separate geometry pass from shading, enabling more efficient multi-pass rendering</li>
+            <li><strong>Motion Vectors:</strong> Support for temporal reprojection and advanced denoising techniques</li>
+            <li><strong>Screen-Space Effects:</strong> Enable SSAO, SSR, and other screen-space techniques</li>
+            <li><strong>Improved Denoising:</strong> Better albedo and normal data for AI-based denoisers</li>
+            <li><strong>Debug Visualization:</strong> Easy visualization of geometry buffers for debugging</li>
+        </ul>
+    </div>
+
+    <h2>📊 Architecture Analysis</h2>
+    
+    <div class="phase">
+        <h3>Current State Comparison</h3>
+        <table>
+            <tr>
+                <th>Component</th>
+                <th>RiPR Engine</th>
+                <th>Claudia Engine</th>
+                <th>Action Required</th>
+            </tr>
+            <tr>
+                <td>GBuffer Ray Types</td>
+                <td>✅ Primary ray type for GBuffer</td>
+                <td>❌ Only path tracing rays</td>
+                <td class="priority-high">Add GBuffer ray types</td>
+            </tr>
+            <tr>
+                <td>GBuffer Data Structures</td>
+                <td>✅ GBuffer0/1Elements</td>
+                <td>❌ Not present</td>
+                <td class="priority-high">Define GBuffer structures</td>
+            </tr>
+            <tr>
+                <td>GBuffer OptiX Programs</td>
+                <td>✅ optix_ripr_gbuffer.cu</td>
+                <td>❌ Not present</td>
+                <td class="priority-high">Create optix_claudia_gbuffer.cu</td>
+            </tr>
+            <tr>
+                <td>Motion Vectors</td>
+                <td>✅ Temporal tracking</td>
+                <td>✅ prevCamera exists</td>
+                <td class="priority-medium">Integrate with GBuffer</td>
+            </tr>
+            <tr>
+                <td>Denoiser Integration</td>
+                <td>✅ Albedo/Normal buffers</td>
+                <td>✅ Denoiser handler exists</td>
+                <td class="priority-medium">Connect to GBuffer</td>
+            </tr>
+            <tr>
+                <td>Pipeline Management</td>
+                <td>✅ Separate GBuffer pipeline</td>
+                <td>❌ Single path trace pipeline</td>
+                <td class="priority-high">Add GBuffer pipeline</td>
+            </tr>
+        </table>
+    </div>
+
+    <h2>🔧 Implementation Phases</h2>
+
+    <div class="phase">
+        <h3>Phase 1: Data Structure Definition</h3>
+        <p><strong>Timeline:</strong> 2-3 hours | <strong>Priority:</strong> <span class="priority-high">HIGH</span></p>
+        
+        <h4>1.1 Update claudia_shared.h</h4>
+        <p>Add the following structures to <span class="file-path">claudia_shared.h</span>:</p>
+        <div class="code-block">
+// GBuffer ray types
+struct GBufferRayType {
+    enum Value {
+        Primary,
+        NumTypes
+    } value;
+    
+    CUDA_DEVICE_FUNCTION constexpr GBufferRayType(Value v = Primary) : value(v) {}
+    CUDA_DEVICE_FUNCTION operator uint32_t() const { return static_cast&lt;uint32_t&gt;(value); }
+};
+
+// GBuffer data elements
+struct GBuffer0Elements {
+    uint32_t instSlot;
+    uint32_t geomInstSlot;
+    uint32_t primIndex;
+    uint16_t qbcB;  // Quantized barycentric B
+    uint16_t qbcC;  // Quantized barycentric C
+};
+
+struct GBuffer1Elements {
+    Vector2D motionVector;
+    float depth;           // Z-depth for reconstruction
+    uint32_t materialID;   // Material ID for deferred shading
+};
+
+// Extend HitPointParams for GBuffer
+struct GBufferHitInfo {
+    Point3D positionInWorld;
+    Point3D prevPositionInWorld;
+    Normal3D geometricNormal;
+    Normal3D shadingNormal;
+    Vector3D tangent;
+    Point2D texCoord;
+    uint32_t objectID;
+    uint32_t primitiveID;
+};
+        </div>
+
+        <h4>1.2 Update PipelineLaunchParameters</h4>
+        <p>Add GBuffer-specific parameters:</p>
+        <div class="code-block">
+struct PipelineLaunchParameters {
+    // ... existing members ...
+    
+    // GBuffer storage (double buffered)
+    optixu::NativeBlockBuffer2D&lt;GBuffer0Elements&gt; GBuffer0[2];
+    optixu::NativeBlockBuffer2D&lt;GBuffer1Elements&gt; GBuffer1[2];
+    optixu::NativeBlockBuffer2D&lt;float4&gt; GBufferAlbedo[2];
+    optixu::NativeBlockBuffer2D&lt;float4&gt; GBufferNormal[2];
+    
+    // GBuffer control
+    uint32_t enableGBuffer : 1;
+    uint32_t gbufferMode : 3;  // 0=disabled, 1=setup, 2=visualize
+    uint32_t visualizeBuffer : 4;  // Which buffer to visualize
+};
+        </div>
+    </div>
+
+    <div class="phase">
+        <h3>Phase 2: OptiX Kernel Implementation</h3>
+        <p><strong>Timeline:</strong> 4-5 hours | <strong>Priority:</strong> <span class="priority-high">HIGH</span></p>
+        
+        <h4>2.1 Create optix_claudia_gbuffer.cu</h4>
+        <p>New file: <span class="file-path">engines/claudia/cuda/optix_claudia_gbuffer.cu</span></p>
+        
+        <ul class="task-list">
+            <li><strong>Ray Generation (setupGBuffers):</strong> Generate primary rays and initiate GBuffer trace</li>
+            <li><strong>Closest Hit (CH):</strong> Store geometry data, compute motion vectors</li>
+            <li><strong>Miss Shader (MS):</strong> Handle environment/background pixels</li>
+            <li><strong>Integration:</strong> Connect with existing Disney material evaluation</li>
+        </ul>
+
+        <div class="code-block">
+// Ray generation for GBuffer setup
+CUDA_DEVICE_KERNEL void RT_RG_NAME(setupGBuffers)() {
+    const uint2 launchIndex = make_uint2(optixGetLaunchIndex().x, optixGetLaunchIndex().y);
+    const uint32_t bufIdx = claudia_plp.bufferIndex;
+    
+    // Generate camera ray using R2 sequence (from existing Claudia implementation)
+    // ... camera ray generation ...
+    
+    // Initialize hit parameters
+    GBufferHitInfo hitInfo = {};
+    HitPointParams hitParams = {};
+    
+    // Trace primary ray
+    GBufferRayPayloadSignature::trace(
+        claudia_plp.travHandle, origin, direction,
+        0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
+        GBufferRayType::Primary, maxNumRayTypes, GBufferRayType::Primary,
+        &amp;hitInfo, &amp;hitParams);
+    
+    // Store GBuffer data
+    // ... write to GBuffer0, GBuffer1, albedo, normal buffers ...
+}
+        </div>
+    </div>
+
+    <div class="phase">
+        <h3>Phase 3: Pipeline Integration</h3>
+        <p><strong>Timeline:</strong> 3-4 hours | <strong>Priority:</strong> <span class="priority-high">HIGH</span></p>
+        
+        <h4>3.1 Update ClaudiaEngine.h</h4>
+        <ul class="task-list">
+            <li>Add GBuffer pipeline member variable</li>
+            <li>Add GBuffer render mode enumeration</li>
+            <li>Add GBuffer setup/cleanup methods</li>
+        </ul>
+
+        <h4>3.2 Update ClaudiaEngine.cpp</h4>
+        <ul class="task-list">
+            <li>Create GBuffer OptiX module in <code>createModules()</code></li>
+            <li>Setup GBuffer programs in <code>createPrograms()</code></li>
+            <li>Allocate GBuffer memory in <code>allocateLaunchParameters()</code></li>
+            <li>Add GBuffer render path in <code>render()</code></li>
+        </ul>
+
+        <div class="warning">
+            <strong>⚠️ Important:</strong> Ensure proper SBT (Shader Binding Table) setup for GBuffer ray types to avoid runtime errors.
+        </div>
+    </div>
+
+    <div class="phase">
+        <h3>Phase 4: Render Handler Integration</h3>
+        <p><strong>Timeline:</strong> 2-3 hours | <strong>Priority:</strong> <span class="priority-medium">MEDIUM</span></p>
+        
+        <h4>4.1 Update ClaudiaRenderHandler</h4>
+        <ul class="task-list">
+            <li>Add GBuffer render mode support</li>
+            <li>Implement buffer visualization modes</li>
+            <li>Handle GBuffer-to-beauty pass transition</li>
+            <li>Add debug visualization options</li>
+        </ul>
+
+        <h4>4.2 Buffer Management</h4>
+        <div class="code-block">
+class ClaudiaRenderHandler {
+public:
+    enum GBufferVisualizationMode {
+        GBUFFER_VIS_NONE = 0,
+        GBUFFER_VIS_ALBEDO,
+        GBUFFER_VIS_NORMAL,
+        GBUFFER_VIS_DEPTH,
+        GBUFFER_VIS_MOTION,
+        GBUFFER_VIS_OBJECT_ID,
+        GBUFFER_VIS_MATERIAL_ID
+    };
+    
+    void renderGBuffer(const RenderContext& ctx);
+    void visualizeGBuffer(GBufferVisualizationMode mode);
+    void compositeGBuffer();
+};
+        </div>
+    </div>
+
+    <div class="phase">
+        <h3>Phase 5: Denoiser Integration</h3>
+        <p><strong>Timeline:</strong> 2 hours | <strong>Priority:</strong> <span class="priority-medium">MEDIUM</span></p>
+        
+        <h4>5.1 Update ClaudiaDenoiserHandler</h4>
+        <ul class="task-list">
+            <li>Connect GBuffer albedo/normal to denoiser inputs</li>
+            <li>Implement motion vector support for temporal denoising</li>
+            <li>Add flow/motion buffer management</li>
+        </ul>
+
+        <div class="success">
+            <strong>✅ Benefit:</strong> GBuffer data provides high-quality guide layers for OptiX AI denoiser, significantly improving denoising quality.
+        </div>
+    </div>
+
+    <div class="phase">
+        <h3>Phase 6: Testing and Validation</h3>
+        <p><strong>Timeline:</strong> 2-3 hours | <strong>Priority:</strong> <span class="priority-high">HIGH</span></p>
+        
+        <h4>6.1 Unit Tests</h4>
+        <ul class="task-list">
+            <li>Create <span class="file-path">unittest/tests/ClaudiaGBufferTest.cpp</span></li>
+            <li>Test GBuffer allocation and deallocation</li>
+            <li>Verify ray generation correctness</li>
+            <li>Validate motion vector computation</li>
+        </ul>
+
+        <h4>6.2 Integration Tests</h4>
+        <ul class="task-list">
+            <li>Test switching between path tracing and GBuffer modes</li>
+            <li>Verify denoiser integration</li>
+            <li>Test visualization modes</li>
+            <li>Performance benchmarking</li>
+        </ul>
+
+        <h4>6.3 Visual Validation</h4>
+        <ul class="task-list">
+            <li>Compare GBuffer output with reference implementation</li>
+            <li>Verify motion vectors with moving objects</li>
+            <li>Test edge cases (empty scene, single object, etc.)</li>
+        </ul>
+    </div>
+
+    <h2>📋 Implementation Checklist</h2>
+    
+    <div class="phase">
+        <h3>Files to Create</h3>
+        <ul class="task-list">
+            <li>☐ <span class="file-path">engines/claudia/cuda/optix_claudia_gbuffer.cu</span></li>
+            <li>☐ <span class="file-path">unittest/tests/ClaudiaGBufferTest.cpp</span></li>
+        </ul>
+
+        <h3>Files to Modify</h3>
+        <ul class="task-list">
+            <li>☐ <span class="file-path">engines/claudia/claudia_shared.h</span></li>
+            <li>☐ <span class="file-path">engines/claudia/ClaudiaEngine.h</span></li>
+            <li>☐ <span class="file-path">engines/claudia/ClaudiaEngine.cpp</span></li>
+            <li>☐ <span class="file-path">engines/claudia/handlers/ClaudiaRenderHandler.h</span></li>
+            <li>☐ <span class="file-path">engines/claudia/handlers/ClaudiaRenderHandler.cpp</span></li>
+            <li>☐ <span class="file-path">engines/claudia/handlers/ClaudiaDenoiserHandler.cpp</span></li>
+            <li>☐ <span class="file-path">framework/engine_core/engine_core.cpp</span> (register GBuffer PTX)</li>
+        </ul>
+    </div>
+
+    <h2>⚠️ Risk Mitigation</h2>
+    
+    <div class="phase">
+        <h3>Potential Issues and Solutions</h3>
+        <table>
+            <tr>
+                <th>Risk</th>
+                <th>Impact</th>
+                <th>Mitigation Strategy</th>
+            </tr>
+            <tr>
+                <td>SBT Configuration Errors</td>
+                <td class="priority-high">HIGH</td>
+                <td>Carefully match ray type counts between host and device code</td>
+            </tr>
+            <tr>
+                <td>Memory Allocation Failures</td>
+                <td class="priority-high">HIGH</td>
+                <td>Implement proper error checking and fallback modes</td>
+            </tr>
+            <tr>
+                <td>Performance Degradation</td>
+                <td class="priority-medium">MEDIUM</td>
+                <td>Profile and optimize memory access patterns</td>
+            </tr>
+            <tr>
+                <td>PTX Compilation Issues</td>
+                <td class="priority-medium">MEDIUM</td>
+                <td>Ensure CUDA kernel compatibility with existing PTX infrastructure</td>
+            </tr>
+            <tr>
+                <td>Pipeline State Conflicts</td>
+                <td class="priority-low">LOW</td>
+                <td>Implement clear state management between render modes</td>
+            </tr>
+        </table>
+    </div>
+
+    <h2>🎯 Success Criteria</h2>
+    
+    <div class="success">
+        <h3>Definition of Done</h3>
+        <ul>
+            <li>✅ GBuffer successfully stores geometry data for all visible pixels</li>
+            <li>✅ Motion vectors correctly computed for temporal effects</li>
+            <li>✅ All GBuffer visualization modes functioning</li>
+            <li>✅ Denoiser successfully uses GBuffer data</li>
+            <li>✅ No performance regression in path tracing mode</li>
+            <li>✅ Unit tests passing with >90% coverage</li>
+            <li>✅ Documentation updated with GBuffer usage examples</li>
+        </ul>
+    </div>
+
+    <h2>📊 Performance Considerations</h2>
+    
+    <div class="phase">
+        <h3>Memory Requirements</h3>
+        <p>For a 1920x1080 viewport:</p>
+        <ul>
+            <li><strong>GBuffer0:</strong> 20 bytes/pixel × 1920×1080 = ~40 MB</li>
+            <li><strong>GBuffer1:</strong> 16 bytes/pixel × 1920×1080 = ~32 MB</li>
+            <li><strong>Albedo Buffer:</strong> 16 bytes/pixel × 1920×1080 = ~32 MB</li>
+            <li><strong>Normal Buffer:</strong> 16 bytes/pixel × 1920×1080 = ~32 MB</li>
+            <li><strong>Total (double buffered):</strong> ~272 MB</li>
+        </ul>
+
+        <h3>Optimization Strategies</h3>
+        <ul>
+            <li>Use packed formats where possible (e.g., R11G11B10 for normals)</li>
+            <li>Implement lazy allocation for unused buffers</li>
+            <li>Consider tiled rendering for very high resolutions</li>
+            <li>Use compression for motion vectors when possible</li>
+        </ul>
+    </div>
+
+    <h2>🚀 Next Steps</h2>
+    
+    <div class="phase">
+        <h3>Immediate Actions</h3>
+        <ol>
+            <li>Review this plan with the development team</li>
+            <li>Set up development branch: <code>feature/claudia-gbuffer</code></li>
+            <li>Begin Phase 1: Data Structure Definition</li>
+            <li>Create tracking issues for each phase</li>
+        </ol>
+
+        <h3>Future Enhancements</h3>
+        <ul>
+            <li>Variable Rate Shading (VRS) support</li>
+            <li>Mesh shaders for efficient geometry processing</li>
+            <li>Hardware ray tracing optimizations</li>
+            <li>Advanced temporal upsampling (DLSS/FSR integration)</li>
+        </ul>
+    </div>
+
+    <div style="text-align: center; margin-top: 40px; padding: 20px; background: #ecf0f1; border-radius: 8px;">
+        <p><strong>Document Version:</strong> 1.0</p>
+        <p><strong>Created:</strong> December 2024</p>
+        <p><strong>Author:</strong> Claude AI Assistant</p>
+        <p><strong>Status:</strong> Ready for Implementation</p>
+    </div>
+</body>
+</html>
