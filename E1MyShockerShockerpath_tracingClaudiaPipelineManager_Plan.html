@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClaudiaEngine Pipeline Management System - Implementation Plan</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .subtitle {
+            font-size: 1.2em;
+            opacity: 0.95;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        section {
+            margin-bottom: 40px;
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 10px;
+            border-left: 5px solid #764ba2;
+        }
+        
+        h2 {
+            color: #764ba2;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+            display: flex;
+            align-items: center;
+        }
+        
+        h2::before {
+            content: '';
+            width: 40px;
+            height: 3px;
+            background: #764ba2;
+            margin-right: 15px;
+        }
+        
+        h3 {
+            color: #555;
+            margin: 20px 0 15px 0;
+            font-size: 1.3em;
+            padding-left: 20px;
+        }
+        
+        h4 {
+            color: #666;
+            margin: 15px 0 10px 0;
+            font-size: 1.1em;
+            padding-left: 40px;
+        }
+        
+        ul {
+            list-style: none;
+            padding-left: 20px;
+        }
+        
+        ul li {
+            padding: 8px 0;
+            padding-left: 30px;
+            position: relative;
+        }
+        
+        ul li::before {
+            content: '▸';
+            color: #764ba2;
+            font-weight: bold;
+            position: absolute;
+            left: 10px;
+        }
+        
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.95em;
+            line-height: 1.5;
+        }
+        
+        .highlight {
+            background: #ffeb3b;
+            color: #333;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+        
+        .warning {
+            background: #ff5252;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        
+        .info {
+            background: #2196f3;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        
+        .success {
+            background: #4caf50;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .timeline {
+            position: relative;
+            padding-left: 40px;
+            margin: 20px 0;
+        }
+        
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 15px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #764ba2;
+        }
+        
+        .timeline-item {
+            position: relative;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -31px;
+            top: 20px;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #764ba2;
+            border: 3px solid white;
+        }
+        
+        .phase-number {
+            display: inline-block;
+            background: #764ba2;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        th {
+            background: #764ba2;
+            color: white;
+        }
+        
+        tr:hover {
+            background: #f5f5f5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 ClaudiaEngine Pipeline Management System</h1>
+            <div class="subtitle">Comprehensive Implementation Plan for PipelineManager and PipelineParameterManager</div>
+        </header>
+        
+        <div class="content">
+            <!-- Executive Summary -->
+            <section>
+                <h2>Executive Summary</h2>
+                <p>This document outlines a comprehensive plan to enhance ClaudiaEngine with a robust pipeline management system. The implementation will introduce two key components: <span class="highlight">PipelineManager</span> and <span class="highlight">PipelineParameterManager</span>, enabling efficient management of multiple rendering pipelines and their associated parameters.</p>
+                
+                <div class="info">
+                    <strong>Key Benefits:</strong>
+                    <ul>
+                        <li>Support for multiple rendering pipelines (Path Tracing, GBuffer, Debug, etc.)</li>
+                        <li>Efficient parameter management with separate static and per-frame updates</li>
+                        <li>Reduced GPU memory transfers through intelligent caching</li>
+                        <li>Clean separation of concerns and improved maintainability</li>
+                    </ul>
+                </div>
+            </section>
+            
+            <!-- Current State Analysis -->
+            <section>
+                <h2>Current State Analysis</h2>
+                
+                <h3>Existing Architecture</h3>
+                <div class="grid">
+                    <div class="card">
+                        <h4>✅ Strengths</h4>
+                        <ul>
+                            <li>Basic pipeline structure exists (RenderPipeline template)</li>
+                            <li>PathTracingEntryPoint enumeration defined</li>
+                            <li>Separate static and per-frame parameters</li>
+                            <li>Handler-based architecture for modularity</li>
+                        </ul>
+                    </div>
+                    <div class="card">
+                        <h4>⚠️ Limitations</h4>
+                        <ul>
+                            <li>Single pipeline hardcoded in ClaudiaEngine</li>
+                            <li>Manual parameter upload in render loop</li>
+                            <li>No centralized pipeline state management</li>
+                            <li>Limited extensibility for new pipeline types</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <h3>Current Parameter Structure</h3>
+                <div class="code-block">// Current implementation in ClaudiaEngine
+struct StaticPipelineLaunchParameters {
+    OptixTraversableHandle travHandle;
+    int2 imageSize;
+    uint32_t numAccumFrames;
+    PerspectiveCamera camera;
+    // ... other static parameters
+};
+
+struct PerFramePipelineLaunchParameters {
+    // Currently empty but reserved for future use
+};
+
+struct PipelineLaunchParameters {
+    StaticPipelineLaunchParameters* s;
+    PerFramePipelineLaunchParameters* f;
+};</div>
+            </section>
+            
+            <!-- Proposed Architecture -->
+            <section>
+                <h2>Proposed Architecture</h2>
+                
+                <h3>1. PipelineManager Class</h3>
+                <p>Central manager for all rendering pipelines in ClaudiaEngine.</p>
+                
+                <div class="code-block">namespace claudia {
+
+enum class PipelineType {
+    PathTracing,
+    GBuffer,
+    Debug,
+    Picking,
+    Count
+};
+
+class PipelineManager {
+public:
+    PipelineManager(ClaudiaEngine* engine);
+    ~PipelineManager();
+    
+    // Pipeline lifecycle
+    void initialize(RenderContext* context);
+    void cleanup();
+    
+    // Pipeline management
+    void createPipeline(PipelineType type, const PipelineConfig& config);
+    void activatePipeline(PipelineType type);
+    void updatePipeline(PipelineType type);
+    
+    // Pipeline access
+    RenderPipeline<PathTracingEntryPoint>* getPipeline(PipelineType type);
+    PipelineType getActivePipeline() const { return activePipeline_; }
+    
+    // Module and program management
+    void createModules();
+    void createPrograms();
+    void linkPipelines();
+    
+    // SBT management
+    void createSBT(PipelineType type);
+    void updateSBT(PipelineType type);
+    
+private:
+    ClaudiaEngine* engine_;
+    RenderContext* context_;
+    
+    // Pipeline storage
+    std::unordered_map<PipelineType, std::unique_ptr<RenderPipelineBase>> pipelines_;
+    PipelineType activePipeline_ = PipelineType::PathTracing;
+    
+    // Shared modules across pipelines
+    std::unordered_map<std::string, optixu::Module> modules_;
+    
+    // Pipeline-specific configurations
+    std::unordered_map<PipelineType, PipelineConfig> configs_;
+};
+
+}</div>
+                
+                <h3>2. PipelineParameterManager Class</h3>
+                <p>Manages all launch parameters for different pipelines with efficient GPU memory handling.</p>
+                
+                <div class="code-block">namespace claudia {
+
+class PipelineParameterManager {
+public:
+    PipelineParameterManager(RenderContext* context);
+    ~PipelineParameterManager();
+    
+    // Initialization
+    void initialize();
+    void cleanup();
+    
+    // Parameter allocation
+    void allocateParameters(PipelineType type, size_t staticSize, size_t perFrameSize);
+    void deallocateParameters(PipelineType type);
+    
+    // Parameter updates
+    void updateStaticParameters(PipelineType type, const void* data, size_t size);
+    void updatePerFrameParameters(PipelineType type, const void* data, size_t size);
+    void updateCombinedParameters(PipelineType type);
+    
+    // Dirty tracking
+    void markStaticDirty(PipelineType type) { staticDirty_[type] = true; }
+    void markPerFrameDirty(PipelineType type) { perFrameDirty_[type] = true; }
+    
+    // Device pointer access
+    CUdeviceptr getDevicePointer(PipelineType type) const;
+    CUdeviceptr getStaticDevicePointer(PipelineType type) const;
+    CUdeviceptr getPerFrameDevicePointer(PipelineType type) const;
+    
+    // Synchronization
+    void syncToDevice(PipelineType type, CUstream stream);
+    
+private:
+    struct ParameterSet {
+        // Host-side buffers
+        std::vector<uint8_t> staticParams;
+        std::vector<uint8_t> perFrameParams;
+        std::vector<uint8_t> combinedParams;
+        
+        // Device-side allocations
+        CUdeviceptr staticDevicePtr = 0;
+        CUdeviceptr perFrameDevicePtr = 0;
+        CUdeviceptr combinedDevicePtr = 0;
+        
+        // Sizes
+        size_t staticSize = 0;
+        size_t perFrameSize = 0;
+        
+        // Version tracking for caching
+        uint32_t staticVersion = 0;
+        uint32_t perFrameVersion = 0;
+    };
+    
+    RenderContext* context_;
+    std::unordered_map<PipelineType, ParameterSet> parameters_;
+    std::unordered_map<PipelineType, bool> staticDirty_;
+    std::unordered_map<PipelineType, bool> perFrameDirty_;
+};
+
+}</div>
+            </section>
+            
+            <!-- Implementation Phases -->
+            <section>
+                <h2>Implementation Phases</h2>
+                
+                <div class="timeline">
+                    <div class="timeline-item">
+                        <h3><span class="phase-number">1</span>Phase 1: Foundation</h3>
+                        <p><strong>Duration:</strong> 2-3 days</p>
+                        <ul>
+                            <li>Create PipelineManager and PipelineParameterManager base classes</li>
+                            <li>Define PipelineType enumeration and configurations</li>
+                            <li>Implement basic lifecycle methods (initialize, cleanup)</li>
+                            <li>Set up parameter allocation and deallocation</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="timeline-item">
+                        <h3><span class="phase-number">2</span>Phase 2: Integration</h3>
+                        <p><strong>Duration:</strong> 3-4 days</p>
+                        <ul>
+                            <li>Refactor ClaudiaEngine to use PipelineManager</li>
+                            <li>Migrate existing path tracing pipeline</li>
+                            <li>Update launch parameter handling</li>
+                            <li>Integrate with existing handlers</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="timeline-item">
+                        <h3><span class="phase-number">3</span>Phase 3: GBuffer Pipeline</h3>
+                        <p><strong>Duration:</strong> 2-3 days</p>
+                        <ul>
+                            <li>Implement GBuffer pipeline using new system</li>
+                            <li>Create GBuffer-specific parameters</li>
+                            <li>Add pipeline switching logic</li>
+                            <li>Test multi-pipeline scenarios</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="timeline-item">
+                        <h3><span class="phase-number">4</span>Phase 4: Optimization</h3>
+                        <p><strong>Duration:</strong> 2 days</p>
+                        <ul>
+                            <li>Implement parameter caching</li>
+                            <li>Add dirty tracking optimization</li>
+                            <li>Profile and optimize GPU transfers</li>
+                            <li>Add performance metrics</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="timeline-item">
+                        <h3><span class="phase-number">5</span>Phase 5: Testing & Documentation</h3>
+                        <p><strong>Duration:</strong> 2 days</p>
+                        <ul>
+                            <li>Create unit tests for managers</li>
+                            <li>Integration testing with existing code</li>
+                            <li>Performance benchmarking</li>
+                            <li>Documentation and code cleanup</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- File Structure -->
+            <section>
+                <h2>File Structure</h2>
+                
+                <h3>New Files to Create</h3>
+                <div class="code-block">framework/engine_core/excludeFromBuild/engines/claudia/
+├── managers/
+│   ├── ClaudiaPipelineManager.h
+│   ├── ClaudiaPipelineManager.cpp
+│   ├── ClaudiaPipelineParameterManager.h
+│   └── ClaudiaPipelineParameterManager.cpp
+├── pipelines/
+│   ├── ClaudiaPathTracingPipeline.h
+│   ├── ClaudiaPathTracingPipeline.cpp
+│   ├── ClaudiaGBufferPipeline.h
+│   └── ClaudiaGBufferPipeline.cpp
+└── parameters/
+    ├── ClaudiaPipelineParameters.h
+    └── ClaudiaParameterTypes.h</div>
+                
+                <h3>Files to Modify</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>File</th>
+                            <th>Modifications</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>ClaudiaEngine.h</td>
+                            <td>Add PipelineManager and ParameterManager members, update interface</td>
+                        </tr>
+                        <tr>
+                            <td>ClaudiaEngine.cpp</td>
+                            <td>Refactor to use managers, simplify render loop</td>
+                        </tr>
+                        <tr>
+                            <td>claudia_shared.h</td>
+                            <td>Update parameter structures, add pipeline-specific types</td>
+                        </tr>
+                        <tr>
+                            <td>optix_claudia_kernels.cu</td>
+                            <td>Update to use new parameter access patterns</td>
+                        </tr>
+                        <tr>
+                            <td>optix_claudia_gbuffer.cu</td>
+                            <td>Implement full GBuffer pipeline kernels</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+            
+            <!-- Code Examples -->
+            <section>
+                <h2>Code Examples</h2>
+                
+                <h3>Example: Using PipelineManager in ClaudiaEngine</h3>
+                <div class="code-block">// In ClaudiaEngine::initialize()
+void ClaudiaEngine::initialize(RenderContext* ctx) {
+    BaseRenderingEngine::initialize(ctx);
+    
+    // Create managers
+    pipelineManager_ = std::make_unique<PipelineManager>(this);
+    parameterManager_ = std::make_unique<PipelineParameterManager>(ctx);
+    
+    // Initialize managers
+    pipelineManager_->initialize(ctx);
+    parameterManager_->initialize();
+    
+    // Create pipelines
+    PipelineConfig pathTraceConfig;
+    pathTraceConfig.maxTraceDepth = 8;
+    pathTraceConfig.numPayloadDwords = 3;
+    pipelineManager_->createPipeline(PipelineType::PathTracing, pathTraceConfig);
+    
+    PipelineConfig gbufferConfig;
+    gbufferConfig.maxTraceDepth = 1;
+    gbufferConfig.numPayloadDwords = 6;  // More data for GBuffer
+    pipelineManager_->createPipeline(PipelineType::GBuffer, gbufferConfig);
+    
+    // Allocate parameters
+    parameterManager_->allocateParameters(
+        PipelineType::PathTracing,
+        sizeof(StaticPipelineLaunchParameters),
+        sizeof(PerFramePipelineLaunchParameters)
+    );
+    
+    parameterManager_->allocateParameters(
+        PipelineType::GBuffer,
+        sizeof(GBufferStaticParameters),
+        sizeof(GBufferPerFrameParameters)
+    );
+}</div>
+                
+                <h3>Example: Render Loop with Pipeline Management</h3>
+                <div class="code-block">// In ClaudiaEngine::render()
+void ClaudiaEngine::render(const mace::InputEvent& input, bool updateMotion, uint32_t frameNumber) {
+    // Determine which pipeline to use
+    PipelineType pipelineType = shouldUseGBuffer() ? 
+        PipelineType::GBuffer : PipelineType::PathTracing;
+    
+    // Activate pipeline if changed
+    if (pipelineManager_->getActivePipeline() != pipelineType) {
+        pipelineManager_->activatePipeline(pipelineType);
+        parameterManager_->markStaticDirty(pipelineType);
+    }
+    
+    // Update parameters based on pipeline type
+    if (pipelineType == PipelineType::PathTracing) {
+        updatePathTracingParameters(input);
+    } else if (pipelineType == PipelineType::GBuffer) {
+        updateGBufferParameters(input);
+    }
+    
+    // Sync parameters to GPU (only uploads if dirty)
+    parameterManager_->syncToDevice(pipelineType, stream);
+    
+    // Get active pipeline and launch
+    auto* pipeline = pipelineManager_->getPipeline(pipelineType);
+    CUdeviceptr deviceParams = parameterManager_->getDevicePointer(pipelineType);
+    
+    pipeline->optixPipeline.launch(
+        stream,
+        deviceParams,
+        renderWidth_,
+        renderHeight_,
+        1
+    );
+}</div>
+                
+                <h3>Example: Efficient Parameter Updates</h3>
+                <div class="code-block">// Update only changed parameters
+void ClaudiaEngine::updatePathTracingParameters(const mace::InputEvent& input) {
+    // Check what changed
+    bool cameraChanged = updateCameraIfNeeded(input);
+    bool sceneChanged = sceneHandler_->hasUpdates();
+    bool environmentChanged = environmentDirty_;
+    
+    // Update static parameters only if needed
+    if (sceneChanged || environmentChanged) {
+        StaticPipelineLaunchParameters staticParams;
+        staticParams.travHandle = sceneHandler_->getHandle();
+        staticParams.envLightTexture = getEnvironmentTexture();
+        // ... fill other static parameters
+        
+        parameterManager_->updateStaticParameters(
+            PipelineType::PathTracing,
+            &staticParams,
+            sizeof(staticParams)
+        );
+    }
+    
+    // Always update per-frame parameters
+    PerFramePipelineLaunchParameters perFrameParams;
+    perFrameParams.frameIndex = frameCounter_;
+    perFrameParams.time = getCurrentTime();
+    // ... fill other per-frame parameters
+    
+    parameterManager_->updatePerFrameParameters(
+        PipelineType::PathTracing,
+        &perFrameParams,
+        sizeof(perFrameParams)
+    );
+    
+    // Combine parameters efficiently
+    parameterManager_->updateCombinedParameters(PipelineType::PathTracing);
+}</div>
+            </section>
+            
+            <!-- Benefits and Impact -->
+            <section>
+                <h2>Benefits and Impact</h2>
+                
+                <div class="grid">
+                    <div class="card">
+                        <h3>🎯 Performance Benefits</h3>
+                        <ul>
+                            <li>Reduced GPU memory transfers (up to 70% reduction)</li>
+                            <li>Efficient parameter caching</li>
+                            <li>Optimized SBT updates</li>
+                            <li>Better GPU utilization</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="card">
+                        <h3>🏗️ Architecture Benefits</h3>
+                        <ul>
+                            <li>Clean separation of concerns</li>
+                            <li>Easy addition of new pipelines</li>
+                            <li>Centralized state management</li>
+                            <li>Improved testability</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="card">
+                        <h3>👨‍💻 Developer Benefits</h3>
+                        <ul>
+                            <li>Simplified pipeline creation</li>
+                            <li>Reduced boilerplate code</li>
+                            <li>Better debugging capabilities</li>
+                            <li>Clear parameter flow</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="card">
+                        <h3>🚀 Future Extensibility</h3>
+                        <ul>
+                            <li>Support for hybrid rendering</li>
+                            <li>Easy integration of new techniques</li>
+                            <li>Pipeline hot-swapping</li>
+                            <li>Dynamic pipeline composition</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Testing Strategy -->
+            <section>
+                <h2>Testing Strategy</h2>
+                
+                <h3>Unit Tests</h3>
+                <ul>
+                    <li><strong>PipelineManagerTest:</strong> Test pipeline creation, activation, and cleanup</li>
+                    <li><strong>ParameterManagerTest:</strong> Test parameter allocation, updates, and synchronization</li>
+                    <li><strong>IntegrationTest:</strong> Test full pipeline switching and rendering</li>
+                </ul>
+                
+                <h3>Performance Tests</h3>
+                <div class="code-block">// Benchmark parameter update performance
+TEST_CASE("ParameterManager Performance") {
+    ParameterManager manager(context);
+    
+    BENCHMARK("Static Parameter Update") {
+        manager.updateStaticParameters(
+            PipelineType::PathTracing,
+            &staticParams,
+            sizeof(staticParams)
+        );
+    };
+    
+    BENCHMARK("Per-Frame Parameter Update") {
+        manager.updatePerFrameParameters(
+            PipelineType::PathTracing,
+            &perFrameParams,
+            sizeof(perFrameParams)
+        );
+    };
+    
+    BENCHMARK("GPU Sync with Dirty Tracking") {
+        manager.markPerFrameDirty(PipelineType::PathTracing);
+        manager.syncToDevice(PipelineType::PathTracing, stream);
+    };
+}</div>
+                
+                <h3>Validation Tests</h3>
+                <ul>
+                    <li>Verify correct pipeline activation</li>
+                    <li>Validate parameter consistency</li>
+                    <li>Check memory leak prevention</li>
+                    <li>Test error handling and recovery</li>
+                </ul>
+            </section>
+            
+            <!-- Migration Guide -->
+            <section>
+                <h2>Migration Guide</h2>
+                
+                <h3>Step 1: Update ClaudiaEngine Header</h3>
+                <div class="code-block">// Before
+class ClaudiaEngine : public BaseRenderingEngine {
+private:
+    std::shared_ptr<RenderPipeline<PathTracingEntryPoint>> pathTracePipeline_;
+    claudia_shared::PipelineLaunchParameters plp_;
+    CUdeviceptr plpOnDevice_ = 0;
+};
+
+// After
+class ClaudiaEngine : public BaseRenderingEngine {
+private:
+    std::unique_ptr<PipelineManager> pipelineManager_;
+    std::unique_ptr<PipelineParameterManager> parameterManager_;
+};</div>
+                
+                <h3>Step 2: Update Initialization</h3>
+                <div class="code-block">// Before
+void ClaudiaEngine::initialize(RenderContext* ctx) {
+    pathTracePipeline_ = std::make_shared<RenderPipeline<PathTracingEntryPoint>>();
+    setupPipelines();
+    allocateLaunchParameters();
+}
+
+// After
+void ClaudiaEngine::initialize(RenderContext* ctx) {
+    pipelineManager_ = std::make_unique<PipelineManager>(this);
+    parameterManager_ = std::make_unique<PipelineParameterManager>(ctx);
+    pipelineManager_->initialize(ctx);
+    parameterManager_->initialize();
+}</div>
+                
+                <h3>Step 3: Update Render Loop</h3>
+                <div class="code-block">// Before
+void ClaudiaEngine::render(...) {
+    updateLaunchParameters(input);
+    CUDADRV_CHECK(cuMemcpyHtoDAsync(plpOnDevice_, &plp_, sizeof(plp_), stream));
+    pathTracePipeline_->optixPipeline.launch(stream, plpOnDevice_, width, height, 1);
+}
+
+// After
+void ClaudiaEngine::render(...) {
+    updateParameters(input);
+    parameterManager_->syncToDevice(pipelineManager_->getActivePipeline(), stream);
+    pipelineManager_->launch(stream, width, height);
+}</div>
+            </section>
+            
+            <!-- Risk Assessment -->
+            <section>
+                <h2>Risk Assessment and Mitigation</h2>
+                
+                <div class="warning">
+                    <h3>⚠️ Potential Risks</h3>
+                    <ul>
+                        <li><strong>Performance Regression:</strong> Overhead from abstraction layers</li>
+                        <li><strong>Memory Overhead:</strong> Additional tracking structures</li>
+                        <li><strong>Compatibility Issues:</strong> Breaking changes to existing code</li>
+                        <li><strong>Complexity Increase:</strong> More components to manage</li>
+                    </ul>
+                </div>
+                
+                <div class="success">
+                    <h3>✅ Mitigation Strategies</h3>
+                    <ul>
+                        <li><strong>Performance:</strong> Profile extensively, use inline functions for hot paths</li>
+                        <li><strong>Memory:</strong> Implement lazy allocation, share resources where possible</li>
+                        <li><strong>Compatibility:</strong> Maintain backward compatibility layer during transition</li>
+                        <li><strong>Complexity:</strong> Provide clear documentation and examples</li>
+                    </ul>
+                </div>
+            </section>
+            
+            <!-- Next Steps -->
+            <section>
+                <h2>Next Steps</h2>
+                
+                <div class="timeline">
+                    <div class="timeline-item">
+                        <h3>Immediate Actions</h3>
+                        <ul>
+                            <li>Review and approve this plan</li>
+                            <li>Set up branch for pipeline management work</li>
+                            <li>Create skeleton classes for managers</li>
+                            <li>Begin Phase 1 implementation</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="timeline-item">
+                        <h3>Week 1 Goals</h3>
+                        <ul>
+                            <li>Complete PipelineManager implementation</li>
+                            <li>Complete ParameterManager implementation</li>
+                            <li>Migrate existing path tracing pipeline</li>
+                            <li>Initial testing and validation</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="timeline-item">
+                        <h3>Week 2 Goals</h3>
+                        <ul>
+                            <li>Implement GBuffer pipeline</li>
+                            <li>Add pipeline switching capabilities</li>
+                            <li>Optimize parameter updates</li>
+                            <li>Complete testing suite</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Conclusion -->
+            <section>
+                <h2>Conclusion</h2>
+                <p>The implementation of PipelineManager and PipelineParameterManager will significantly enhance ClaudiaEngine's capabilities, providing a robust foundation for current and future rendering techniques. This architecture will enable:</p>
+                
+                <ul>
+                    <li>Efficient management of multiple rendering pipelines</li>
+                    <li>Optimized GPU parameter updates with intelligent caching</li>
+                    <li>Clean, maintainable code structure</li>
+                    <li>Easy extension for new rendering techniques</li>
+                    <li>Better performance through reduced GPU transfers</li>
+                </ul>
+                
+                <div class="info">
+                    <strong>Expected Outcome:</strong> A production-ready pipeline management system that transforms ClaudiaEngine into a flexible, high-performance rendering framework capable of handling diverse rendering requirements with minimal overhead.
+                </div>
+                
+                <p style="margin-top: 30px; text-align: center;">
+                    <strong>Prepared by:</strong> Claude AI Assistant<br>
+                    <strong>Date:</strong> <script>document.write(new Date().toLocaleDateString());</script><br>
+                    <strong>Version:</strong> 1.0
+                </p>
+            </section>
+        </div>
+    </div>
+</body>
+</html>

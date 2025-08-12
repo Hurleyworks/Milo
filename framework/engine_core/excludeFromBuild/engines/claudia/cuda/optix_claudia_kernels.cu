@@ -7,7 +7,7 @@
 #include "principledDisney_claudia.h"
 
 
-RT_PIPELINE_LAUNCH_PARAMETERS PipelineLaunchParameters claudia_plp;
+RT_PIPELINE_LAUNCH_PARAMETERS claudia_shared::PipelineLaunchParameters claudia_plp;
 
 // R2 Sequence Sampling Implementation
 // ===================================
@@ -166,7 +166,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE RGB computeDirectLighting (
 
     // Perform visibility ray tracing to check if the light is occluded
     claudia_shared::VisibilityRayPayloadSignature::trace (
-        claudia_plp.travHandle,
+        claudia_plp.s->travHandle,
         shadingPoint.toNative(), shadowRayDir.toNative(), 0.0f, dist * 0.9999f, 0.0f,
         0xFF, OPTIX_RAY_FLAG_NONE,
         RayType::RayType_Visibility, claudia_shared::NumRayTypes, RayType::RayType_Visibility,
@@ -213,7 +213,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void sampleEnviroLight (
     float uvPDF; // PDF for UV sampling
 
     // Sample the importance map to get UV coordinates and PDF
-    claudia_plp.envLightImportanceMap.sample (u0, u1, &u, &v, &uvPDF);
+    claudia_plp.s->envLightImportanceMap.sample (u0, u1, &u, &v, &uvPDF);
 
     // Convert UV to spherical coordinates
     float phi = 2 * Pi * u;
@@ -226,7 +226,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void sampleEnviroLight (
     }
 
     // Apply rotation to the environment light
-    float posPhi = phi - claudia_plp.envLightRotation;
+    float posPhi = phi - claudia_plp.s->envLightRotation;
     posPhi = posPhi - floorf (posPhi / (2 * Pi)) * 2 * Pi;
 
     // Convert spherical to Cartesian coordinates
@@ -253,10 +253,10 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void sampleEnviroLight (
     //  printf ("areaPDensity: %f\n", *areaPDensity);
 
     // Retrieve the environment light texture
-    texEmittance = claudia_plp.envLightTexture;
+    texEmittance = claudia_plp.s->envLightTexture;
 
     // Set a base emittance value
-    emittance = RGB (Pi * claudia_plp.envLightPowerCoeff);
+    emittance = RGB (Pi * claudia_plp.s->envLightPowerCoeff);
     texCoord.x = u;
     texCoord.y = v;
 
@@ -284,7 +284,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void sampleAreaLight(
 {
     *areaPDensity = 0.0f;
     
-    if (!claudia_plp.enableAreaLights || claudia_plp.numLightInsts == 0) {
+    if (!claudia_plp.s->enableAreaLights || claudia_plp.s->numLightInsts == 0) {
         return;
     }
     
@@ -293,14 +293,14 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void sampleAreaLight(
     // First, sample an instance from the light instance distribution
     float instProb;
     float uGeomInst;
-    const uint32_t instSlot = claudia_plp.lightInstDist.sample(ul, &instProb, &uGeomInst);
+    const uint32_t instSlot = claudia_plp.s->lightInstDist.sample(ul, &instProb, &uGeomInst);
     lightProb *= instProb;
     
     if (instProb == 0.0f) {
         return;
     }
     
-    const shared::InstanceData& inst = claudia_plp.instanceDataBufferArray[claudia_plp.bufferIndex][instSlot];
+    const shared::InstanceData& inst = claudia_plp.s->instanceDataBufferArray[claudia_plp.s->bufferIndex][instSlot];
     
     // Next, sample a geometry instance from this instance
     float geomInstProb;
@@ -313,7 +313,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void sampleAreaLight(
         return;
     }
     
-    const shared::GeometryInstanceData& geomInst = claudia_plp.geometryInstanceDataBuffer[geomInstSlot];
+    const shared::GeometryInstanceData& geomInst = claudia_plp.s->geometryInstanceDataBuffer[geomInstSlot];
     
     // Finally, sample a primitive from the geometry instance
     float primProb;
@@ -347,13 +347,13 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void sampleAreaLight(
     lightSample->normal = normalize(bc0 * nA + bc1 * nB + bc2 * nC);
     
     // Get material emittance
-    const shared::DisneyData& mat = claudia_plp.materialDataBuffer[geomInst.materialSlot];
+    const shared::DisneyData& mat = claudia_plp.s->materialDataBuffer[geomInst.materialSlot];
     
     // Sample emittance texture if available
     Point2D texCoord = bc0 * vA.texCoord + bc1 * vB.texCoord + bc2 * vC.texCoord;
     if (mat.emissive) {
         float4 texValue = tex2DLod<float4>(mat.emissive, texCoord.x, texCoord.y, 0.0f);
-        lightSample->emittance = RGB(texValue.x, texValue.y, texValue.z) * claudia_plp.areaLightPowerCoeff;
+        lightSample->emittance = RGB(texValue.x, texValue.y, texValue.z) * claudia_plp.s->areaLightPowerCoeff;
     } else {
         lightSample->emittance = RGB(0.0f, 0.0f, 0.0f);
     }
@@ -397,11 +397,11 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE RGB performNextEventEstimation (
     float envLightProb = 0.0f;
     float areaLightProb = 0.0f;
     
-    if (claudia_plp.enableEnvLight && claudia_plp.envLightTexture) {
+    if (claudia_plp.s->enableEnvLight && claudia_plp.s->envLightTexture) {
         envLightProb = 0.5f;  // Could be based on relative power
     }
     
-    if (claudia_plp.enableAreaLights && claudia_plp.numLightInsts > 0) {
+    if (claudia_plp.s->enableAreaLights && claudia_plp.s->numLightInsts > 0) {
         areaLightProb = 0.5f;
     }
     
@@ -474,46 +474,46 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME (pathTracing)()
     uint2 launchIndex = make_uint2 (optixGetLaunchIndex().x, optixGetLaunchIndex().y);
 
     // Initialize the random number generator
-    PCG32RNG rng = claudia_plp.rngBuffer[launchIndex];
+    PCG32RNG rng = claudia_plp.s->rngBuffer[launchIndex];
 
     Point3D origin;
     Vector3D direction;
-    const PerspectiveCamera& camera = claudia_plp.camera;
+    const PerspectiveCamera& camera = claudia_plp.s->camera;
 
     // different approach for DOF
-    if (claudia_plp.camera.lensSize > 0.0f)
+    if (claudia_plp.s->camera.lensSize > 0.0f)
     {
         // Use R2 sequence for pixel sampling with DOF
-        uint32_t pixelIndex = launchIndex.y * claudia_plp.imageSize.x + launchIndex.x;
-        uint32_t sampleIndex = pixelIndex + claudia_plp.numAccumFrames * (claudia_plp.imageSize.x * claudia_plp.imageSize.y);
+        uint32_t pixelIndex = launchIndex.y * claudia_plp.s->imageSize.x + launchIndex.x;
+        uint32_t sampleIndex = pixelIndex + claudia_plp.s->numAccumFrames * (claudia_plp.s->imageSize.x * claudia_plp.s->imageSize.y);
         float2 r2Sample = R2Sequence(sampleIndex);
         
         Point2D pixel (
-            (launchIndex.x + r2Sample.x) / claudia_plp.imageSize.x,
-            (launchIndex.y + r2Sample.y) / claudia_plp.imageSize.y);
+            (launchIndex.x + r2Sample.x) / claudia_plp.s->imageSize.x,
+            (launchIndex.y + r2Sample.y) / claudia_plp.s->imageSize.y);
 
-        generateCameraRay (rng, claudia_plp.camera, pixel, &origin, &direction);
+        generateCameraRay (rng, claudia_plp.s->camera, pixel, &origin, &direction);
     }
     else
     {
         // Generate jitter offsets using R2 sequence for better distribution
-        uint32_t pixelIndex = launchIndex.y * claudia_plp.imageSize.x + launchIndex.x;
-        uint32_t sampleIndex = pixelIndex + claudia_plp.numAccumFrames * (claudia_plp.imageSize.x * claudia_plp.imageSize.y);
+        uint32_t pixelIndex = launchIndex.y * claudia_plp.s->imageSize.x + launchIndex.x;
+        uint32_t sampleIndex = pixelIndex + claudia_plp.s->numAccumFrames * (claudia_plp.s->imageSize.x * claudia_plp.s->imageSize.y);
         float2 r2Sample = R2Sequence(sampleIndex);
         
         float jx = r2Sample.x;
         float jy = r2Sample.y;
 
         // Update the RNG buffer (still needed for other sampling)
-        claudia_plp.rngBuffer.write (launchIndex, rng);
+        claudia_plp.s->rngBuffer.write (launchIndex, rng);
 
         // Compute normalized screen coordinates
-        float x = (launchIndex.x + jx) / claudia_plp.imageSize.x;
-        float y = (launchIndex.y + jy) / claudia_plp.imageSize.y;
+        float x = (launchIndex.x + jx) / claudia_plp.s->imageSize.x;
+        float y = (launchIndex.y + jy) / claudia_plp.s->imageSize.y;
 
         // Compute vertical and horizontal view angles
-        float vh = 2 * std::tan (claudia_plp.camera.fovY * 0.5f);
-        float vw = claudia_plp.camera.aspect * vh;
+        float vh = 2 * std::tan (claudia_plp.s->camera.fovY * 0.5f);
+        float vw = claudia_plp.s->camera.aspect * vh;
 
         // Setup ray origin and direction
         origin = camera.position;
@@ -523,7 +523,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME (pathTracing)()
     // Debug: Print traversable handle and ray info for first pixel (similar to Shocker)
     if (launchIndex.x == 0 && launchIndex.y == 0) {
         printf("ClaudiaEngine RG: travHandle=%llu, origin=(%.2f,%.2f,%.2f), dir=(%.2f,%.2f,%.2f)\n",
-               claudia_plp.travHandle, origin.x, origin.y, origin.z, direction.x, direction.y, direction.z);
+               claudia_plp.s->travHandle, origin.x, origin.y, origin.z, direction.x, direction.y, direction.z);
     }
 
     // Initialize ray payload
@@ -554,13 +554,13 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME (pathTracing)()
     {
         // Trace the ray and collect results
         SearchRayPayloadSignature::trace (
-            claudia_plp.travHandle, origin.toNative(), direction.toNative(),
+            claudia_plp.s->travHandle, origin.toNative(), direction.toNative(),
             0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
             RayType_Search, NumRayTypes, RayType_Search,
             rng, payloadPtr, hitPointParamsPtr, firstHitAlbedoPtr, firstHitNormalPtr);
 
         // Break out of the loop if conditions are met
-        if (payload.terminate || payload.pathLength >= claudia_plp.bounceLimit)
+        if (payload.terminate || payload.pathLength >= claudia_plp.s->bounceLimit)
             break;
 
         // Update ray origin and direction for the next iteration
@@ -570,26 +570,26 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME (pathTracing)()
     }
 
     // Store the updated RNG state back to the buffer
-    claudia_plp.rngBuffer[launchIndex] = rng;
+    claudia_plp.s->rngBuffer[launchIndex] = rng;
 
     RGB prevAlbedoResult (0.0f, 0.0f, 0.0f);
     RGB prevColorResult (0.0f, 0.0f, 0.0f);
     Normal3D prevNormalResult (0.0f, 0.0f, 0.0f);
 
-    if (claudia_plp.numAccumFrames > 0)
+    if (claudia_plp.s->numAccumFrames > 0)
     {
-        prevColorResult = RGB (getXYZ (claudia_plp.colorAccumBuffer.read (launchIndex)));
-        prevAlbedoResult = RGB (getXYZ (claudia_plp.albedoAccumBuffer.read (launchIndex)));
-        prevNormalResult = Normal3D (getXYZ (claudia_plp.normalAccumBuffer.read (launchIndex)));
+        prevColorResult = RGB (getXYZ (claudia_plp.s->colorAccumBuffer.read (launchIndex)));
+        prevAlbedoResult = RGB (getXYZ (claudia_plp.s->albedoAccumBuffer.read (launchIndex)));
+        prevNormalResult = Normal3D (getXYZ (claudia_plp.s->normalAccumBuffer.read (launchIndex)));
     }
 
-    float curWeight = 1.0f / (1 + claudia_plp.numAccumFrames);
+    float curWeight = 1.0f / (1 + claudia_plp.s->numAccumFrames);
 
     // Clamp contribution to reduce fireflies
     RGB clampedContribution = payload.contribution;
-    clampedContribution.r = fminf(clampedContribution.r, claudia_plp.maxRadiance);
-    clampedContribution.g = fminf(clampedContribution.g, claudia_plp.maxRadiance);
-    clampedContribution.b = fminf(clampedContribution.b, claudia_plp.maxRadiance);
+    clampedContribution.r = fminf(clampedContribution.r, claudia_plp.s->maxRadiance);
+    clampedContribution.g = fminf(clampedContribution.g, claudia_plp.s->maxRadiance);
+    clampedContribution.b = fminf(clampedContribution.b, claudia_plp.s->maxRadiance);
 
     RGB colorResult = (1 - curWeight) * prevColorResult + curWeight * clampedContribution;
 #if 0
@@ -633,9 +633,9 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME (pathTracing)()
             normalResult = Normal3D (make_float3 (1000000.0f, 0.0f, 0.0f)); // super red
     }
 #endif
-    claudia_plp.colorAccumBuffer.write (launchIndex, make_float4 (colorResult.toNative(), 1.0f));
-    claudia_plp.albedoAccumBuffer.write (launchIndex, make_float4 (albedoResult.toNative(), 1.0f));
-    claudia_plp.normalAccumBuffer.write (launchIndex, make_float4 (normalResult.toNative(), 1.0f));
+    claudia_plp.s->colorAccumBuffer.write (launchIndex, make_float4 (colorResult.toNative(), 1.0f));
+    claudia_plp.s->albedoAccumBuffer.write (launchIndex, make_float4 (albedoResult.toNative(), 1.0f));
+    claudia_plp.s->normalAccumBuffer.write (launchIndex, make_float4 (normalResult.toNative(), 1.0f));
     
     // Calculate motion vectors
     Vector2D motionVector (0.0f, 0.0f);
@@ -645,15 +645,15 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME (pathTracing)()
         Point2D curRasterPos (launchIndex.x + 0.5f, launchIndex.y + 0.5f);
         
         // Calculate previous frame position using previous camera
-        Point2D prevRasterPos = claudia_plp.prevCamera.calcScreenPosition (hitPointParams.prevPositionInWorld) 
-                               * Point2D (claudia_plp.imageSize.x, claudia_plp.imageSize.y);
+        Point2D prevRasterPos = claudia_plp.s->prevCamera.calcScreenPosition (hitPointParams.prevPositionInWorld) 
+                               * Point2D (claudia_plp.s->imageSize.x, claudia_plp.s->imageSize.y);
         
         // Motion vector is the difference
         motionVector = curRasterPos - prevRasterPos;
     }
     
     // Write motion vector to flow accumulation buffer
-    claudia_plp.flowAccumBuffer.write (launchIndex, make_float4 (motionVector.x, motionVector.y, 0.0f, 1.0f));
+    claudia_plp.s->flowAccumBuffer.write (launchIndex, make_float4 (motionVector.x, motionVector.y, 0.0f, 1.0f));
 }
 // Miss shader that handles environment lighting and background
 CUDA_DEVICE_KERNEL void RT_MS_NAME (miss)()
@@ -672,23 +672,23 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME (miss)()
     float theta = 0.0f;
     Point2D texCoord (0.0f, 0.0f);
 
-    if (claudia_plp.envLightTexture)
+    if (claudia_plp.s->envLightTexture)
     {
         Vector3D rayDir = normalize (Vector3D (optixGetWorldRayDirection()));
         float posPhi;
         toPolarYUp (rayDir, &posPhi, &theta);
-        float phi = posPhi + claudia_plp.envLightRotation;
+        float phi = posPhi + claudia_plp.s->envLightRotation;
         phi = phi - floorf (phi / (2 * Pi)) * 2 * Pi;
         texCoord = Point2D (phi / (2 * Pi), theta / Pi);
-        float4 texValue = tex2DLod<float4> (claudia_plp.envLightTexture, texCoord.x, texCoord.y, 0.0f);
+        float4 texValue = tex2DLod<float4> (claudia_plp.s->envLightTexture, texCoord.x, texCoord.y, 0.0f);
         environmentValue = RGB (texValue.x, texValue.y, texValue.z);
     }
 
     // For background color, use raw HDR or solid color without power coefficient
     RGB background;
-    if (claudia_plp.useSolidBackground || !claudia_plp.envLightTexture)
+    if (claudia_plp.s->useSolidBackground || !claudia_plp.s->envLightTexture)
     {
-        background = RGB (claudia_plp.backgroundColor.x, claudia_plp.backgroundColor.y, claudia_plp.backgroundColor.z);
+        background = RGB (claudia_plp.s->backgroundColor.x, claudia_plp.s->backgroundColor.y, claudia_plp.s->backgroundColor.z);
     }
     else
     {
@@ -699,10 +699,10 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME (miss)()
     float misWeight = 1.0f;
     if (payload->pathLength > 1 && !payload->deltaSampled)
     {
-        float uvPDF = claudia_plp.envLightImportanceMap.evaluatePDF (texCoord.x, texCoord.y);
+        float uvPDF = claudia_plp.s->envLightImportanceMap.evaluatePDF (texCoord.x, texCoord.y);
         float hypAreaPDensity = uvPDF / (2 * Pi * Pi * std::sin (theta));
         float lightPDensity = hypAreaPDensity;
-        if (claudia_plp.lightInstDist.integral() > 0.0f)
+        if (claudia_plp.s->lightInstDist.integral() > 0.0f)
         {
             lightPDensity *= probToSampleEnvLight;
         }
@@ -710,7 +710,7 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME (miss)()
         misWeight = pow2 (bsdfPDensity) / (pow2 (bsdfPDensity) + pow2 (lightPDensity));
 
         // Apply power coefficient only for surface lighting
-        payload->contribution += payload->alpha * (environmentValue * claudia_plp.envLightPowerCoeff) * misWeight;
+        payload->contribution += payload->alpha * (environmentValue * claudia_plp.s->envLightPowerCoeff) * misWeight;
     }
     else
     {
@@ -726,12 +726,12 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME (shading)()
 {
     // Get material and geometry instance data from global buffers
     auto sbtr = HitGroupSBTRecordData::get();
-    const shared::DisneyData& mat = claudia_plp.materialDataBuffer[sbtr.materialSlot];
-    const shared::GeometryInstanceData& geomInst = claudia_plp.geometryInstanceDataBuffer[sbtr.geomInstSlot];
+    const shared::DisneyData& mat = claudia_plp.s->materialDataBuffer[sbtr.materialSlot];
+    const shared::GeometryInstanceData& geomInst = claudia_plp.s->geometryInstanceDataBuffer[sbtr.geomInstSlot];
     
     // Get instance data using buffer index from launch parameters
-    const uint32_t bufIdx = claudia_plp.bufferIndex;  
-    const shared::InstanceData& inst = claudia_plp.instanceDataBufferArray[bufIdx][optixGetInstanceId()];
+    const uint32_t bufIdx = claudia_plp.s->bufferIndex;  
+    const shared::InstanceData& inst = claudia_plp.s->instanceDataBufferArray[bufIdx][optixGetInstanceId()];
 
     // Initialize random number generator and payload
     PCG32RNG rng;
@@ -775,8 +775,8 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME (shading)()
 
     // Create DisneyPrincipled instance directly instead of using BSDF
     DisneyPrincipled bsdf = DisneyPrincipled::create (
-        mat, texCoord, 0.0f, claudia_plp.makeAllGlass, claudia_plp.globalGlassIOR,
-        claudia_plp.globalTransmittanceDist, claudia_plp.globalGlassType);
+        mat, texCoord, 0.0f, claudia_plp.s->makeAllGlass, claudia_plp.s->globalGlassIOR,
+        claudia_plp.s->globalTransmittanceDist, claudia_plp.s->globalGlassType);
 
     // Delta in PBR rendering refers to a perfect specular reflection or transmission that occurs at a single angle.
     // It represents an infinitely narrow spike of reflection, like what you'd see in a perfect mirror, where all light
@@ -794,7 +794,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME (shading)()
             // Direct camera hit - no MIS needed
             payload->contribution += payload->alpha * emission;
         }
-        else if (claudia_plp.enableAreaLights && !payload->deltaSampled)
+        else if (claudia_plp.s->enableAreaLights && !payload->deltaSampled)
         {
             // Indirect hit with MIS
             // We need to compute the probability of having sampled this light via NEE
@@ -815,7 +815,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME (shading)()
                 float area = 0.5f * length(cross(p1 - p0, p2 - p0));
                 
                 // Get the various sampling probabilities
-                float instProb = claudia_plp.lightInstDist.evaluatePMF(optixGetInstanceId());
+                float instProb = claudia_plp.s->lightInstDist.evaluatePMF(optixGetInstanceId());
                 float geomInstProb = inst.lightGeomInstDist.evaluatePMF(0); // Assuming single geom inst
                 float primProb = geomInst.emitterPrimDist.evaluatePMF(hp.primIndex);
                 
@@ -823,7 +823,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME (shading)()
                 float lightPDF = instProb * geomInstProb * primProb / area;
                 
                 // Account for light type selection probability
-                float envLightProb = (claudia_plp.enableEnvLight && claudia_plp.envLightTexture) ? 0.5f : 0.0f;
+                float envLightProb = (claudia_plp.s->enableEnvLight && claudia_plp.s->envLightTexture) ? 0.5f : 0.0f;
                 float areaLightProb = 1.0f - envLightProb;
                 lightPDF *= areaLightProb;
                 
@@ -906,8 +906,8 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME (visibility)()
 {
     // Get material and geometry instance data
     auto sbtr = HitGroupSBTRecordData::get();
-    const shared::DisneyData& mat = claudia_plp.materialDataBuffer[sbtr.materialSlot];
-    const shared::GeometryInstanceData& geomInst = claudia_plp.geometryInstanceDataBuffer[sbtr.geomInstSlot];
+    const shared::DisneyData& mat = claudia_plp.s->materialDataBuffer[sbtr.materialSlot];
+    const shared::GeometryInstanceData& geomInst = claudia_plp.s->geometryInstanceDataBuffer[sbtr.geomInstSlot];
 
     // Get barycentric coordinates
     float2 bc = optixGetTriangleBarycentrics();
@@ -974,14 +974,14 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME (visibility)()
 
     // Calculate Fresnel for incident ray
     float cosTheta = abs (dot (normal, rayDir));
-    float ior = claudia_plp.globalGlassIOR; // Use global glass IOR from pipeline params
+    float ior = claudia_plp.s->globalGlassIOR; // Use global glass IOR from pipeline params
     float F = mx_fresnel_dielectric (cosTheta, ior);
 
     // Calculate how much light passes through (transmission)
     float transmission = (1.0f - F) * transparency * transmittance;
 
     // Apply color absorption using Beer's law if not thin-walled
-    bool thinWalled = (claudia_plp.globalGlassType == 0);
+    bool thinWalled = (claudia_plp.s->globalGlassType == 0);
     if (!thinWalled && transmittanceDistance > 0.0f)
     {
         // Estimate approximate ray distance through the material
@@ -1024,8 +1024,8 @@ CUDA_DEVICE_KERNEL void RT_AH_NAME (visibility)()
 {
     // Get material and geometry instance data
     auto sbtr = HitGroupSBTRecordData::get();
-    const shared::DisneyData& mat = claudia_plp.materialDataBuffer[sbtr.materialSlot];
-    const shared::GeometryInstanceData& geomInst = claudia_plp.geometryInstanceDataBuffer[sbtr.geomInstSlot];
+    const shared::DisneyData& mat = claudia_plp.s->materialDataBuffer[sbtr.materialSlot];
+    const shared::GeometryInstanceData& geomInst = claudia_plp.s->geometryInstanceDataBuffer[sbtr.geomInstSlot];
 
     // Get barycentric coordinates
     float2 bc = optixGetTriangleBarycentrics();

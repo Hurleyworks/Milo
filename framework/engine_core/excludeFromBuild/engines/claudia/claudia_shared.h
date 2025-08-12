@@ -342,7 +342,7 @@ namespace claudia_shared
 
         // Compute the probability of sampling this light
         float lightProb = 1.0f;
-        if (claudia_plp.envLightTexture && claudia_plp.enableEnvLight)
+        if (claudia_plp.s->envLightTexture && claudia_plp.s->enableEnvLight)
             lightProb *= (1 - probToSampleEnvLight);
 
         // Check for invalid probabilities
