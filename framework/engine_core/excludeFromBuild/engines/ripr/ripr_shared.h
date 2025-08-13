@@ -135,68 +135,77 @@ namespace ripr_shared
 
     struct StaticPipelineLaunchParameters
     {
-        OptixTraversableHandle travHandle;
         int2 imageSize;
-        uint32_t numAccumFrames;
-        uint32_t bufferIndex;
-
         optixu::BlockBuffer2D<shared::PCG32RNG, 1> rngBuffer;
-        optixu::NativeBlockBuffer2D<float4> colorAccumBuffer;
+        
+        optixu::NativeBlockBuffer2D<GBuffer0Elements> GBuffer0[2];
+        optixu::NativeBlockBuffer2D<GBuffer1Elements> GBuffer1[2];
+        
+        shared::ROBuffer<shared::DisneyData> materialDataBuffer;
+        shared::ROBuffer<shared::InstanceData> instanceDataBufferArray[2];
+        shared::ROBuffer<shared::GeometryInstanceData> geometryInstanceDataBuffer;
+        shared::LightDistribution lightInstDist;
+        shared::RegularConstantContinuousDistribution2D envLightImportanceMap;
+        CUtexObject envLightTexture;
+        
+        optixu::NativeBlockBuffer2D<float4> beautyAccumBuffer;
         optixu::NativeBlockBuffer2D<float4> albedoAccumBuffer;
         optixu::NativeBlockBuffer2D<float4> normalAccumBuffer;
         optixu::NativeBlockBuffer2D<float4> flowAccumBuffer;
-
-        PerspectiveCamera camera;
-        PerspectiveCamera prevCamera; // Previous frame camera for temporal reprojection
-        uint32_t useCameraSpaceNormal : 1;
-        uint32_t bounceLimit; // Maximum path length for path tracing
-
-        // Experimental
+        
+        PickInfo* pickInfos[2];
+        
+        // Experimental glass parameters
         uint32_t makeAllGlass : 1;
         uint32_t globalGlassType : 1;
         float globalGlassIOR;
         float globalTransmittanceDist;
-
-        // skydome environment
-        uint32_t enableEnvLight : 1;
-        float envLightPowerCoeff;
-        float envLightRotation;
-        uint32_t useSolidBackground : 1;
-        float3 backgroundColor; // Solid background color when not using HDR
-
-        // Area light support
-        shared::LightDistribution lightInstDist;
-        uint32_t numLightInsts;        // Number of emissive instances
-        uint32_t enableAreaLights : 1; // Enable/disable area lights
-        float areaLightPowerCoeff;     // Area light power multiplier
-
-        shared::RegularConstantContinuousDistribution2D envLightImportanceMap;
-        CUtexObject envLightTexture;
-
-        // Material data buffer
-        shared::ROBuffer<shared::DisneyData> materialDataBuffer;
-
-        // Geometry instance data buffer
-        shared::ROBuffer<shared::GeometryInstanceData> geometryInstanceDataBuffer;
-
-        // Instance data buffer array (double buffered for async updates)
-        shared::ROBuffer<shared::InstanceData> instanceDataBufferArray[2];
-
-        // Pick info buffer
-        PickInfo* pickInfoBuffer[2]; // Double buffered
         
-
-        // geometry buffers 
-        optixu::NativeBlockBuffer2D<GBuffer0Elements> geoBuffer0[2];
-        optixu::NativeBlockBuffer2D<GBuffer1Elements> geoBuffer1[2];
-
+        // Background
+        uint32_t useSolidBackground : 1;
+        float3 backgroundColor;
+        
+        // Area light support
+        uint32_t numLightInsts;
+        uint32_t enableAreaLights : 1;
+        float areaLightPowerCoeff;
+        
         // Firefly reduction
-        float maxRadiance; // Maximum radiance value to clamp fireflies
-
-        int2 mousePosition;
+        float maxRadiance;
     };
+    
     struct PerFramePipelineLaunchParameters
     {
+        OptixTraversableHandle travHandle;
+        uint32_t numAccumFrames;
+        uint32_t frameIndex;
+        
+        PerspectiveCamera camera;
+        PerspectiveCamera prevCamera;
+        
+        float envLightPowerCoeff;
+        float envLightRotation;
+        
+        int2 mousePosition;
+        
+        uint32_t maxPathLength : 4;
+        uint32_t bufferIndex : 1;
+        uint32_t resetFlowBuffer : 1;
+        uint32_t enableJittering : 1;
+        uint32_t enableEnvLight : 1;
+        uint32_t enableBumpMapping : 1;
+        uint32_t enableDebugPrint : 1;
+        
+        uint32_t debugSwitches;
+        void setDebugSwitch(int32_t idx, bool b)
+        {
+            debugSwitches &= ~(1 << idx);
+            debugSwitches |= b << idx;
+        }
+        CUDA_COMMON_FUNCTION bool getDebugSwitch(int32_t idx) const
+        {
+            return (debugSwitches >> idx) & 0b1;
+        }
     };
 
     struct PipelineLaunchParameters
@@ -381,7 +390,7 @@ namespace ripr_shared
 
         // Compute the probability of sampling this light
         float lightProb = 1.0f;
-        if (ripr_plp.s->envLightTexture && ripr_plp.s->enableEnvLight)
+        if (ripr_plp.s->envLightTexture && ripr_plp.f->enableEnvLight)
             lightProb *= (1 - probToSampleEnvLight);
 
         // Check for invalid probabilities

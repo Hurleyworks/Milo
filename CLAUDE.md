@@ -203,3 +203,5 @@ These headers are not part of this codebase and will cause compilation errors.
 ## Miscellaneous Notes
 
 - **Scene Traversable Handle**: Scene traversable handle can be set to 0 in an empty scene. It's a feature
+- **Always Study APIs Thoroughly**
+  - Never make assumptions about an API. Study the API first so you get it right the first time!!!

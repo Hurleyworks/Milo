@@ -1131,132 +1131,24 @@ void RiPREngine::updateLaunchParameters (const mace::InputEvent& input)
         return;
     }
 
-    // Update STATIC parameters in host buffer
-    static_plp_.travHandle = 0; // Default to 0
-    if (sceneHandler_)
-    {
-        // Get IAS handle from scene handler
-        static_plp_.travHandle = sceneHandler_->getHandle();
-    }
-
+    // ===== UPDATE STATIC PARAMETERS =====
+    // These parameters rarely change during rendering
+    
+    // Set image size
     static_plp_.imageSize = make_int2 (renderWidth_, renderHeight_);
-    static_plp_.numAccumFrames = numAccumFrames_;
-    static_plp_.bufferIndex = frameCounter_ & 1; // TODO: Temporarily commented to debug crash
-    static_plp_.camera = lastCamera_;
-    static_plp_.prevCamera = prevCamera_; // For temporal reprojection
-    static_plp_.useCameraSpaceNormal = 1;
-    static_plp_.bounceLimit = 8; // Maximum path length
-
-    static_plp_.geoBuffer0[0] = gbuffers_.gBuffer0[0].getSurfaceObject (0);
-    static_plp_.geoBuffer0[1] = gbuffers_.gBuffer0[1].getSurfaceObject (0);
-    static_plp_.geoBuffer1[0] = gbuffers_.gBuffer1[0].getSurfaceObject (0);
-    static_plp_.geoBuffer1[1] = gbuffers_.gBuffer1[1].getSurfaceObject (0);
-
-    // Experimental glass parameters (disabled)
-    static_plp_.makeAllGlass = 0;
-    static_plp_.globalGlassType = 1;
-    static_plp_.globalGlassIOR = 1.52f;
-    static_plp_.globalTransmittanceDist = 1.0f;
-
-    // Firefly reduction parameter
-    static_plp_.maxRadiance = DEFAULT_MAX_RADIANCE; // Default value
-
-    static_plp_.mousePosition = int2 (static_cast<int32_t> (input.getX()), static_cast<int32_t> (input.getY()));
-
-    // Debug: Log mouse position periodically to verify input is working
-    static int debugCounter = 0;
-    if (debugCounter++ % 60 == 0) // Log every 60 frames (about once per second at 60fps)
+    
+    // Set RNG buffer
+    if (rngBuffer_.isInitialized())
     {
-        LOG (DBUG) << "Mouse input: (" << input.getX() << ", " << input.getY() << ")";
+        static_plp_.rngBuffer = rngBuffer_.getBlockBuffer2D();
     }
-
-    // Environment light parameters from property system
-    const PropertyService& properties = renderContext_->getPropertyService();
-    if (properties.renderProps)
-    {
-        // Get firefly reduction parameter
-        static_plp_.maxRadiance = properties.renderProps->getValOr<float> (RenderKey::MaxRadiance, DEFAULT_MAX_RADIANCE);
-
-        // Check if environment rendering is enabled
-        static_plp_.enableEnvLight = properties.renderProps->getValOr<bool> (RenderKey::RenderEnviro, DEFAULT_RENDER_ENVIRO) ? 1 : 0;
-
-        // EnviroIntensity is already a coefficient (0-2 range)
-        static_plp_.envLightPowerCoeff = properties.renderProps->getValOr<float> (RenderKey::EnviroIntensity, DEFAULT_ENVIRO_INTENSITY_PERCENT);
-
-        // EnviroRotation is in degrees, convert to radians for the shader
-        float envRotationDegrees = properties.renderProps->getValOr<float> (RenderKey::EnviroRotation, DEFAULT_ENVIRO_ROTATION);
-        static_plp_.envLightRotation = envRotationDegrees * (M_PI / 180.0f);
-
-        // Use solid background when environment rendering is disabled
-        static_plp_.useSolidBackground = properties.renderProps->getValOr<bool> (RenderKey::RenderEnviro, DEFAULT_RENDER_ENVIRO) ? 0 : 1;
-
-        // Background color when not using environment
-        Eigen::Vector3d bgColor = properties.renderProps->getValOr<Eigen::Vector3d> (RenderKey::BackgroundColor, DEFAULT_BACKGROUND_COLOR);
-        static_plp_.backgroundColor = make_float3 (bgColor.x(), bgColor.y(), bgColor.z());
-    }
-    else
-    {
-        // Fallback to defaults if properties not available
-        static_plp_.enableEnvLight = DEFAULT_RENDER_ENVIRO ? 1 : 0;
-        static_plp_.envLightPowerCoeff = DEFAULT_ENVIRO_INTENSITY_PERCENT;
-        static_plp_.envLightRotation = DEFAULT_ENVIRO_ROTATION * (M_PI / 180.0f);
-        static_plp_.useSolidBackground = DEFAULT_RENDER_ENVIRO ? 0 : 1;
-        static_plp_.backgroundColor = make_float3 (DEFAULT_BACKGROUND_COLOR.x(), DEFAULT_BACKGROUND_COLOR.y(), DEFAULT_BACKGROUND_COLOR.z());
-    }
-
-    // Set environment texture if available
-    static_plp_.envLightTexture = 0;
-    if (renderContext_)
-    {
-        auto& handlers = renderContext_->getHandlers();
-        if (handlers.skyDomeHandler && handlers.skyDomeHandler->hasEnvironmentTexture())
-        {
-            static_plp_.envLightTexture = handlers.skyDomeHandler->getEnvironmentTexture();
-
-            // Get the environment light importance map
-            handlers.skyDomeHandler->getImportanceMap().getDeviceType (&static_plp_.envLightImportanceMap);
-        }
-        else
-        {
-            // Initialize with empty distribution
-            static_plp_.envLightImportanceMap = shared::RegularConstantContinuousDistribution2D();
-        }
-    }
-
-    // Set light distribution from scene handler
-    if (sceneHandler_)
-    {
-        // Update emissive instances and build light distribution
-        sceneHandler_->updateEmissiveInstances();
-        sceneHandler_->buildLightInstanceDistribution();
-
-        // Get the device representation of the light distribution
-        sceneHandler_->getLightInstDistribution().getDeviceType (&static_plp_.lightInstDist);
-        static_plp_.numLightInsts = sceneHandler_->getNumEmissiveInstances();
-
-        // Read area light settings from properties
-        if (properties.renderProps)
-        {
-            bool enableAreaLights = properties.renderProps->getValOr<bool> (RenderKey::EnableAreaLights, DEFAULT_ENABLE_AREA_LIGHTS);
-            static_plp_.enableAreaLights = (enableAreaLights && static_plp_.numLightInsts > 0) ? 1 : 0;
-            static_plp_.areaLightPowerCoeff = properties.renderProps->getValOr<float> (RenderKey::AreaLightPower, DEFAULT_AREA_LIGHT_POWER);
-        }
-        else
-        {
-            // Fallback to defaults
-            static_plp_.enableAreaLights = static_plp_.numLightInsts > 0 ? 1 : 0;
-            static_plp_.areaLightPowerCoeff = DEFAULT_AREA_LIGHT_POWER;
-        }
-    }
-    else
-    {
-        // Set to empty distribution if no scene handler
-        static_plp_.lightInstDist = shared::LightDistribution();
-        static_plp_.numLightInsts = 0;
-        static_plp_.enableAreaLights = 0;
-        static_plp_.areaLightPowerCoeff = 1.0f;
-    }
-
+    
+    // Set GBuffers
+    static_plp_.GBuffer0[0] = gbuffers_.gBuffer0[0].getSurfaceObject (0);
+    static_plp_.GBuffer0[1] = gbuffers_.gBuffer0[1].getSurfaceObject (0);
+    static_plp_.GBuffer1[0] = gbuffers_.gBuffer1[0].getSurfaceObject (0);
+    static_plp_.GBuffer1[1] = gbuffers_.gBuffer1[1].getSurfaceObject (0);
+    
     // Set material data buffer from material handler
     if (materialHandler_ && materialHandler_->getMaterialDataBuffer())
     {
@@ -1264,46 +1156,9 @@ void RiPREngine::updateLaunchParameters (const mace::InputEvent& input)
     }
     else
     {
-        // Set to empty buffer if no material handler
         static_plp_.materialDataBuffer = shared::ROBuffer<shared::DisneyData>();
     }
-
-    // Set geometry instance data buffer from model handler
-    if (modelHandler_ && modelHandler_->getGeometryInstanceDataBuffer())
-    {
-        static_plp_.geometryInstanceDataBuffer = modelHandler_->getGeometryInstanceDataBuffer()->getROBuffer<shared::enableBufferOobCheck>();
-    }
-    else
-    {
-        // Set to empty buffer if no model handler
-        static_plp_.geometryInstanceDataBuffer = shared::ROBuffer<shared::GeometryInstanceData>();
-    }
-
-    // Set buffer pointers from RenderHandler
-    if (renderHandler_)
-    {
-        static_plp_.colorAccumBuffer = renderHandler_->getBeautyAccumSurfaceObject();
-        static_plp_.albedoAccumBuffer = renderHandler_->getAlbedoAccumSurfaceObject();
-        static_plp_.normalAccumBuffer = renderHandler_->getNormalAccumSurfaceObject();
-        static_plp_.flowAccumBuffer = renderHandler_->getFlowAccumSurfaceObject();
-    }
-
-    // Set RNG buffer
-    if (rngBuffer_.isInitialized())
-    {
-        static_plp_.rngBuffer = rngBuffer_.getBlockBuffer2D();
-    }
-
-    // Set pick info buffer pointers
-    if (renderHandler_)
-    {
-        for (int i = 0; i < 2; ++i)
-        {
-            static_plp_.pickInfoBuffer[i] = reinterpret_cast<ripr_shared::PickInfo*> (
-                renderHandler_->getPickInfoPointer (i));
-        }
-    }
-
+    
     // Set instance data buffer array
     if (sceneHandler_)
     {
@@ -1316,23 +1171,174 @@ void RiPREngine::updateLaunchParameters (const mace::InputEvent& input)
             }
         }
     }
+    
+    // Set geometry instance data buffer from model handler
+    if (modelHandler_ && modelHandler_->getGeometryInstanceDataBuffer())
+    {
+        static_plp_.geometryInstanceDataBuffer = modelHandler_->getGeometryInstanceDataBuffer()->getROBuffer<shared::enableBufferOobCheck>();
+    }
+    else
+    {
+        static_plp_.geometryInstanceDataBuffer = shared::ROBuffer<shared::GeometryInstanceData>();
+    }
+    
+    // Set light distribution from scene handler
+    if (sceneHandler_)
+    {
+        // Update emissive instances and build light distribution
+        sceneHandler_->updateEmissiveInstances();
+        sceneHandler_->buildLightInstanceDistribution();
+        
+        // Get the device representation of the light distribution
+        sceneHandler_->getLightInstDistribution().getDeviceType (&static_plp_.lightInstDist);
+    }
+    else
+    {
+        static_plp_.lightInstDist = shared::LightDistribution();
+    }
+    
+    // Set environment light importance map and texture
+    if (renderContext_)
+    {
+        auto& handlers = renderContext_->getHandlers();
+        if (handlers.skyDomeHandler && handlers.skyDomeHandler->hasEnvironmentTexture())
+        {
+            static_plp_.envLightTexture = handlers.skyDomeHandler->getEnvironmentTexture();
+            handlers.skyDomeHandler->getImportanceMap().getDeviceType (&static_plp_.envLightImportanceMap);
+        }
+        else
+        {
+            static_plp_.envLightTexture = 0;
+            static_plp_.envLightImportanceMap = shared::RegularConstantContinuousDistribution2D();
+        }
+    }
+    
+    // Set accumulation buffer pointers from RenderHandler
+    if (renderHandler_)
+    {
+        static_plp_.beautyAccumBuffer = renderHandler_->getBeautyAccumSurfaceObject();
+        static_plp_.albedoAccumBuffer = renderHandler_->getAlbedoAccumSurfaceObject();
+        static_plp_.normalAccumBuffer = renderHandler_->getNormalAccumSurfaceObject();
+    }
+    
+    // Set pick info buffer pointers
+    if (renderHandler_)
+    {
+        for (int i = 0; i < 2; ++i)
+        {
+            static_plp_.pickInfos[i] = reinterpret_cast<ripr_shared::PickInfo*> (
+                renderHandler_->getPickInfoPointer (i));
+        }
+    }
+    
+    // Set flow accumulation buffer
+    if (renderHandler_)
+    {
+        static_plp_.flowAccumBuffer = renderHandler_->getFlowAccumSurfaceObject();
+    }
+    
+    // Set experimental glass parameters (default values)
+    static_plp_.makeAllGlass = 0;
+    static_plp_.globalGlassType = 0;
+    static_plp_.globalGlassIOR = 1.5f;
+    static_plp_.globalTransmittanceDist = 10.0f;
+    
+    // Set background parameters
+    static_plp_.useSolidBackground = 0;
+    static_plp_.backgroundColor = make_float3(0.05f, 0.05f, 0.05f);
+    
+    // Set area light parameters
+    if (sceneHandler_)
+    {
+        static_plp_.numLightInsts = sceneHandler_->getNumEmissiveInstances();
+        static_plp_.enableAreaLights = static_plp_.numLightInsts > 0 ? 1 : 0;
+    }
+    else
+    {
+        static_plp_.numLightInsts = 0;
+        static_plp_.enableAreaLights = 0;
+    }
+    static_plp_.areaLightPowerCoeff = 1.0f;
+    
+    // Set firefly reduction parameter
+    static_plp_.maxRadiance = 10.0f;
 
-    // Copy static parameters to device
+    // ===== UPDATE PER-FRAME PARAMETERS =====
+    // These parameters change every frame
+    
+    // Set traversable handle
+    per_frame_plp_.travHandle = 0; // Default to 0
+    if (sceneHandler_)
+    {
+        per_frame_plp_.travHandle = sceneHandler_->getHandle();
+    }
+    
+    // Frame counters
+    per_frame_plp_.numAccumFrames = numAccumFrames_;
+    per_frame_plp_.frameIndex = frameCounter_;
+    
+    // Camera parameters
+    per_frame_plp_.camera = lastCamera_;
+    per_frame_plp_.prevCamera = prevCamera_;
+    
+    // Environment light parameters from property system
+    const PropertyService& properties = renderContext_->getPropertyService();
+    if (properties.renderProps)
+    {
+        // EnviroIntensity is already a coefficient (0-2 range)
+        per_frame_plp_.envLightPowerCoeff = properties.renderProps->getValOr<float> (RenderKey::EnviroIntensity, DEFAULT_ENVIRO_INTENSITY_PERCENT);
+        
+        // EnviroRotation is in degrees, convert to radians for the shader
+        float envRotationDegrees = properties.renderProps->getValOr<float> (RenderKey::EnviroRotation, DEFAULT_ENVIRO_ROTATION);
+        per_frame_plp_.envLightRotation = envRotationDegrees * (M_PI / 180.0f);
+        
+        // Check if environment rendering is enabled
+        per_frame_plp_.enableEnvLight = properties.renderProps->getValOr<bool> (RenderKey::RenderEnviro, DEFAULT_RENDER_ENVIRO) ? 1 : 0;
+    }
+    else
+    {
+        per_frame_plp_.envLightPowerCoeff = DEFAULT_ENVIRO_INTENSITY_PERCENT;
+        per_frame_plp_.envLightRotation = DEFAULT_ENVIRO_ROTATION * (M_PI / 180.0f);
+        per_frame_plp_.enableEnvLight = DEFAULT_RENDER_ENVIRO ? 1 : 0;
+    }
+    
+    // Mouse position for picking
+    per_frame_plp_.mousePosition = int2 (static_cast<int32_t> (input.getX()), static_cast<int32_t> (input.getY()));
+    
+    // Rendering control flags
+    per_frame_plp_.maxPathLength = 8; // Maximum path length for path tracing
+    per_frame_plp_.bufferIndex = frameCounter_ & 1; // Alternating buffer index
+    per_frame_plp_.resetFlowBuffer = (numAccumFrames_ == 0) ? 1 : 0; // Reset flow on first frame
+    per_frame_plp_.enableJittering = 1; // Enable anti-aliasing jitter
+    per_frame_plp_.enableBumpMapping = 1; // Enable bump/normal mapping
+    per_frame_plp_.enableDebugPrint = 0; // Disable debug output by default
+    
+    // Debug switches (initially all off)
+    per_frame_plp_.debugSwitches = 0;
+
+    // Copy parameters to device
+    CUstream stream = renderContext_->getCudaStream();
+    
+    // Copy static parameters
     CUDADRV_CHECK (cuMemcpyHtoDAsync (
         static_plp_on_device_,
         &static_plp_,
         sizeof (ripr_shared::StaticPipelineLaunchParameters),
-        renderContext_->getCudaStream()));
-
-    // Note: Per-frame parameters are currently empty
-    // per_frame_plp_ is reserved for future use
-
-    // Copy the pointer structure to device
+        stream));
+    
+    // Copy per-frame parameters
+    CUDADRV_CHECK (cuMemcpyHtoDAsync (
+        per_frame_plp_on_device_,
+        &per_frame_plp_,
+        sizeof (ripr_shared::PerFramePipelineLaunchParameters),
+        stream));
+    
+    // Copy main pipeline parameter structure (just the pointers)
     CUDADRV_CHECK (cuMemcpyHtoDAsync (
         plp_on_device_,
         &plp_,
         sizeof (ripr_shared::PipelineLaunchParameters),
-        renderContext_->getCudaStream()));
+        stream));
 }
 
 void RiPREngine::updateCameraBody (const mace::InputEvent& input)
