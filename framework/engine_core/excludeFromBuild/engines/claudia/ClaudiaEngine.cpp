@@ -1150,6 +1150,9 @@ void ClaudiaEngine::updateLaunchParameters (const mace::InputEvent& input)
     // Firefly reduction parameter
     static_plp_.maxRadiance = DEFAULT_MAX_RADIANCE; // Default value
 
+    static_plp_.mousePosition = int2 (static_cast<int32_t> (input.getX()), static_cast<int32_t> (input.getY()));
+
+
     // Environment light parameters from property system
     const PropertyService& properties = renderContext_->getPropertyService();
     if (properties.renderProps)

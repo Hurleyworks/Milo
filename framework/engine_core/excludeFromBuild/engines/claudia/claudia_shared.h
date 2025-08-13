@@ -93,17 +93,15 @@ namespace claudia_shared
 
     struct PickInfo
     {
+        uint32_t instSlot;
+        uint32_t geomInstSlot;
+        uint32_t primIndex;
+        uint32_t matSlot;
         Point3D positionInWorld;
         Normal3D normalInWorld;
-        Point3D rayOrigin;
-        Vector3D rayDir;
-
-        uint32_t instanceIndex;
-        uint32_t matIndex;
-        uint32_t primIndex;
-        uint32_t instanceID;
-        unsigned int matID : 16;
-        unsigned int hit : 1;
+        RGB albedo;
+        RGB emittance;
+        uint32_t hit : 1;
     };
 
     struct HitPointParams
@@ -185,6 +183,7 @@ namespace claudia_shared
 
         // Pick info buffer
         PickInfo* pickInfoBuffer[2]; // Double buffered
+        
 
         // geometry buffers 
         optixu::NativeBlockBuffer2D<GBuffer0Elements> geoBuffer0[2];
@@ -192,6 +191,8 @@ namespace claudia_shared
 
         // Firefly reduction
         float maxRadiance; // Maximum radiance value to clamp fireflies
+
+        int2 mousePosition;
     };
     struct PerFramePipelineLaunchParameters
     {
