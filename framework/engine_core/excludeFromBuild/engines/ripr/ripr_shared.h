@@ -10,13 +10,7 @@ namespace ripr_shared
 {
     static constexpr float probToSampleEnvLight = 0.25f;
 
-    /* enum PickRayType
-     {
-         PickRayType_Primary = 0,
-         PickRayType_Visibility,
-         NumPickRayTypes
-     };
-     */
+
     enum RayType
     {
         RayType_Search = 0,
@@ -41,24 +35,7 @@ namespace ripr_shared
         }
     };
 
-    /* struct PathTracingRayType
-     {
-         enum Value
-         {
-             Closest,
-             Visibility,
-             NumTypes
-         } value;
-
-         CUDA_DEVICE_FUNCTION constexpr PathTracingRayType (Value v = Closest) :
-             value (v) {}
-
-         CUDA_DEVICE_FUNCTION operator uint32_t() const
-         {
-             return static_cast<uint32_t> (value);
-         }
-     };*/
-
+   
     constexpr uint32_t maxNumRayTypes = 2;
 
     // In PerspectiveCamera struct in shared.h
@@ -269,31 +246,6 @@ namespace ripr_shared
         }
     };
 
-    // Define a struct called HitPointParameter to hold hit point info
-    //struct HitPointParameter
-    //{
-    //    float b1, b2;      // Barycentric coordinates
-    //    int32_t primIndex; // Index of the primitive hit by the ray
-
-    //    // Static member function to get hit point parameters
-    //    CUDA_DEVICE_FUNCTION CUDA_INLINE static HitPointParameter get()
-    //    {
-    //        HitPointParameter ret; // Create an instance of the struct
-
-    //        // Get barycentric coordinates from OptiX API
-    //        float2 bc = optixGetTriangleBarycentrics();
-
-    //        // Store the barycentric coordinates in the struct
-    //        ret.b1 = bc.x;
-    //        ret.b2 = bc.y;
-
-    //        // Get the index of the primitive hit by the ray from OptiX API
-    //        ret.primIndex = optixGetPrimitiveIndex();
-
-    //        // Return the populated struct
-    //        return ret;
-    //    }
-    //};
 
     struct HitPointParameter
     {
