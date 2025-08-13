@@ -410,15 +410,18 @@ void ClaudiaEngine::render (const mace::InputEvent& input, bool updateMotion, ui
 
     // Update launch parameters with current state
     updateLaunchParameters (input);
-    
+
     // Render GBuffer first (for temporal reprojection and other effects)
-    renderGBuffer(stream);
-    
+    renderGBuffer (stream);
+
+    // Synchronize after GBuffer launch to ensure pick info is ready
+    CUDADRV_CHECK (cuStreamSynchronize (stream));
+
     // Output debug info for GBuffer (if enabled)
-   // if (enableGBufferDebug_)
-        if(true)
+    // if (enableGBufferDebug_)
+    if (true)
     {
-        outputGBufferDebugInfo(stream);
+        outputGBufferDebugInfo (stream);
     }
 
     // Launch path tracing kernel - it will handle empty scenes and render the environment
@@ -513,7 +516,7 @@ void ClaudiaEngine::setupPipelines()
     }
 
     optixu::Context optixContext = renderContext_->getOptiXContext();
-    
+
     // Create default material for the scene (using inherited member from BaseRenderingEngine)
     defaultMaterial_ = optixContext.createMaterial();
     // Note: optixu::Scene doesn't have setMaterialDefault, materials are set per geometry instance
@@ -538,15 +541,15 @@ void ClaudiaEngine::setupPipelines()
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
     LOG (INFO) << "Claudia path tracing pipeline configured with max payload dwords: " << maxPayloadDwords;
-    
+
     // Create GBuffer pipeline
     gbufferPipeline_ = std::make_shared<engine_core::RenderPipeline<GBufferEntryPoint>>();
     gbufferPipeline_->optixPipeline = optixContext.createPipeline();
-    
+
     // Configure GBuffer pipeline options
     // GBuffer needs payload for primary ray information
     uint32_t gbufferPayloadDwords = claudia_shared::PrimaryRayPayloadSignature::numDwords;
-    
+
     gbufferPipeline_->optixPipeline.setPipelineOptions (
         gbufferPayloadDwords,
         optixu::calcSumDwords<float2>(), // Attribute dwords for barycentrics
@@ -555,7 +558,7 @@ void ClaudiaEngine::setupPipelines()
         OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
         OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
-    
+
     LOG (INFO) << "Claudia GBuffer pipeline configured with payload dwords: " << gbufferPayloadDwords;
 
     // Ray type configuration is now handled in the pipeline setup
@@ -644,7 +647,7 @@ void ClaudiaEngine::createModules()
 {
     LOG (INFO) << "ClaudiaEngine::createModules()";
 
-    if (!ptxManager_ || !pathTracePipeline_ || !pathTracePipeline_->optixPipeline || 
+    if (!ptxManager_ || !pathTracePipeline_ || !pathTracePipeline_->optixPipeline ||
         !gbufferPipeline_ || !gbufferPipeline_->optixPipeline)
     {
         LOG (WARNING) << "PTXManager or Pipelines not ready";
@@ -668,7 +671,7 @@ void ClaudiaEngine::createModules()
         DEBUG_SELECT (OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
 
     LOG (INFO) << "Claudia path tracing module created successfully";
-    
+
     // Load PTX for GBuffer kernels
     std::vector<char> gbufferPtxData = ptxManager_->getPTXData ("optix_claudia_gbuffer");
     if (gbufferPtxData.empty())
@@ -676,7 +679,7 @@ void ClaudiaEngine::createModules()
         LOG (WARNING) << "Failed to load PTX for optix_claudia_gbuffer";
         return;
     }
-    
+
     // Create module for GBuffer pipeline
     std::string gbufferPtxString (gbufferPtxData.begin(), gbufferPtxData.end());
     gbufferPipeline_->optixModule = gbufferPipeline_->optixPipeline.createModuleFromPTXString (
@@ -684,7 +687,7 @@ void ClaudiaEngine::createModules()
         OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
         DEBUG_SELECT (OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
         DEBUG_SELECT (OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
-    
+
     LOG (INFO) << "Claudia GBuffer module created successfully";
 }
 
@@ -739,68 +742,69 @@ void ClaudiaEngine::createPrograms()
                           pathTracePipeline_->programs.at ("emptyMiss"));
 
         LOG (INFO) << "Path tracing pipeline programs created";
-        
+
         // Setup material hit groups for path tracing pipeline on the default material
         if (defaultMaterial_)
         {
             // Set hit group for search rays (shading)
-            defaultMaterial_.setHitGroup(claudia_shared::RayType_Search,
-                                       pathTracePipeline_->hitPrograms.at(RT_CH_NAME_STR("shading")));
-            
+            defaultMaterial_.setHitGroup (claudia_shared::RayType_Search,
+                                          pathTracePipeline_->hitPrograms.at (RT_CH_NAME_STR ("shading")));
+
             // Set hit group for visibility rays
-            defaultMaterial_.setHitGroup(claudia_shared::RayType_Visibility,
-                                       pathTracePipeline_->hitPrograms.at(RT_AH_NAME_STR("visibility")));
-            
+            defaultMaterial_.setHitGroup (claudia_shared::RayType_Visibility,
+                                          pathTracePipeline_->hitPrograms.at (RT_AH_NAME_STR ("visibility")));
+
             LOG (INFO) << "Path tracing material hit groups configured on default material";
         }
     }
-    
+
     // GBuffer Pipeline Programs
     {
         auto& p = gbufferPipeline_->optixPipeline;
         auto& m = gbufferPipeline_->optixModule;
-        
+
         // Create ray generation program for GBuffer setup
         gbufferPipeline_->entryPoints[GBufferEntryPoint_SetupGBuffers] =
             p.createRayGenProgram (m, RT_RG_NAME_STR ("setupGBuffers"));
-        
+
         // Create miss program for GBuffer
-        gbufferPipeline_->programs[RT_MS_NAME_STR ("setupGBuffers")] = 
+        gbufferPipeline_->programs[RT_MS_NAME_STR ("setupGBuffers")] =
             p.createMissProgram (m, RT_MS_NAME_STR ("setupGBuffers"));
-        
+
         // Create hit group for GBuffer generation
-        gbufferPipeline_->hitPrograms[RT_CH_NAME_STR ("setupGBuffers")] = 
+        gbufferPipeline_->hitPrograms[RT_CH_NAME_STR ("setupGBuffers")] =
             p.createHitProgramGroupForTriangleIS (
                 m, RT_CH_NAME_STR ("setupGBuffers"),
                 emptyModule, nullptr);
-        
+
         // Create empty hit group for unused ray types
         gbufferPipeline_->hitPrograms["emptyHitGroup"] = p.createEmptyHitProgramGroup();
-        
+
         // Set the entry point
         gbufferPipeline_->setEntryPoint (GBufferEntryPoint_SetupGBuffers);
-        
+
         // Configure miss programs for GBuffer ray types
         p.setNumMissRayTypes (claudia_shared::GBufferRayType::NumTypes);
         p.setMissProgram (claudia_shared::GBufferRayType::Primary,
                           gbufferPipeline_->programs.at (RT_MS_NAME_STR ("setupGBuffers")));
-        
+
         LOG (INFO) << "GBuffer pipeline programs created";
     }
-    
+
     // Setup material hit groups for GBuffer pipeline on the default material
     if (defaultMaterial_)
     {
         // Set hit group for primary rays
-        defaultMaterial_.setHitGroup(claudia_shared::GBufferRayType::Primary, 
-                                     gbufferPipeline_->hitPrograms.at(RT_CH_NAME_STR("setupGBuffers")));
-        
+        defaultMaterial_.setHitGroup (claudia_shared::GBufferRayType::Primary,
+                                      gbufferPipeline_->hitPrograms.at (RT_CH_NAME_STR ("setupGBuffers")));
+
         // Set empty hit groups for unused ray types
-        for (uint32_t rayType = claudia_shared::GBufferRayType::NumTypes; 
-             rayType < claudia_shared::maxNumRayTypes; ++rayType) {
-            defaultMaterial_.setHitGroup(rayType, gbufferPipeline_->hitPrograms.at("emptyHitGroup"));
+        for (uint32_t rayType = claudia_shared::GBufferRayType::NumTypes;
+             rayType < claudia_shared::maxNumRayTypes; ++rayType)
+        {
+            defaultMaterial_.setHitGroup (rayType, gbufferPipeline_->hitPrograms.at ("emptyHitGroup"));
         }
-        
+
         LOG (INFO) << "GBuffer material hit groups configured on default material";
     }
 }
@@ -818,13 +822,13 @@ void ClaudiaEngine::linkPipelines()
         pathTracePipeline_->optixPipeline.link (2);
         LOG (INFO) << "Path tracing pipeline linked successfully";
     }
-    
+
     // Link GBuffer pipeline with depth 1 (no recursion needed)
     if (gbufferPipeline_ && gbufferPipeline_->optixPipeline)
     {
         // Set the scene on the pipeline
         gbufferPipeline_->optixPipeline.setScene (scene_);
-        
+
         gbufferPipeline_->optixPipeline.link (1);
         LOG (INFO) << "GBuffer pipeline linked successfully";
     }
@@ -884,16 +888,16 @@ void ClaudiaEngine::createSBT()
 
         LOG (INFO) << "Path tracing pipeline SBT created";
     }
-    
+
     // Create SBT for GBuffer pipeline
     if (gbufferPipeline_ && gbufferPipeline_->optixPipeline)
     {
         auto& p = gbufferPipeline_->optixPipeline;
         size_t sbtSize;
         p.generateShaderBindingTableLayout (&sbtSize);
-        
+
         LOG (INFO) << "GBuffer pipeline SBT size: " << sbtSize << " bytes";
-        
+
         if (sbtSize > 0)
         {
             gbufferPipeline_->sbt.initialize (
@@ -901,7 +905,7 @@ void ClaudiaEngine::createSBT()
             gbufferPipeline_->sbt.setMappedMemoryPersistent (true);
             p.setShaderBindingTable (gbufferPipeline_->sbt, gbufferPipeline_->sbt.getMappedPointer());
         }
-        
+
         // Set hit group SBT for GBuffer pipeline
         if (!gbufferPipeline_->hitGroupSbt.isInitialized())
         {
@@ -919,7 +923,7 @@ void ClaudiaEngine::createSBT()
             gbufferPipeline_->optixPipeline.setHitGroupShaderBindingTable (
                 gbufferPipeline_->hitGroupSbt, gbufferPipeline_->hitGroupSbt.getMappedPointer());
         }
-        
+
         LOG (INFO) << "GBuffer pipeline SBT created";
     }
 }
@@ -988,25 +992,25 @@ void ClaudiaEngine::updateMaterialHitGroups (ClaudiaModelPtr model)
                 mat.setHitGroup (1, visibilityIt->second);
             }
         }
-        
+
         // Set hit groups for GBuffer pipeline
         if (gbufferPipeline_ && gbufferPipeline_->optixPipeline)
         {
             // Set hit group for primary rays
-            auto gbufferIt = gbufferPipeline_->hitPrograms.find(RT_CH_NAME_STR("setupGBuffers"));
+            auto gbufferIt = gbufferPipeline_->hitPrograms.find (RT_CH_NAME_STR ("setupGBuffers"));
             if (gbufferIt != gbufferPipeline_->hitPrograms.end())
             {
-                mat.setHitGroup(claudia_shared::GBufferRayType::Primary, gbufferIt->second);
+                mat.setHitGroup (claudia_shared::GBufferRayType::Primary, gbufferIt->second);
             }
-            
+
             // Set empty hit groups for unused ray types
-            auto emptyIt = gbufferPipeline_->hitPrograms.find("emptyHitGroup");
+            auto emptyIt = gbufferPipeline_->hitPrograms.find ("emptyHitGroup");
             if (emptyIt != gbufferPipeline_->hitPrograms.end())
             {
-                for (uint32_t rayType = claudia_shared::GBufferRayType::NumTypes; 
+                for (uint32_t rayType = claudia_shared::GBufferRayType::NumTypes;
                      rayType < claudia_shared::maxNumRayTypes; ++rayType)
                 {
-                    mat.setHitGroup(rayType, emptyIt->second);
+                    mat.setHitGroup (rayType, emptyIt->second);
                 }
             }
         }
@@ -1053,7 +1057,7 @@ void ClaudiaEngine::updateSBT()
         pathTracePipeline_->optixPipeline.setHitGroupShaderBindingTable (
             pathTracePipeline_->hitGroupSbt, pathTracePipeline_->hitGroupSbt.getMappedPointer());
     }
-    
+
     // Update hit group SBT for GBuffer pipeline
     if (gbufferPipeline_ && gbufferPipeline_->optixPipeline && hitGroupSbtSize > 0)
     {
@@ -1073,21 +1077,21 @@ void ClaudiaEngine::updateSBT()
             gbufferPipeline_->hitGroupSbt.initialize (cuContext, cudau::BufferType::Device, 1, hitGroupSbtSize);
             gbufferPipeline_->hitGroupSbt.setMappedMemoryPersistent (true);
         }
-        
+
         // Re-set on pipeline to ensure update is applied
         gbufferPipeline_->optixPipeline.setHitGroupShaderBindingTable (
             gbufferPipeline_->hitGroupSbt, gbufferPipeline_->hitGroupSbt.getMappedPointer());
     }
 }
 
-void ClaudiaEngine::renderGBuffer(CUstream stream)
+void ClaudiaEngine::renderGBuffer (CUstream stream)
 {
     if (!gbufferPipeline_ || !gbufferPipeline_->optixPipeline)
     {
         LOG (WARNING) << "GBuffer pipeline not ready";
         return;
     }
-    
+
     // Launch the GBuffer generation kernel
     try
     {
@@ -1096,7 +1100,7 @@ void ClaudiaEngine::renderGBuffer(CUstream stream)
             plp_on_device_,
             renderWidth_,
             renderHeight_,
-            1  // depth
+            1 // depth
         );
     }
     catch (const std::exception& e)
@@ -1158,14 +1162,13 @@ void ClaudiaEngine::updateLaunchParameters (const mace::InputEvent& input)
     static_plp_.maxRadiance = DEFAULT_MAX_RADIANCE; // Default value
 
     static_plp_.mousePosition = int2 (static_cast<int32_t> (input.getX()), static_cast<int32_t> (input.getY()));
-    
+
     // Debug: Log mouse position periodically to verify input is working
     static int debugCounter = 0;
-    if (debugCounter++ % 60 == 0)  // Log every 60 frames (about once per second at 60fps)
+    if (debugCounter++ % 60 == 0) // Log every 60 frames (about once per second at 60fps)
     {
-        LOG(DBUG) << "Mouse input: (" << input.getX() << ", " << input.getY() << ")";
+        LOG (DBUG) << "Mouse input: (" << input.getX() << ", " << input.getY() << ")";
     }
-
 
     // Environment light parameters from property system
     const PropertyService& properties = renderContext_->getPropertyService();
@@ -1454,46 +1457,46 @@ void ClaudiaEngine::updateCameraSensor()
     }
 }
 
-void ClaudiaEngine::outputGBufferDebugInfo(CUstream stream)
+void ClaudiaEngine::outputGBufferDebugInfo (CUstream stream)
 {
     if (!renderHandler_)
     {
-        LOG(WARNING) << "RenderHandler not available for debug output";
+        LOG (WARNING) << "RenderHandler not available for debug output";
         return;
     }
-    
+
     // Get the current buffer index
     uint32_t bufferIndex = frameCounter_ & 1;
-    
+
     // Read pick info - exactly like Shocker code
     claudia_shared::PickInfo pickInfoOnHost;
-    renderHandler_->getPickInfo(bufferIndex).read(&pickInfoOnHost, 1, stream);
-    
-    // Only output debug information if something was hit
-    if (pickInfoOnHost.hit)
+    renderHandler_->getPickInfo (bufferIndex).read (&pickInfoOnHost, 1, stream);
+
+    // Only output debug information if geometry was hit (not environment/background)
+    if (pickInfoOnHost.hit && pickInfoOnHost.matSlot != 0xFFFFFFFF)
     {
-        LOG(INFO) << "========== GBuffer Pick Info ==========";
-        LOG(INFO) << "Mouse Position: (" << lastInput_.getX() << ", " << lastInput_.getY() << ")";
-        LOG(INFO) << "Instance: " << pickInfoOnHost.instSlot;
-        LOG(INFO) << "Geometry Instance: " << pickInfoOnHost.geomInstSlot;
-        LOG(INFO) << "Primitive Index: " << pickInfoOnHost.primIndex;
-        LOG(INFO) << "Material: " << pickInfoOnHost.matSlot;
-        LOG(INFO) << "Position: " 
-                  << pickInfoOnHost.positionInWorld.x << ", "
-                  << pickInfoOnHost.positionInWorld.y << ", "
-                  << pickInfoOnHost.positionInWorld.z;
-        LOG(INFO) << "Normal: "
-                  << pickInfoOnHost.normalInWorld.x << ", "
-                  << pickInfoOnHost.normalInWorld.y << ", "
-                  << pickInfoOnHost.normalInWorld.z;
-        LOG(INFO) << "Albedo: "
-                  << pickInfoOnHost.albedo.r << ", "
-                  << pickInfoOnHost.albedo.g << ", "
-                  << pickInfoOnHost.albedo.b;
-        LOG(INFO) << "Emittance: "
-                  << pickInfoOnHost.emittance.r << ", "
-                  << pickInfoOnHost.emittance.g << ", "
-                  << pickInfoOnHost.emittance.b;
-        LOG(INFO) << "========================================";
+        LOG (INFO) << "========== GBuffer Pick Info ==========";
+        LOG (INFO) << "Mouse Position: (" << lastInput_.getX() << ", " << lastInput_.getY() << ")";
+        LOG (INFO) << "Instance: " << pickInfoOnHost.instSlot;
+        LOG (INFO) << "Geometry Instance: " << pickInfoOnHost.geomInstSlot;
+        LOG (INFO) << "Primitive Index: " << pickInfoOnHost.primIndex;
+        LOG (INFO) << "Material: " << pickInfoOnHost.matSlot;
+        LOG (INFO) << "Position: "
+                   << pickInfoOnHost.positionInWorld.x << ", "
+                   << pickInfoOnHost.positionInWorld.y << ", "
+                   << pickInfoOnHost.positionInWorld.z;
+        LOG (INFO) << "Normal: "
+                   << pickInfoOnHost.normalInWorld.x << ", "
+                   << pickInfoOnHost.normalInWorld.y << ", "
+                   << pickInfoOnHost.normalInWorld.z;
+        LOG (INFO) << "Albedo: "
+                   << pickInfoOnHost.albedo.r << ", "
+                   << pickInfoOnHost.albedo.g << ", "
+                   << pickInfoOnHost.albedo.b;
+        LOG (INFO) << "Emittance: "
+                   << pickInfoOnHost.emittance.r << ", "
+                   << pickInfoOnHost.emittance.g << ", "
+                   << pickInfoOnHost.emittance.b;
+        LOG (INFO) << "========================================";
     }
 }

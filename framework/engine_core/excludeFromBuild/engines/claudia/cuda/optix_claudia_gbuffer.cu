@@ -103,7 +103,8 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME (setupGBuffers)()
 {
 
     const uint2 launchIndex = make_uint2 (optixGetLaunchIndex().x, optixGetLaunchIndex().y);
-#if 0 if (launchIndex.x % 100 == 0 && launchIndex.y % 100 == 0)
+#if 0
+    if (launchIndex.x % 100 == 0 && launchIndex.y % 100 == 0)
     {
         printf ("Claudia GBuffer CH: HIT DETECTED! pixel (%u, %u), instance %u, ray t=%.3f\n",
                 launchIndex.x, launchIndex.y, optixGetInstanceId(), optixGetRayTmax());
@@ -184,7 +185,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME (setupGBuffers)()
         launchIndex.y == claudia_plp.s->mousePosition.y)
     {
         pickInfo->hit = true;
-        pickInfo->matSlot = geomInst.materialSlot;
+        pickInfo->matSlot = sbtr.materialSlot;
         RGB emittance (0.0f, 0.0f, 0.0f);
         if (mat.emissive)
         {
@@ -227,7 +228,7 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME (setupGBuffers)()
         pickInfo->hit = true;
         pickInfo->matSlot = 0xFFFFFFFF;
         RGB emittance (0.0f, 0.0f, 0.0f);
-        if (claudia_plp.s->envLightTexture && plp.f->enableEnvLight)
+        if (claudia_plp.s->envLightTexture)
         {
             float4 texValue = tex2DLod<float4> (claudia_plp.s->envLightTexture, u, v, 0.0f);
             emittance = RGB (getXYZ (texValue));

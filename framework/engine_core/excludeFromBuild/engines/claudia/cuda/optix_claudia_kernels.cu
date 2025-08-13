@@ -679,7 +679,10 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME (miss)()
         toPolarYUp (rayDir, &posPhi, &theta);
         float phi = posPhi + claudia_plp.s->envLightRotation;
         phi = phi - floorf (phi / (2 * Pi)) * 2 * Pi;
-        texCoord = Point2D (phi / (2 * Pi), theta / Pi);
+        // Clamp texture coordinates to [0, 1) range to prevent evaluatePDF assertion
+        float u = fminf(phi / (2 * Pi), 0.999999f);
+        float v = fminf(theta / Pi, 0.999999f);
+        texCoord = Point2D (u, v);
         float4 texValue = tex2DLod<float4> (claudia_plp.s->envLightTexture, texCoord.x, texCoord.y, 0.0f);
         environmentValue = RGB (texValue.x, texValue.y, texValue.z);
     }
@@ -750,7 +753,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME (shading)()
     Point2D texCoord;
     float hypAreaPDensity;
     computeSurfacePoint (
-        geomInst, hp.primIndex, hp.b1, hp.b2,
+        geomInst, hp.primIndex, hp.bcB, hp.bcC,
         Point3D (optixGetWorldRayOrigin()),
         &positionInWorld, &shadingNormalInWorld, &texCoord0DirInWorld,
         &geometricNormalInWorld, &texCoord, &hypAreaPDensity);
