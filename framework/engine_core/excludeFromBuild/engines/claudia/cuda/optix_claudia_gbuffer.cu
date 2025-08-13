@@ -101,18 +101,138 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME (setupGBuffers)()
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME (setupGBuffers)()
 {
-    const uint2 launchIndex = make_uint2 (optixGetLaunchIndex().x, optixGetLaunchIndex().y);
-    // const uint32_t bufIdx = plp.f->bufferIndex;
 
-    if (launchIndex.x % 100 == 0 && launchIndex.y % 100 == 0)
+    const uint2 launchIndex = make_uint2 (optixGetLaunchIndex().x, optixGetLaunchIndex().y);
+#if 0 if (launchIndex.x % 100 == 0 && launchIndex.y % 100 == 0)
     {
         printf ("Claudia GBuffer CH: HIT DETECTED! pixel (%u, %u), instance %u, ray t=%.3f\n",
                 launchIndex.x, launchIndex.y, optixGetInstanceId(), optixGetRayTmax());
     }
+#endif
 
-    const auto sbtr = HitGroupSBTRecordData::get();
+    auto sbtr = HitGroupSBTRecordData::get();
+    const shared::DisneyData& mat = claudia_plp.s->materialDataBuffer[sbtr.materialSlot];
+    const shared::GeometryInstanceData& geomInst = claudia_plp.s->geometryInstanceDataBuffer[sbtr.geomInstSlot];
+
+    // Get instance data using buffer index from launch parameters
+    const uint32_t bufIdx = claudia_plp.s->bufferIndex;
+    const shared::InstanceData& inst = claudia_plp.s->instanceDataBufferArray[bufIdx][optixGetInstanceId()];
+
+    HitPointParams* hitPointParams;
+    PickInfo* pickInfo;
+    PrimaryRayPayloadSignature::get (&hitPointParams, &pickInfo);
+
+    const auto hp = HitPointParameter::get();
+    hitPointParams->instSlot = optixGetInstanceId();
+    hitPointParams->geomInstSlot = sbtr.geomInstSlot;
+    hitPointParams->primIndex = hp.primIndex;
+
+    Point3D positionInWorld;
+    Point3D prevPositionInWorld;
+    Normal3D shadingNormalInWorld;
+    Vector3D texCoord0DirInWorld;
+    Point2D texCoord;
+    {
+        const Triangle& tri = geomInst.triangleBuffer[hp.primIndex];
+        const Vertex& vA = geomInst.vertexBuffer[tri.index0];
+        const Vertex& vB = geomInst.vertexBuffer[tri.index1];
+        const Vertex& vC = geomInst.vertexBuffer[tri.index2];
+        const float bcB = hp.bcB;
+        const float bcC = hp.bcC;
+        const float bcA = 1 - (bcB + bcC);
+        hitPointParams->qbcB = encodeBarycentric (bcB);
+        hitPointParams->qbcC = encodeBarycentric (bcC);
+        const Point3D positionInObj = bcA * vA.position + bcB * vB.position + bcC * vC.position;
+        const Normal3D shadingNormalInObj = bcA * vA.normal + bcB * vB.normal + bcC * vC.normal;
+        const Vector3D texCoord0DirInObj = bcA * vA.texCoord0Dir + bcB * vB.texCoord0Dir + bcC * vC.texCoord0Dir;
+        texCoord = bcA * vA.texCoord + bcB * vB.texCoord + bcC * vC.texCoord;
+
+        positionInWorld = transformPointFromObjectToWorldSpace (positionInObj);
+        prevPositionInWorld = inst.curToPrevTransform * positionInWorld;
+        shadingNormalInWorld = normalize (transformNormalFromObjectToWorldSpace (shadingNormalInObj));
+        texCoord0DirInWorld = transformVectorFromObjectToWorldSpace (texCoord0DirInObj);
+        texCoord0DirInWorld = normalize (
+            texCoord0DirInWorld - dot (shadingNormalInWorld, texCoord0DirInWorld) * shadingNormalInWorld);
+        if (!shadingNormalInWorld.allFinite())
+        {
+            shadingNormalInWorld = Normal3D (0, 0, 1);
+            texCoord0DirInWorld = Vector3D (1, 0, 0);
+        }
+    }
+
+    hitPointParams->positionInWorld = positionInWorld;
+    hitPointParams->prevPositionInWorld = prevPositionInWorld;
+
+    // Create DisneyPrincipled instance directly instead of using BSDF
+    DisneyPrincipled bsdf = DisneyPrincipled::create (
+        mat, texCoord, 0.0f, claudia_plp.s->makeAllGlass, claudia_plp.s->globalGlassIOR,
+        claudia_plp.s->globalTransmittanceDist, claudia_plp.s->globalGlassType);
+
+    ReferenceFrame shadingFrame (shadingNormalInWorld, texCoord0DirInWorld);
+    /* if (plp.f->enableBumpMapping)
+     {
+         const Normal3D modLocalNormal = mat.readModifiedNormal (mat.normal, mat.normalDimInfo, texCoord, 0.0f);
+         applyBumpMapping (modLocalNormal, &shadingFrame);
+     }*/
+    const Vector3D vOut (-Vector3D (optixGetWorldRayDirection()));
+    const Vector3D vOutLocal = shadingFrame.toLocal (normalize (vOut));
+
+    hitPointParams->normalInWorld = shadingFrame.normal;
+    hitPointParams->albedo = bsdf.evaluateDHReflectanceEstimate (vOutLocal);
+
+    if (launchIndex.x == claudia_plp.s->mousePosition.x &&
+        launchIndex.y == claudia_plp.s->mousePosition.y)
+    {
+        pickInfo->hit = true;
+        pickInfo->matSlot = geomInst.materialSlot;
+        RGB emittance (0.0f, 0.0f, 0.0f);
+        if (mat.emissive)
+        {
+            float4 texValue = tex2DLod<float4> (mat.emissive, texCoord.x, texCoord.y, 0.0f);
+            emittance = RGB (getXYZ (texValue));
+        }
+        pickInfo->emittance = emittance;
+    }
 }
 
 CUDA_DEVICE_KERNEL void RT_MS_NAME (setupGBuffers)()
 {
+    const uint2 launchIndex = make_uint2 (optixGetLaunchIndex().x, optixGetLaunchIndex().y);
+
+    const Vector3D vOut (-Vector3D (optixGetWorldRayDirection()));
+    const Point3D p (-vOut);
+
+    float posPhi, posTheta;
+    toPolarYUp (Vector3D (p), &posPhi, &posTheta);
+
+    const float phi = posPhi + claudia_plp.s->envLightRotation;
+
+    float u = phi / (2 * pi_v<float>);
+    u -= floorf (u);
+    const float v = posTheta / pi_v<float>;
+
+    HitPointParams* hitPointParams;
+    PickInfo* pickInfo;
+    PrimaryRayPayloadSignature::get (&hitPointParams, &pickInfo);
+
+    hitPointParams->positionInWorld = p;
+    hitPointParams->prevPositionInWorld = p;
+    hitPointParams->normalInWorld = Normal3D (vOut);
+    hitPointParams->qbcB = encodeBarycentric (u);
+    hitPointParams->qbcC = encodeBarycentric (v);
+
+     if (launchIndex.x == claudia_plp.s->mousePosition.x &&
+        launchIndex.y == claudia_plp.s->mousePosition.y)
+    {
+        pickInfo->hit = true;
+        pickInfo->matSlot = 0xFFFFFFFF;
+        RGB emittance (0.0f, 0.0f, 0.0f);
+        if (claudia_plp.s->envLightTexture && plp.f->enableEnvLight)
+        {
+            float4 texValue = tex2DLod<float4> (claudia_plp.s->envLightTexture, u, v, 0.0f);
+            emittance = RGB (getXYZ (texValue));
+            emittance *= pi_v<float> * claudia_plp.s->envLightPowerCoeff;
+        }
+        pickInfo->emittance = emittance;
+    }
 }

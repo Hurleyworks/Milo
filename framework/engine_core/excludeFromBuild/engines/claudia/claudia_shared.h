@@ -118,6 +118,7 @@ namespace claudia_shared
         uint16_t qbcC;
     };
 
+
     struct GBuffer0Elements
     {
         uint32_t instSlot;
@@ -260,27 +261,43 @@ namespace claudia_shared
     };
 
     // Define a struct called HitPointParameter to hold hit point info
+    //struct HitPointParameter
+    //{
+    //    float b1, b2;      // Barycentric coordinates
+    //    int32_t primIndex; // Index of the primitive hit by the ray
+
+    //    // Static member function to get hit point parameters
+    //    CUDA_DEVICE_FUNCTION CUDA_INLINE static HitPointParameter get()
+    //    {
+    //        HitPointParameter ret; // Create an instance of the struct
+
+    //        // Get barycentric coordinates from OptiX API
+    //        float2 bc = optixGetTriangleBarycentrics();
+
+    //        // Store the barycentric coordinates in the struct
+    //        ret.b1 = bc.x;
+    //        ret.b2 = bc.y;
+
+    //        // Get the index of the primitive hit by the ray from OptiX API
+    //        ret.primIndex = optixGetPrimitiveIndex();
+
+    //        // Return the populated struct
+    //        return ret;
+    //    }
+    //};
+
     struct HitPointParameter
     {
-        float b1, b2;      // Barycentric coordinates
-        int32_t primIndex; // Index of the primitive hit by the ray
+        float bcB, bcC;
+        int32_t primIndex;
 
-        // Static member function to get hit point parameters
         CUDA_DEVICE_FUNCTION CUDA_INLINE static HitPointParameter get()
         {
-            HitPointParameter ret; // Create an instance of the struct
-
-            // Get barycentric coordinates from OptiX API
-            float2 bc = optixGetTriangleBarycentrics();
-
-            // Store the barycentric coordinates in the struct
-            ret.b1 = bc.x;
-            ret.b2 = bc.y;
-
-            // Get the index of the primitive hit by the ray from OptiX API
+            HitPointParameter ret;
+            const float2 bc = optixGetTriangleBarycentrics();
+            ret.bcB = bc.x;
+            ret.bcC = bc.y;
             ret.primIndex = optixGetPrimitiveIndex();
-
-            // Return the populated struct
             return ret;
         }
     };
