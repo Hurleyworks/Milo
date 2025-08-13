@@ -65,6 +65,9 @@ private:
     
     // GBuffer rendering
     void renderGBuffer(CUstream stream);
+    void outputGBufferDebugInfo(CUstream stream);
+    void setGBufferDebugEnabled(bool enabled) { enableGBufferDebug_ = enabled; }
+    bool isGBufferDebugEnabled() const { return enableGBufferDebug_; }
     
     // Launch parameter management
     void updateLaunchParameters(const mace::InputEvent& input);
@@ -134,4 +137,7 @@ private:
     
     // Light probability computation kernels
     ComputeProbTex computeProbTex_;
+    
+    // Debug settings
+    bool enableGBufferDebug_ = false;
 };

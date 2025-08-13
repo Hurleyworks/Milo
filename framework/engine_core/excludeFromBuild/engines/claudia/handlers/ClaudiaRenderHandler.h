@@ -60,10 +60,16 @@ public:
     
     
     // Pick info buffer accessor
-    float4* getPickInfoPointer(int bufferIndex) const
+    claudia_shared::PickInfo* getPickInfoPointer(int bufferIndex) const
     {
         return pickInfoBuffers_[bufferIndex].isInitialized() ? 
                pickInfoBuffers_[bufferIndex].getDevicePointer() : nullptr;
+    }
+    
+    // Get pick info buffer for reading (similar to Shocker renderer)
+    const cudau::TypedBuffer<claudia_shared::PickInfo>& getPickInfo(int bufferIndex) const
+    {
+        return pickInfoBuffers_[bufferIndex];
     }
     
     // Operations
@@ -99,7 +105,7 @@ private:
     
     
     // Pick info buffers (double buffered)
-    cudau::TypedBuffer<float4> pickInfoBuffers_[2];
+    cudau::TypedBuffer<claudia_shared::PickInfo> pickInfoBuffers_[2];
     
     // CUDA module and kernels for buffer operations
     CUmodule moduleCopyBuffers_ = nullptr;

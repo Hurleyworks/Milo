@@ -413,6 +413,13 @@ void ClaudiaEngine::render (const mace::InputEvent& input, bool updateMotion, ui
     
     // Render GBuffer first (for temporal reprojection and other effects)
     renderGBuffer(stream);
+    
+    // Output debug info for GBuffer (if enabled)
+   // if (enableGBufferDebug_)
+        if(true)
+    {
+        outputGBufferDebugInfo(stream);
+    }
 
     // Launch path tracing kernel - it will handle empty scenes and render the environment
     timer->pathTrace.start (stream);
@@ -1151,6 +1158,13 @@ void ClaudiaEngine::updateLaunchParameters (const mace::InputEvent& input)
     static_plp_.maxRadiance = DEFAULT_MAX_RADIANCE; // Default value
 
     static_plp_.mousePosition = int2 (static_cast<int32_t> (input.getX()), static_cast<int32_t> (input.getY()));
+    
+    // Debug: Log mouse position periodically to verify input is working
+    static int debugCounter = 0;
+    if (debugCounter++ % 60 == 0)  // Log every 60 frames (about once per second at 60fps)
+    {
+        LOG(DBUG) << "Mouse input: (" << input.getX() << ", " << input.getY() << ")";
+    }
 
 
     // Environment light parameters from property system
@@ -1437,5 +1451,49 @@ void ClaudiaEngine::updateCameraSensor()
     if (!success)
     {
         LOG (WARNING) << "Failed to update camera sensor with rendered image";
+    }
+}
+
+void ClaudiaEngine::outputGBufferDebugInfo(CUstream stream)
+{
+    if (!renderHandler_)
+    {
+        LOG(WARNING) << "RenderHandler not available for debug output";
+        return;
+    }
+    
+    // Get the current buffer index
+    uint32_t bufferIndex = frameCounter_ & 1;
+    
+    // Read pick info - exactly like Shocker code
+    claudia_shared::PickInfo pickInfoOnHost;
+    renderHandler_->getPickInfo(bufferIndex).read(&pickInfoOnHost, 1, stream);
+    
+    // Only output debug information if something was hit
+    if (pickInfoOnHost.hit)
+    {
+        LOG(INFO) << "========== GBuffer Pick Info ==========";
+        LOG(INFO) << "Mouse Position: (" << lastInput_.getX() << ", " << lastInput_.getY() << ")";
+        LOG(INFO) << "Instance: " << pickInfoOnHost.instSlot;
+        LOG(INFO) << "Geometry Instance: " << pickInfoOnHost.geomInstSlot;
+        LOG(INFO) << "Primitive Index: " << pickInfoOnHost.primIndex;
+        LOG(INFO) << "Material: " << pickInfoOnHost.matSlot;
+        LOG(INFO) << "Position: " 
+                  << pickInfoOnHost.positionInWorld.x << ", "
+                  << pickInfoOnHost.positionInWorld.y << ", "
+                  << pickInfoOnHost.positionInWorld.z;
+        LOG(INFO) << "Normal: "
+                  << pickInfoOnHost.normalInWorld.x << ", "
+                  << pickInfoOnHost.normalInWorld.y << ", "
+                  << pickInfoOnHost.normalInWorld.z;
+        LOG(INFO) << "Albedo: "
+                  << pickInfoOnHost.albedo.r << ", "
+                  << pickInfoOnHost.albedo.g << ", "
+                  << pickInfoOnHost.albedo.b;
+        LOG(INFO) << "Emittance: "
+                  << pickInfoOnHost.emittance.r << ", "
+                  << pickInfoOnHost.emittance.g << ", "
+                  << pickInfoOnHost.emittance.b;
+        LOG(INFO) << "========================================";
     }
 }
