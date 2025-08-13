@@ -46,14 +46,23 @@
 #include "excludeFromBuild/engines/ripr/handlers/RiPRRenderHandler.cpp"
 #include "excludeFromBuild/engines/ripr/handlers/RiPRDenoiserHandler.cpp"
 
+// shocker handlers
+#include "excludeFromBuild/engines/shocker/handlers/ShockerModelHandler.cpp"
+#include "excludeFromBuild/engines/shocker/handlers/ShockerMaterialHandler.cpp"
+#include "excludeFromBuild/engines/shocker/handlers/ShockerSceneHandler.cpp"
+#include "excludeFromBuild/engines/shocker/handlers/ShockerRenderHandler.cpp"
+#include "excludeFromBuild/engines/shocker/handlers/ShockerDenoiserHandler.cpp"
+
 // engines
 #include "excludeFromBuild/engines/base/BaseRenderingEngine.cpp"
 #include "excludeFromBuild/engines/RenderEngineManager.cpp"
 #include "excludeFromBuild/engines/milo/MiloEngine.cpp"
 #include "excludeFromBuild/engines/claudia/ClaudiaEngine.cpp"
 #include "excludeFromBuild/engines/ripr/RiPREngine.cpp"
+#include "excludeFromBuild/engines/shocker/ShockerEngine.cpp"
 
 // models
 #include "excludeFromBuild/engines/milo/models/MiloModel.cpp"
 #include "excludeFromBuild/engines/claudia/models/ClaudiaModel.cpp"
 #include "excludeFromBuild/engines/ripr/models/RiPRModel.cpp"
+#include "excludeFromBuild/engines/shocker/models/ShockerModel.cpp"

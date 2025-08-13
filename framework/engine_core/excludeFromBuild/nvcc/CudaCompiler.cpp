@@ -83,6 +83,16 @@ std::vector<std::filesystem::path> CudaCompiler::getCudaFilesForEngine(
             }
         }
         
+        // Shocker engine files
+        std::filesystem::path shockerPath = baseFolder / "engines" / "shocker" / "cuda";
+        if (std::filesystem::exists(shockerPath)) {
+            for (const auto& entry : std::filesystem::directory_iterator(shockerPath)) {
+                if (entry.path().extension() == ".cu") {
+                    result.push_back(entry.path());
+                }
+            }
+        }
+        
         // Common GPU kernels
         std::filesystem::path commonPath = baseFolder / "common" / "gpu_kernels";
         if (std::filesystem::exists(commonPath)) {
@@ -160,6 +170,27 @@ std::vector<std::filesystem::path> CudaCompiler::getCudaFilesForEngine(
         std::filesystem::path commonPath = baseFolder / "common" / "gpu_kernels";
         if (std::filesystem::exists(commonPath)) {
             // Add compute_light_probs.cu if it exists (used by RiPR)
+            auto lightProbs = commonPath / "compute_light_probs.cu";
+            if (std::filesystem::exists(lightProbs)) {
+                result.push_back(lightProbs);
+            }
+        }
+    }
+    else if (engineFilter == "shocker") {
+        // Only Shocker engine files
+        std::filesystem::path shockerPath = baseFolder / "engines" / "shocker" / "cuda";
+        if (std::filesystem::exists(shockerPath)) {
+            for (const auto& entry : std::filesystem::directory_iterator(shockerPath)) {
+                if (entry.path().extension() == ".cu") {
+                    result.push_back(entry.path());
+                }
+            }
+        }
+        
+        // Add common files that Shocker uses
+        std::filesystem::path commonPath = baseFolder / "common" / "gpu_kernels";
+        if (std::filesystem::exists(commonPath)) {
+            // Add compute_light_probs.cu if it exists (used by Shocker)
             auto lightProbs = commonPath / "compute_light_probs.cu";
             if (std::filesystem::exists(lightProbs)) {
                 result.push_back(lightProbs);

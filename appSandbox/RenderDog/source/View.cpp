@@ -103,7 +103,7 @@ View::View (const DesktopWindowSettings& settings) :
     // Engine selection combo box
     new Label (engineWindow, "Render Engine:", "sans-bold");
     m_engineCombo = new ComboBox (engineWindow,
-                                  {"Milo Engine", "Claudia Engine", "RiPR Engine"});
+                                  {"Milo Engine", "Claudia Engine", "RiPR Engine", "Shocker Engine"});
     m_engineCombo->set_selected_index (0); // Default to Milo Engine
     m_engineCombo->set_tooltip ("Select the rendering engine to use");
     m_engineCombo->set_callback ([this] (int index)
@@ -111,12 +111,14 @@ View::View (const DesktopWindowSettings& settings) :
         const std::vector<std::string> engineNames = {
             "milo",
             "claudia",
-            "ripr"
+            "ripr",
+            "shocker"
         };
         const std::vector<std::string> engineDescriptions = {
             "High-performance path tracing engine based on RiPR architecture",
             "Advanced path tracing engine with adaptive sampling and improved convergence",
-            "Dual-pipeline ray tracing engine with G-buffer and path tracing modes"
+            "Dual-pipeline ray tracing engine with G-buffer and path tracing modes",
+            "Next-generation path tracing engine with optimized performance"
         };
         if (index >= 0 && index < engineNames.size()) {
             LOG(INFO) << "Switching to engine: " << engineNames[index];
