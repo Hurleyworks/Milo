@@ -1,153 +1,180 @@
 #pragma once
 
 // RiPRModelHandler.h
-// Manages RiPRModel lifecycle, geometry instances, and groups
-// Part of the RiPREngine handler architecture
+// Responsible for managing RiPR 3D models in the rendering system, providing
+// model creation, retrieval, and visibility control functionality
 
 #include "../models/RiPRModel.h"
-#include "../models/RiPRCore.h"
-#include "../models/RiPRDeviceCore.h"
-#include "../../../common/common_host.h"
-#include "../../milo/milo_shared.h"
-#include <unordered_map>
-#include <memory>
-#include <vector>
 
-// Forward declarations
+using sabi::RenderableNode;
+using sabi::RenderableWeakRef;
+using sabi::WeakRenderableList;
+
+using RiPRModelHandlerPtr = std::shared_ptr<class RiPRModelHandler>;
 class RiPRMaterialHandler;
-class RiPRTextureHandler;
-class AreaLightHandler;
-class RenderContext;
-using RenderContextPtr = std::shared_ptr<RenderContext>;
-using AreaLightHandlerPtr = std::shared_ptr<AreaLightHandler>;
+class RiPRSceneHandler;
 
 class RiPRModelHandler
 {
+    // Internal class that manages the storage and lookup of RiPR models
+    class RiPRModelManager
+    {
+    public:
+        // Stores a RiPR model with the specified key identifier
+        // Returns the key for future reference
+        ItemID storeModel(RiPRModelPtr model, ItemID key)
+        {
+            models[key] = model;
+            return key;
+        }
+
+        RiPRModelPtr retrieveModel(ItemID key)
+        {
+            auto it = models.find(key);
+            if (it != models.end())
+            {
+                return it->second;
+            }
+            LOG(DBUG) << "Could not find model with key " << key;
+            return nullptr;
+        }
+
+        void removeModel(ItemID itemID)
+        {
+            auto it = models.find(itemID);
+            if (it != models.end())
+            {
+                models.erase(it);
+            }
+        }
+
+        // Sets visibility mask for all managed models
+        // Used to control which models are visible in different ray types
+        void setAllVisibility(uint32_t mask)
+        {
+            for (auto& it : models)
+            {
+                it.second->getOptiXInstance().setVisibilityMask(mask);
+            }
+        }
+        
+        // Get all models for updating materials
+        const std::map<ItemID, RiPRModelPtr>& getModels() const { return models; }
+        
+        // Clear all models
+        void clear()
+        {
+            models.clear();
+        }
+
+    private:
+        std::map<ItemID, RiPRModelPtr> models;  // Storage map for models indexed by ID
+    };
+
 public:
-    RiPRModelHandler() = default;
-    ~RiPRModelHandler() = default;
+    // Factory method to create a new RiPRModelHandler instance
+    static RiPRModelHandlerPtr create(RenderContextPtr ctx) 
+    { 
+        return std::make_shared<RiPRModelHandler>(ctx); 
+    }
+
+public:
+    // Constructor that initializes the handler with a render context
+    RiPRModelHandler(RenderContextPtr ctx);
     
-    // Initialize the handler with dependencies
-    void initialize(RenderContextPtr context);
+    // Destructor
+    ~RiPRModelHandler();
+
+    // Initialize the model handler with buffer allocation for geometry instances
+    void initialize();
+
+    // Finalize and clean up all resources
+    void finalize();
+
+    // Set the material and scene handlers (must be called before adding models)
+    void setHandlers(std::shared_ptr<RiPRMaterialHandler> materialHandler,
+                     std::shared_ptr<RiPRSceneHandler> sceneHandler)
+    {
+        materialHandler_ = materialHandler;
+        sceneHandler_ = sceneHandler;
+    }
+
+    // Adds a single model from a renderable node to the RiPR scene
+    void addCgModel(RenderableWeakRef weakNode);
     
-    // Main conversion pipeline - creates model from RenderableNode
-    RiPRModelPtr processRenderableNode(const sabi::RenderableNode& node);
+    // Adds multiple models from a list of renderable nodes
+    void addCgModelList(const WeakRenderableList& weakNodeList);
     
-    // Create a model based on geometry type
-    RiPRModelPtr createModelByType(const sabi::CgModelPtr& cgModel);
+    // Sets visibility mask for all managed models
+    void setAllModelsVisibility(uint32_t mask)
+    {
+        modelMgr.setAllVisibility(mask);
+    }
+
+    // Get all models for updating materials
+    const std::map<ItemID, RiPRModelPtr>& getModels() const 
+    { 
+        return modelMgr.getModels(); 
+    }
     
-    // Surface management (replaces geometry instance)
-    ripr::RiPRSurface* createRiPRSurface(RiPRModel* model);
+    // Retrieves a RiPR model by its ID
+    RiPRModelPtr getRiPRModel(ItemID key)
+    {
+        return modelMgr.retrieveModel(key);
+    }
     
-    // Surface group management (replaces geometry group)
-    ripr::RiPRSurfaceGroup* createRiPRSurfaceGroup(const std::vector<ripr::RiPRSurface*>& surfaces);
-    
-    // Node creation with transforms (replaces instance)
-    ripr::RiPRNode* createRiPRNode(RiPRModel* model, const sabi::SpaceTime& spacetime);
-    
-    // Get model by name
-    RiPRModelPtr getModel(const std::string& name) const;
-    
-    // Check if model exists
-    bool hasModel(const std::string& name) const;
-    
-    // Get all models
-    const std::unordered_map<std::string, RiPRModelPtr>& getAllModels() const { return models_; }
-    
-    // Get count of all surfaces across all models
-    size_t getRiPRSurfaceCount() const;
-    
-    // Get all surface groups  
-    const std::vector<std::unique_ptr<ripr::RiPRSurfaceGroup>>& getRiPRSurfaceGroups() const { return surfaceGroups_; }
-    
-    // Clear all data
-    void clear();
-    
-    // Set material handler (for future integration)
-    void setMaterialHandler(RiPRMaterialHandler* handler) { materialHandler_ = handler; }
-    
-    // Set texture handler (for future integration)
-    void setTextureHandler(RiPRTextureHandler* handler) { textureHandler_ = handler; }
-    
-    // Set area light handler
-    void setAreaLightHandler(AreaLightHandlerPtr handler) { areaLightHandler_ = handler; }
-    
-    // Get the geometry instance data buffer for GPU upload
-    cudau::TypedBuffer<ripr::RiPRSurfaceData>* getGeometryInstanceDataBuffer()
+    // Retrieves a RiPR model by renderable node
+    RiPRModelPtr getModel(const RenderableNode& node)
+    {
+        if (!node) return nullptr;
+        return getRiPRModel(node->getID());
+    }
+
+    void removeModel(ItemID itemID);
+
+    // Get the geometry instance data buffer
+    cudau::TypedBuffer<shared::GeometryInstanceData>* getGeometryInstanceDataBuffer()
     {
         return &geometryInstanceDataBuffer_;
     }
-    
-    // Update the geometry instance data buffer with all surface data
-    void updateGeometryInstanceDataBuffer();
-    
-private:
-    // Helper to determine geometry type from CgModel
-    RiPRGeometryType determineGeometryType(const sabi::CgModelPtr& model) const;
-    
-    // Helper to calculate combined AABB
-    AABB calculateCombinedAABB(const std::vector<ripr::RiPRSurface*>& surfaces) const;
-    
-    // Slot management helpers
+
+    // Allocate a geometry instance slot
     uint32_t allocateGeometryInstanceSlot()
     {
         uint32_t slot = geomInstSlotFinder_.getFirstAvailableSlot();
-        if (slot != SlotFinder::InvalidSlotIndex) {
+        if (slot != SlotFinder::InvalidSlotIndex)
+        {
             geomInstSlotFinder_.setInUse(slot);
         }
         return slot;
     }
-    
+
+    // Release a geometry instance slot
     void releaseGeometryInstanceSlot(uint32_t slot)
     {
-        if (slot != SlotFinder::InvalidSlotIndex) {
+        if (slot != SlotFinder::InvalidSlotIndex)
+        {
             geomInstSlotFinder_.setNotInUse(slot);
         }
     }
-    
-    uint32_t allocateInstanceSlot()
-    {
-        uint32_t slot = instanceSlotFinder_.getFirstAvailableSlot();
-        if (slot != SlotFinder::InvalidSlotIndex) {
-            instanceSlotFinder_.setInUse(slot);
-        }
-        return slot;
-    }
-    
-    void releaseInstanceSlot(uint32_t slot)
-    {
-        if (slot != SlotFinder::InvalidSlotIndex) {
-            instanceSlotFinder_.setNotInUse(slot);
-        }
-    }
-    
+
 private:
-    // Model registry - stores all created models by name
-    std::unordered_map<std::string, RiPRModelPtr> models_;
+    RenderContextPtr ctx_ = nullptr;  // Render context for OptiX operations
+    RiPRModelManager modelMgr;        // Model manager that stores and retrieves models
     
-    // Surfaces - owns all created surfaces (replaces geometry instances)
-    std::vector<std::unique_ptr<ripr::RiPRSurface>> surfaces_;
-    
-    // Surface groups - owns all created surface groups (replaces geometry groups)
-    std::vector<std::unique_ptr<ripr::RiPRSurfaceGroup>> surfaceGroups_;
-    
-    // Nodes - owns all created nodes (replaces instances)
-    std::vector<std::unique_ptr<ripr::RiPRNode>> nodes_;
-    
-    // Slot management
+    // Handler references (not owned)
+    std::shared_ptr<RiPRMaterialHandler> materialHandler_;
+    std::shared_ptr<RiPRSceneHandler> sceneHandler_;
+
+    // Slot management for geometry instances
     SlotFinder geomInstSlotFinder_;
-    SlotFinder instanceSlotFinder_;
+
+    // Geometry instance data buffer
+    cudau::TypedBuffer<shared::GeometryInstanceData> geometryInstanceDataBuffer_;
     
-    // GPU buffers
-    cudau::TypedBuffer<ripr::RiPRSurfaceData> geometryInstanceDataBuffer_;
+    // Track initialization state
+    bool isInitialized_ = false;
     
-    // Dependencies
-    RenderContextPtr renderContext_;
-    RiPRMaterialHandler* materialHandler_ = nullptr;
-    RiPRTextureHandler* textureHandler_ = nullptr;
-    AreaLightHandlerPtr areaLightHandler_ = nullptr;
-    
-    // Statistics
-    size_t totalTriangles_ = 0;
-    size_t totalVertices_ = 0;
+    // Maximum number of geometry instances
+    static constexpr uint32_t maxNumGeometryInstances = 65536;
 };

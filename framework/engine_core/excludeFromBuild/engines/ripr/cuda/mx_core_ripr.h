@@ -6,7 +6,7 @@
 
 #include "../ripr_shared.h"
 #include "../../../material/DeviceDisneyMaterial.h"
-
+#include "../../../common/deviceCommon.h"
 
 using namespace ripr_shared;
 using namespace shared;

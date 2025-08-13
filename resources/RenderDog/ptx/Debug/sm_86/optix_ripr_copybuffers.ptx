@@ -29,7 +29,7 @@
 	.reg .f32 	%f<18>;
 	.reg .b32 	%r<29>;
 	.reg .b64 	%rd<21>;
-	.loc	1 15 0
+	.loc	1 14 0
 
 
 	ld.param.u64 	%rd2, [copySurfacesToLinear_param_0];
@@ -42,7 +42,7 @@
 	ld.param.u64 	%rd9, [copySurfacesToLinear_param_7];
 	ld.param.u32 	%r5, [copySurfacesToLinear_param_8+4];
 	ld.param.u32 	%r3, [copySurfacesToLinear_param_8];
-	.loc	1 26 5
+	.loc	1 25 5
 	mov.u32 	%r6, %ctaid.x;
 	mov.u32 	%r7, %ntid.x;
 	mov.u32 	%r8, %tid.x;
@@ -51,38 +51,38 @@
 	mov.u32 	%r10, %ntid.y;
 	mov.u32 	%r11, %tid.y;
 	mad.lo.s32 	%r2, %r10, %r9, %r11;
-	.loc	1 28 5
+	.loc	1 27 5
 	setp.ge.u32 	%p1, %r1, %r3;
 	setp.ge.u32 	%p2, %r2, %r5;
 	or.pred  	%p3, %p2, %p1;
 	@%p3 bra 	$L__BB0_4;
 
-	.loc	1 35 5
+	.loc	1 34 5
 	shl.b32 	%r4, %r1, 4;
-	.loc	1 32 5
+	.loc	1 31 5
 	mad.lo.s32 	%r12, %r3, %r2, %r1;
-	.loc	1 35 5
+	.loc	1 34 5
 	cvt.u64.u32 	%rd1, %r12;
 	cvta.to.global.u64 	%rd10, %rd6;
-	.loc	1 35 5
-	.loc	2 115 3, function_name $L__info_string0, inlined_at 1 35 5
+	.loc	1 34 5
+	.loc	2 115 3, function_name $L__info_string0, inlined_at 1 34 5
 	mul.wide.u32 	%rd11, %r12, 16;
 	add.s64 	%rd12, %rd10, %rd11;
 	suld.b.2d.v4.b32.trap {%r13, %r14, %r15, %r16}, [%rd2, {%r4, %r2}];
 	st.global.v4.u32 	[%rd12], {%r13, %r14, %r15, %r16};
 	cvta.to.global.u64 	%rd13, %rd7;
-	.loc	1 38 5
-	.loc	2 115 3, function_name $L__info_string0, inlined_at 1 38 5
+	.loc	1 37 5
+	.loc	2 115 3, function_name $L__info_string0, inlined_at 1 37 5
 	add.s64 	%rd14, %rd13, %rd11;
 	suld.b.2d.v4.b32.trap {%r17, %r18, %r19, %r20}, [%rd3, {%r4, %r2}];
 	st.global.v4.u32 	[%rd14], {%r17, %r18, %r19, %r20};
-	.loc	1 42 5
-	.loc	2 115 3, function_name $L__info_string0, inlined_at 1 42 5
+	.loc	1 41 5
+	.loc	2 115 3, function_name $L__info_string0, inlined_at 1 41 5
 	suld.b.2d.v4.b32.trap {%r21, %r22, %r23, %r24}, [%rd4, {%r4, %r2}];
 	mov.b32 	%f15, %r21;
 	mov.b32 	%f16, %r22;
 	mov.b32 	%f17, %r23;
-	.loc	1 44 5
+	.loc	1 43 5
 	setp.eq.ftz.f32 	%p4, %f15, 0f00000000;
 	setp.eq.ftz.f32 	%p5, %f16, 0f00000000;
 	and.pred  	%p6, %p4, %p5;
@@ -90,34 +90,34 @@
 	and.pred  	%p8, %p7, %p6;
 	@%p8 bra 	$L__BB0_3;
 
-	.loc	1 46 9
+	.loc	1 45 9
 	mul.ftz.f32 	%f10, %f16, %f16;
 	fma.rn.ftz.f32 	%f11, %f15, %f15, %f10;
 	fma.rn.ftz.f32 	%f12, %f17, %f17, %f11;
 	sqrt.approx.ftz.f32 	%f13, %f12;
-	.loc	1 47 9
+	.loc	1 46 9
 	div.approx.ftz.f32 	%f15, %f15, %f13;
 	div.approx.ftz.f32 	%f16, %f16, %f13;
 	div.approx.ftz.f32 	%f17, %f17, %f13;
 
 $L__BB0_3:
-	.loc	1 49 5
+	.loc	1 48 5
 	mov.f32 	%f14, 0f3F800000;
 	cvta.to.global.u64 	%rd15, %rd8;
 	shl.b64 	%rd16, %rd1, 4;
 	add.s64 	%rd17, %rd15, %rd16;
 	st.global.v4.f32 	[%rd17], {%f15, %f16, %f17, %f14};
-	.loc	1 53 5
-	.loc	2 115 3, function_name $L__info_string0, inlined_at 1 53 5
+	.loc	1 52 5
+	.loc	2 115 3, function_name $L__info_string0, inlined_at 1 52 5
 	suld.b.2d.v4.b32.trap {%r25, %r26, %r27, %r28}, [%rd5, {%r4, %r2}];
 	cvta.to.global.u64 	%rd18, %rd9;
-	.loc	1 55 5
+	.loc	1 54 5
 	shl.b64 	%rd19, %rd1, 3;
 	add.s64 	%rd20, %rd18, %rd19;
 	st.global.v2.u32 	[%rd20], {%r25, %r26};
 
 $L__BB0_4:
-	.loc	1 56 1
+	.loc	1 55 1
 	ret;
 
 }

@@ -1,534 +1,1099 @@
-// RiPRSceneHandler.cpp
-// Implementation of scene management for the RiPR rendering system
-
 #include "RiPRSceneHandler.h"
+#include "../../../handlers/Handlers.h"
 #include "RiPRModelHandler.h"
-#include "RiPRMaterialHandler.h"
-#include "../../../handlers/AreaLightHandler.h"
 #include "../models/RiPRModel.h"
-#include "../models/RiPRCore.h"
 
-RiPRSceneHandler::RiPRSceneHandler(RenderContextPtr ctx)
-    : ctx_(ctx)
+using Eigen::Affine3f;
+using sabi::PRenderableState;
+
+RiPRSceneHandler::RiPRSceneHandler (RenderContextPtr ctx) :
+    ctx (ctx)
 {
-    // Constructor - no logging needed
+    LOG (DBUG) << _FN_;
 }
 
+// Cleans up displacement and CUDA module resources
 RiPRSceneHandler::~RiPRSceneHandler()
 {
-    // Clean up OptiX resources
-    if (ctx_ && ctx_->getCudaStream()) {
-        try {
-            CUDADRV_CHECK(cuStreamSynchronize(ctx_->getCudaStream()));
-        } catch (...) {
-            // Ignore errors during destruction
+    finalize();
+}
+
+void RiPRSceneHandler::finalize()
+{
+    try
+    {
+        // First synchronize stream to ensure pending operations complete
+        if (ctx && ctx->getCudaStream())
+        {
+            CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
         }
-    }
-    
-    if (ias_) {
-        ias_.destroy();
-    }
-    
-    if (iasMem_.isInitialized()) {
-        iasMem_.finalize();
-    }
-    
-    if (instanceBuffer_.isInitialized()) {
-        instanceBuffer_.finalize();
-    }
-    
-    // Note: scene_ is not owned by this handler, don't destroy it
-    scene_ = nullptr;
-    
-    clear();
-}
 
-void RiPRSceneHandler::initialize()
-{
-    if (isInitialized_) {
-        LOG(WARNING) << "RiPRSceneHandler already initialized";
-        return;
-    }
-
-    // Initialize instance slot finder
-    instanceSlotFinder_.initialize(MaxNumInstances);
-    
-    // Reserve space for nodes
-    nodes_.reserve(1000); // Start with reasonable capacity
-    
-    isInitialized_ = true;
-    LOG(INFO) << "RiPRSceneHandler initialized with capacity for " << MaxNumInstances << " nodes";
-}
-
-ripr::RiPRNode* RiPRSceneHandler::createRiPRNode(RenderableWeakRef& weakNode)
-{
-    if (!isInitialized_) {
-        LOG(WARNING) << "RiPRSceneHandler not initialized";
-        return nullptr;
-    }
-
-    if (!modelHandler_) {
-        LOG(WARNING) << "Model handler not set";
-        return nullptr;
-    }
-
-    // Get the node
-    RenderableNode node = weakNode.lock();
-    if (!node) {
-        LOG(WARNING) << "Failed to lock weak node reference";
-        return nullptr;
-    }
-
-    // Process the node through model handler
-    // Note: modelHandler_->processRenderableNode already handles material processing
-    RiPRModelPtr model = modelHandler_->processRenderableNode(node);
-    if (!model) {
-        LOG(WARNING) << "Failed to create model for node: " << node->getName();
-        return nullptr;
-    }
-
-    // Create RiPRNode from the model
-    ripr::RiPRNode* shockerNode = modelHandler_->createRiPRNode(model.get(), node->getSpaceTime());
-    if (!shockerNode) {
-        LOG(WARNING) << "Failed to create RiPRNode for node: " << node->getName();
-        return nullptr;
-    }
-
-    // Store node
-    nodes_.push_back(shockerNode);
-    
-    // Map node to renderable node
-    nodeMap_[shockerNode->instSlot] = weakNode;
-    
-    // Note: AreaLightHandler notifications will be handled separately
-    
-    // Successfully created node (no logging needed for routine operations)
-    
-    return shockerNode;
-}
-
-void RiPRSceneHandler::createNodeList(const WeakRenderableList& weakNodeList)
-{
-    LOG(INFO) << "Creating nodes for " << weakNodeList.size() << " renderable nodes";
-    
-    size_t successCount = 0;
-    size_t failCount = 0;
-    
-    for (const auto& weakNode : weakNodeList) {
-        // Create a copy to pass as non-const reference
-        RenderableWeakRef weakNodeCopy = weakNode;
-        ripr::RiPRNode* shockerNode = createRiPRNode(weakNodeCopy);
-        if (shockerNode) {
-            successCount++;
-        } else {
-            failCount++;
+        // Destroy IAS first before releasing its memory
+        if (ias)
+        {
+            ias.destroy();
         }
-    }
-    
-    LOG(INFO) << "Created " << successCount << " nodes successfully";
-    if (failCount > 0) {
-        LOG(WARNING) << "Failed to create " << failCount << " nodes";
-    }
-}
-
-void RiPRSceneHandler::processRenderableNode(RenderableNode& node)
-{
-    if (!isInitialized_) {
-        initialize();
-    }
-
-    // Create weak reference
-    RenderableWeakRef weakNode = node;
-    
-    // Create RiPRNode
-    createRiPRNode(weakNode);
-}
-
-void RiPRSceneHandler::clear()
-{
-    // Note: AreaLightHandler notifications will be handled separately
-    
-    // Destroy IAS if it exists
-    if (ias_) {
-        ias_.destroy();
-    }
-    
-    // Destroy IAS memory buffer if allocated
-    if (iasMem_.isInitialized()) {
-        iasMem_.finalize();
-    }
-    
-    // Destroy instance buffer if allocated
-    if (instanceBuffer_.isInitialized()) {
-        instanceBuffer_.finalize();
-    }
-    
-    // Clear nodes (they're owned by model handler)
-    nodes_.clear();
-    
-    // Clear node map
-    nodeMap_.clear();
-    
-    // Reset slot finder
-    instanceSlotFinder_.reset();
-    
-    // Clear handlers if needed
-    if (modelHandler_) {
-        modelHandler_->clear();
-    }
-    
-    if (materialHandler_) {
-        materialHandler_->clear();
-    }
-}
-
-ripr::RiPRNode* RiPRSceneHandler::getRiPRNode(uint32_t index) const
-{
-    if (index >= nodes_.size()) {
-        return nullptr;
-    }
-    return nodes_[index];
-}
-
-RenderableWeakRef RiPRSceneHandler::getRenderableNode(uint32_t nodeIndex) const
-{
-    auto it = nodeMap_.find(nodeIndex);
-    if (it != nodeMap_.end()) {
-        return it->second;
-    }
-    return RenderableWeakRef();
-}
-
-void RiPRSceneHandler::buildAccelerationStructures()
-{
-    if (!modelHandler_) {
-        LOG(WARNING) << "Cannot build acceleration structures: model handler not set";
-        return;
-    }
-
-    LOG(INFO) << "Building acceleration structures for " << nodes_.size() << " nodes";
-    
-    if (!ctx_) {
-        LOG(WARNING) << "No render context available - marking structures as built without GPU resources";
         
-        // Even without a render context, we should mark the structures as "built"
-        // to maintain consistency in the state management
-        for (const auto& [name, model] : modelHandler_->getAllModels()) {
-            ripr::RiPRSurfaceGroup* surfaceGroup = model->getSurfaceGroup();
-            if (surfaceGroup && surfaceGroup->needsRebuild) {
-                surfaceGroup->needsRebuild = 0;
-                LOG(DBUG) << "Marked surface group as built (no GPU) for model: " << name;
+        // Release IAS memory
+        if (iasMem.isInitialized())
+        {
+            iasMem.finalize();
+        }
+
+        // Release instance buffer
+        if (instanceBuffer.isInitialized())
+        {
+            instanceBuffer.finalize();
+        }
+
+        // Release instance data buffers
+        for (int i = 0; i < 2; ++i)
+        {
+            if (instanceDataBuffer_[i].isInitialized())
+            {
+                instanceDataBuffer_[i].finalize();
             }
         }
+
+        // Release displacement buffer
+        if (displacementBuffer.isInitialized())
+        {
+            displacementBuffer.finalize();
+        }
+
+        // Clear node map to release references
+        nodeMap.clear();
+        
+        // Reset traversable handle
+        travHandle = 0;
+
+        // Only unload module if we have a valid context
+        if (moduleDeform)
+        {
+            CUcontext current = nullptr;
+            CUresult result = cuCtxGetCurrent (&current);
+
+            if (result == CUDA_SUCCESS && current)
+            {
+                LOG (DBUG) << "Unloading deform module";
+                CUDADRV_CHECK (cuModuleUnload (moduleDeform));
+            }
+            else
+            {
+                LOG (WARNING) << "No current CUDA context when trying to unload module";
+            }
+            moduleDeform = 0;
+        }
+    }
+    catch (const std::exception& e)
+    {
+        LOG (WARNING) << "Error during RiPRSceneHandler cleanup: " << e.what();
+    }
+}
+
+
+
+void RiPRSceneHandler::init()
+{
+    LOG (DBUG) << _FN_;
+    // Create Instance Acceleration Structure (IAS)
+    if (!scene_)
+    {
+        LOG(WARNING) << "Scene not set - cannot create IAS";
+        return;
+    }
+    ias = scene_->createInstanceAccelerationStructure();
+
+    // Set the trade-off for the IAS to prefer fast trace
+    ias.setConfiguration (
+        optixu::ASTradeoff::PreferFastBuild,
+        optixu::AllowUpdate::Yes);
+    
+    // Generate initial scene SBT layout before any IAS operations
+    // This prevents the "Shader binding table layout generation has not been done" error
+    size_t dummySize;
+    scene_->generateShaderBindingTableLayout(&dummySize);
+    LOG(DBUG) << "Generated initial scene SBT layout";
+
+    // Load deformation kernel PTX/OptiXIR using PTXManager
+    bool useEmbedded = ctx->getPropertyService().renderProps->getVal<bool> (RenderKey::UseEmbeddedPTX);
+    std::vector<char> ptxData;
+
+    try
+    {
+        // Use PTXManager to get data for deform kernel
+        ptxData = ctx->getPTXManager()->getPTXData ("optix_deform_kernels", useEmbedded);
+
+        // Load the module from memory
+        if (!ptxData.empty())
+        {
+            LOG (DBUG) << "Loading deform kernel using PTXManager (" << ptxData.size() << " bytes)";
+            CUDADRV_CHECK (cuModuleLoadData (&moduleDeform, ptxData.data()));
+        }
+        else
+        {
+            throw std::runtime_error ("Empty PTX data for deform kernel");
+        }
+    }
+    catch (const std::exception& e)
+    {
+        // Fallback to direct file loading on error
+        LOG (WARNING) << "Failed to load deform kernel via PTXManager: " << e.what();
+
+        std::filesystem::path ptxPath;
+#ifndef NDEBUG
+        ptxPath = ctx->getPropertyService().renderProps->getVal<fs::path>(RenderKey::ResourceFolder) / "ptx" / "Debug" / "deform.ptx";
+#else
+        ptxPath = ctx->getPropertyService().renderProps->getVal<fs::path>(RenderKey::ResourceFolder) / "ptx" / "Release" / "deform.ptx";
+#endif
+        LOG (DBUG) << "Falling back to loading deform kernel from file: " << ptxPath.string();
+        CUDADRV_CHECK (cuModuleLoad (&moduleDeform, ptxPath.generic_string().c_str()));
+    }
+
+    // Initialize kernels
+    kernelDeform.set (moduleDeform, "deform", cudau::dim3 (32), 0);
+    kernelResetDeform.set (moduleDeform, "resetDeform", cudau::dim3 (32), 0);
+    kernelAccumulateVertexNormals.set (moduleDeform, "accumulateVertexNormals", cudau::dim3 (32), 0);
+    kernelNormalizeVertexNormals.set (moduleDeform, "normalizeVertexNormals", cudau::dim3 (32), 0);
+    
+    // Initialize instance data buffers (double buffered)
+    // These need to be initialized early so they're ready when geometry is added
+    const cudau::BufferType bufferType = cudau::BufferType::Device;
+    instanceDataBuffer_[0].initialize(ctx->getCudaContext(), bufferType, maxNumInstances);
+    instanceDataBuffer_[1].initialize(ctx->getCudaContext(), bufferType, maxNumInstances);
+    LOG(DBUG) << "Initialized instance data buffers with capacity: " << maxNumInstances;
+}
+
+// Prepare for building the IAS
+void RiPRSceneHandler::prepareForBuild()
+{
+    // Prepare the IAS for build and get memory requirements
+    OptixAccelBufferSizes bufferSizes;
+    ias.prepareForBuild (&bufferSizes);
+
+    if (bufferSizes.tempSizeInBytes > ctx->getASBuildScratchMem().sizeInBytes())
+        ctx->getASBuildScratchMem().resize (bufferSizes.tempSizeInBytes, 1, ctx->getCudaStream());
+
+    if (iasMem.isInitialized())
+    {
+        CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
+        iasMem.resize (bufferSizes.outputSizeInBytes, 1, ctx->getCudaStream());
+
+        if (ias.getNumChildren())
+        {
+            // Check if instance buffer is initialized before resizing
+            if (instanceBuffer.isInitialized())
+            {
+                instanceBuffer.resize (ias.getNumChildren());
+            }
+            else
+            {
+                // Initialize if not already initialized
+                instanceBuffer.initialize (ctx->getCudaContext(), cudau::BufferType::Device, ias.getNumChildren());
+            }
+        }
+    }
+    else
+    {
+        // Initialize memory buffers based on requirements
+        CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
+        iasMem.initialize (ctx->getCudaContext(), cudau::BufferType::Device, bufferSizes.outputSizeInBytes, 1);
+        
+        // Only initialize instance buffer if we have children
+        if (ias.getNumChildren() > 0)
+        {
+            instanceBuffer.initialize (ctx->getCudaContext(), cudau::BufferType::Device, ias.getNumChildren());
+        }
+        
+        // Instance data buffers are now initialized in init() to ensure they're ready
+        // when geometry is added to an empty scene
+    }
+}
+
+// Initialize Scene Dependent Shader Binding Table (SBT)
+// TODO: Implement with new entry point system
+#if 0
+void RiPRSceneHandler::initializeSceneDependentSBT (EntryPointType type)
+{
+    // Get the pipeline for  entry point
+    // Pipeline handling needs to be updated for new architecture
+    // auto pipeline = ctx->getHandlers().pl->getPipeline (type);
+    // TODO: Implement pipeline handling in RiPREngine
+    if (!pipeline)
+        throw std::runtime_error ("Pipeline not in database!");
+
+    // Get the size of the Hit Group SBT
+    size_t hitGroupSbtSize;
+    // Scene SBT generation needs to be handled differently
+    // ctx->getOptiXContext().generateShaderBindingTableLayout (&hitGroupSbtSize);
+    // TODO: Implement SBT generation in RiPREngine
+
+    // Initialize the scene dependent SBT
+    // pipeline->sceneDependentSBT.initialize (ctx->getCudaContext(), cudau::BufferType::Device, hitGroupSbtSize, 1);
+    // TODO: Implement SBT initialization in RiPREngine
+
+    // Keep the mapped memory persistent
+    // pipeline->sceneDependentSBT.setMappedMemoryPersistent (true);
+}
+#endif
+
+// Resize scene dependent Shader Binding Table (SBT)
+void RiPRSceneHandler::resizeSceneDependentSBT()
+{
+    if (!scene_)
+    {
+        LOG(WARNING) << "Scene not set - cannot resize SBT";
+        return;
+    }
+
+    // Generate the shader binding table layout
+    // This MUST be called before building the IAS
+    size_t hitGroupSbtSize;
+    scene_->generateShaderBindingTableLayout(&hitGroupSbtSize);
+    
+    LOG(DBUG) << "Generated scene SBT layout, size: " << hitGroupSbtSize << " bytes";
+}
+
+void RiPRSceneHandler::undeformNode (RenderableNode node)
+{
+    RiPRModelPtr optiXModel = modelHandler_->getRiPRModel (node->getClientID());
+    if (!optiXModel)
+    {
+        LOG (WARNING) << "Could not find OptiXModel for " << node->getName();
+        return;
+    }
+
+    auto triangleModel = std::dynamic_pointer_cast<RiPRTriangleModel> (optiXModel);
+    if (!triangleModel) return;
+
+    try
+    {
+        const size_t vertexCount = triangleModel->getCurrentVertexBuffer().numElements();
+
+        // Step 1: Reset vertex positions and clear normals
+        kernelResetDeform.launchWithThreadDim (
+            ctx->getCudaStream(),
+            cudau::dim3 (vertexCount),
+            static_cast<const shared::Vertex*> (triangleModel->getOriginalVertexBuffer().getDevicePointer()),
+            static_cast<shared::Vertex*> (triangleModel->getCurrentVertexBuffer().getDevicePointer()),
+            vertexCount);
+
+        // Verify completion of the reset operation
+        CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
+
+        // Step 2: Accumulate face normals to vertices
+        const auto& triangleBuffer = triangleModel->getTriangleBuffer();
+        kernelAccumulateVertexNormals.launchWithThreadDim (
+            ctx->getCudaStream(),
+            cudau::dim3 (triangleBuffer.numElements()),
+            static_cast<shared::Vertex*> (triangleModel->getCurrentVertexBuffer().getDevicePointer()),
+            static_cast<shared::Triangle*> (triangleBuffer.getDevicePointer()),
+            triangleBuffer.numElements());
+
+        // Step 3: Normalize the accumulated vertex normals
+        kernelNormalizeVertexNormals.launchWithThreadDim (
+            ctx->getCudaStream(),
+            cudau::dim3 (vertexCount),
+            static_cast<shared::Vertex*> (triangleModel->getCurrentVertexBuffer().getDevicePointer()),
+            vertexCount);
+
+        // Ensure all normal computation is complete before rebuilding GAS
+        CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
+
+        // Step 4: Update GAS
+        GAS* gas = triangleModel->getGAS();
+        if (gas)
+        {
+            gas->gas.rebuild (ctx->getCudaStream(), gas->gasMem, ctx->getASBuildScratchMem());
+        }
+
+       // LOG (DBUG) << "Reset deformation and recomputed normals for " << node->getName();
+    }
+    catch (const std::exception& e)
+    {
+        LOG (WARNING) << "Error undeforming node " << node->getName()
+                      << ": " << e.what();
+    }
+}
+
+void RiPRSceneHandler::updateDeformedNode (RenderableNode node)
+{
+    RiPRModelPtr optiXModel = modelHandler_->getRiPRModel (node->getClientID());
+    if (!optiXModel)
+    {
+        LOG (DBUG) << "Could not find OptiXModel for " << node->getName();
+        return;
+    }
+
+    auto triangleModel = std::dynamic_pointer_cast<RiPRTriangleModel> (optiXModel);
+    if (!triangleModel || !triangleModel->hasDeformation())
+        return;
+
+    try
+    {
+        CgModelPtr model = node->getModel();
+        if (!model || model->VD.cols() == 0)
+        {
+            LOG (DBUG) << "No displacement data for " << node->getName();
+            return;
+        }
+
+        const size_t vertexCount = triangleModel->getCurrentVertexBuffer().numElements();
+
+        // Initialize or resize displacement buffer if needed
+        if (!displacementBuffer.isInitialized())
+        {
+            displacementBuffer.initialize (
+                ctx->getCudaContext(),
+                cudau::BufferType::Device,
+                vertexCount,
+                sizeof (float3));
+        }
+        else if (displacementBuffer.numElements() != vertexCount)
+        {
+            displacementBuffer.resize (
+                vertexCount,
+                sizeof (float3),
+                ctx->getCudaStream());
+        }
+
+        // Copy deformed positions to GPU
+        float3* mappedDisp = static_cast<float3*> (
+            displacementBuffer.map (ctx->getCudaStream(), cudau::BufferMapFlag::WriteOnlyDiscard));
+
+        Eigen::Vector3f scale = node->getSpaceTime().scale;
+        for (int i = 0; i < vertexCount; i++)
+        {
+            mappedDisp[i] = make_float3 (
+                model->VD.col (i).x(),
+                model->VD.col (i).y(),
+                model->VD.col (i).z());
+        }
+
+        displacementBuffer.unmap (ctx->getCudaStream());
+
+        // Launch deformation kernels
+        kernelDeform.launchWithThreadDim (
+            ctx->getCudaStream(),
+            cudau::dim3 (vertexCount),
+            triangleModel->getOriginalVertexBuffer().getDevicePointer(),
+            triangleModel->getCurrentVertexBuffer().getDevicePointer(),
+            vertexCount,
+            static_cast<const float3*> (displacementBuffer.getDevicePointer()));
+
+        const auto& triangleBuffer = triangleModel->getTriangleBuffer();
+        kernelAccumulateVertexNormals.launchWithThreadDim (
+            ctx->getCudaStream(),
+            cudau::dim3 (triangleBuffer.numElements()),
+            static_cast<shared::Vertex*> (triangleModel->getCurrentVertexBuffer().getDevicePointer()),
+            static_cast<shared::Triangle*> (triangleBuffer.getDevicePointer()),
+            triangleBuffer.numElements());
+
+        kernelNormalizeVertexNormals.launchWithThreadDim (
+            ctx->getCudaStream(),
+            cudau::dim3 (vertexCount),
+            static_cast<shared::Vertex*> (triangleModel->getCurrentVertexBuffer().getDevicePointer()),
+            vertexCount);
+
+        // Critical: Update GAS after deformation
+        GAS* gas = triangleModel->getGAS();
+        if (gas)
+        {
+            gas->gas.rebuild (ctx->getCudaStream(), gas->gasMem, ctx->getASBuildScratchMem());
+        }
+    }
+    catch (const std::exception& e)
+    {
+        LOG (WARNING) << "Error updating deformed node " << node->getName()
+                      << ": " << e.what();
+    }
+}
+
+void RiPRSceneHandler::removeNodesByIDs (const std::vector<BodyID>& bodyIDs)
+{
+    if (bodyIDs.empty()) return;
+
+    // Step 1: Find all nodes to remove and their indices
+    std::vector<uint32_t> indicesToRemove;
+    
+    for (BodyID bodyID : bodyIDs)
+    {
+        for (const auto& [index, weakRef] : nodeMap)
+        {
+            if (!weakRef.expired())
+            {
+                RenderableNode node = weakRef.lock();
+                if (node && node->getClientID() == bodyID)
+                {
+                    indicesToRemove.push_back(index);
+                    node->getState().state &= ~sabi::PRenderableState::StoredInSceneHandler;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (indicesToRemove.empty())
+    {
+        LOG (DBUG) << "No matching instances found in OptiX scene - skipping removal";
+        return;
+    }
+
+    // Step 2: Sort indices in descending order for stable removal
+    std::sort(indicesToRemove.rbegin(), indicesToRemove.rend());
+
+    // Step 3: Remove from IAS in descending order (no index shifts affect remaining removals)
+    for (uint32_t index : indicesToRemove)
+    {
+        if (index < ias.getNumChildren())
+        {
+            ias.removeChildAt(index);
+        }
+        else
+        {
+            LOG(WARNING) << "Invalid index " << index << " (max: " << ias.getNumChildren() - 1 << ")";
+        }
+    }
+
+    // Step 4: Rebuild nodeMap with correct indices in a single pass
+    NodeMap newNodeMap;
+    uint32_t newIndex = 0;
+    
+    // Go through all existing indices in order
+    for (const auto& [oldIndex, weakRef] : nodeMap)
+    {
+        // Skip if this index was removed
+        if (std::find(indicesToRemove.begin(), indicesToRemove.end(), oldIndex) == indicesToRemove.end())
+        {
+            if (!weakRef.expired())
+            {
+                newNodeMap[newIndex++] = weakRef;
+            }
+        }
+    }
+    
+    nodeMap = std::move(newNodeMap);
+
+    // Step 5: Rebuild IAS and update SBT
+    LOG (DBUG) << "Rebuilding IAS after removing " << indicesToRemove.size() << " instances";
+    prepareForBuild();
+    rebuild();
+}
+
+void RiPRSceneHandler::createInstance (RenderableWeakRef& weakNode)
+{
+    // debug_assert (false);
+
+    if (weakNode.expired()) return;
+
+    RenderableNode node = weakNode.lock();
+
+    if (travHandle == 0)
+        init();
+
+    // Create a new OptiX instance
+    optixu::Instance instance = scene_->createInstance();
+
+    // Instances don't have a LWITEMID converted to a ClientID
+    // RiPRModelPtr optiXModel = modelHandler_->getRiPRModel (node->getID());
+    RiPRModelPtr optiXModel = modelHandler_->getRiPRModel (node->getClientID());
+    optiXModel->setOptiXInstance (instance);
+
+    // Set the Geometry Acceleration Structure (GAS)
+    instance.setChild (optiXModel->getGAS()->gas);
+
+    const SpaceTime& st = node->getSpaceTime();
+    MatrixRowMajor34f t;
+    getWorldTransform (t, st);
+    instance.setTransform (t.data());
+
+    // Add the instance to the IAS
+    ias.addChild (instance);
+
+    node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
+
+    uint32_t index = ias.findChildIndex (instance);
+    nodeMap[index] = weakNode;
+
+    GAS* gasData = optiXModel->getGAS();
+    gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, ctx->getASBuildScratchMem());
+
+    prepareForBuild();
+
+    rebuild();
+    
+    // Populate instance data for GPU access
+    populateInstanceData(index, node);
+}
+
+void RiPRSceneHandler::populateInstanceData(uint32_t instanceIndex, const RenderableNode& node)
+{
+    if (instanceIndex >= maxNumInstances)
+    {
+        LOG(WARNING) << "Instance index " << instanceIndex << " exceeds max instances " << maxNumInstances;
         return;
     }
     
-    // Build GAS for each surface group that needs rebuilding
-    CUcontext cudaContext = ctx_->getCudaContext();
-    CUstream cudaStream = ctx_->getCudaStream();
-    optixu::Context optixContext = ctx_->getOptiXContext();
-    
-    // Build GAS for each surface group that needs rebuilding
-    for (const auto& [name, model] : modelHandler_->getAllModels()) {
-        ripr::RiPRSurfaceGroup* surfaceGroup = model->getSurfaceGroup();
-        if (!surfaceGroup) continue;
+    // Map both buffers and populate with instance data
+    for (int bufferIdx = 0; bufferIdx < 2; ++bufferIdx)
+    {
+        shared::InstanceData* instDataOnHost = instanceDataBuffer_[bufferIdx].map();
+        if (!instDataOnHost)
+        {
+            LOG(WARNING) << "Failed to map instance data buffer " << bufferIdx;
+            continue;
+        }
         
-        if (surfaceGroup->needsRebuild) {
-            // Check if we have geometry to build
-            if (surfaceGroup->geomInsts.empty()) {
-                LOG(WARNING) << "Surface group has no geometry instances for model: " << name;
-                surfaceGroup->needsRebuild = 0;
+        shared::InstanceData& instData = instDataOnHost[instanceIndex];
+        
+        // Get world transform from node
+        const Eigen::Matrix4f& worldTransform = node->getSpaceTime().worldTransform.matrix();
+        
+        // Convert Eigen matrix to shared Matrix4x4 (column-major)
+        Matrix4x4 transform(
+            Vector4D(worldTransform(0, 0), worldTransform(1, 0), worldTransform(2, 0), worldTransform(3, 0)),  // column 0
+            Vector4D(worldTransform(0, 1), worldTransform(1, 1), worldTransform(2, 1), worldTransform(3, 1)),  // column 1
+            Vector4D(worldTransform(0, 2), worldTransform(1, 2), worldTransform(2, 2), worldTransform(3, 2)),  // column 2
+            Vector4D(worldTransform(0, 3), worldTransform(1, 3), worldTransform(2, 3), worldTransform(3, 3))   // column 3
+        );
+        instData.transform = transform;
+        
+        // For now, no motion blur - identity transform
+        instData.curToPrevTransform = Matrix4x4();
+        
+        // Compute normal matrix (inverse transpose of upper 3x3)
+        Matrix3x3 upperLeft(
+            Vector3D(worldTransform(0, 0), worldTransform(1, 0), worldTransform(2, 0)),  // column 0
+            Vector3D(worldTransform(0, 1), worldTransform(1, 1), worldTransform(2, 1)),  // column 1
+            Vector3D(worldTransform(0, 2), worldTransform(1, 2), worldTransform(2, 2))   // column 2
+        );
+        instData.normalMatrix = transpose(invert(upperLeft));
+        
+        // Set uniform scale (for now, assume 1.0)
+        instData.uniformScale = 1.0f;
+        
+        // Empty buffers for now - these would be populated if the instance has geometry slots
+        instData.geomInstSlots = shared::ROBuffer<uint32_t>();
+        instData.lightGeomInstDist = shared::LightDistribution();
+        
+        instanceDataBuffer_[bufferIdx].unmap();
+    }
+}
+
+void RiPRSceneHandler::createGeometryInstance (RenderableWeakRef& weakNode)
+{
+    if (weakNode.expired()) return;
+
+    RenderableNode node = weakNode.lock();
+
+    RenderableNode instancedFrom = node->getInstancedFrom();
+    if (!instancedFrom)
+    {
+        LOG (WARNING) << "Invalid instance has no Instanced From " << node->getName();
+        return;
+    }
+
+    //  LOG (DBUG) << "Creating geometry instance for " << node->getName()
+    //           << " instancedFrom: " << instancedFrom->getName()
+    //         << " instancedFrom clientID: " << instancedFrom->getClientID();
+
+    // Check if the instancedFrom model exists
+    RiPRModelPtr instancedFromModel = modelHandler_->getRiPRModel (instancedFrom->getClientID());
+    if (!instancedFromModel)
+    {
+        LOG (WARNING) << "Can't find Instanced from in database. Name: " << instancedFrom->getName()
+                      << " ID: " << instancedFrom->getID()
+                      << " ClientID: " << instancedFrom->getClientID();
+        return;
+    }
+
+    RiPRModelPtr optiXModel = modelHandler_->getRiPRModel (node->getClientID());
+    if (!optiXModel)
+    {
+        LOG (WARNING) << "Could not find OptiXModel for " << node->getName();
+        return;
+    }
+
+    // Add safety check for GAS
+    GAS* gasData = instancedFromModel->getGAS();
+    if (!gasData)
+    {
+        LOG (WARNING) << "Source model has no GAS: " << instancedFrom->getName();
+        return;
+    }
+
+    // Create a new OptiX instance
+    optixu::Instance instance = scene_->createInstance();
+
+    optiXModel->setOptiXInstance (instance);
+
+    // Set the Geometry Acceleration Structure (GAS) using the InstancedFrom
+    instance.setChild (gasData->gas);
+
+    // Set the instance transform using the given pose
+    const Eigen::Matrix4f& m = node->getSpaceTime().worldTransform.matrix();
+    MatrixRowMajor34f t = m.block<3, 4> (0, 0);
+    instance.setTransform (t.data());
+
+    // Add the instance to the IAS
+    ias.addChild (instance);
+
+    // Set the flag to indicate this node is stored in RiPRSceneHandler
+    node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
+
+    uint32_t index = ias.findChildIndex (instance);
+    nodeMap[index] = weakNode;
+
+    prepareForBuild();
+
+    rebuild();
+    
+    // Populate instance data for GPU access
+    populateInstanceData(index, node);
+}
+
+void RiPRSceneHandler::createPhysicsPhantom (RenderableWeakRef& weakNode)
+{
+    if (weakNode.expired()) return;
+    try
+    {
+        RenderableNode node = weakNode.lock();
+        if (node->isInstance())
+            throw std::runtime_error ("Can't make a phantom from an instance!");
+
+        // Create a new OptiX instance
+        optixu::Instance instance = scene_->createInstance();
+
+        RiPRModelPtr optiXModel = modelHandler_->getRiPRModel (node->getID());
+        if (!optiXModel) throw std::runtime_error ("could not find optix model bound to " + node->getName());
+
+        optiXModel->setOptiXInstance (instance);
+
+        RenderableNode phantomFrom = node->getPhantomFrom();
+        if (!phantomFrom) throw std::runtime_error (node->getName() + " has no phantom model");
+
+        RiPRModelPtr phantomFromModel = modelHandler_->getRiPRModel (phantomFrom->getID());
+        if (!phantomFromModel) throw std::runtime_error (node->getName() + " has no phantomFrom model");
+
+        // Set the Geometry Acceleration Structure (GAS) using the PhantomFrom
+        // set the phantom material(blue);
+        instance.setChild (phantomFromModel->getGAS()->gas, 2);
+
+        // Set the instance transform using the given pose
+        const Eigen::Matrix4f& m = node->getSpaceTime().worldTransform.matrix();
+        MatrixRowMajor34f t = m.block<3, 4> (0, 0);
+        instance.setTransform (t.data());
+
+        // Add the instance to the IAS
+        ias.addChild (instance);
+
+        // Set the flag to indicate this node is stored in RiPRSceneHandler
+        node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
+
+        uint32_t index = ias.findChildIndex (instance);
+        nodeMap[index] = weakNode;
+
+        prepareForBuild();
+
+        rebuild();
+        
+        // Populate instance data for GPU access
+        populateInstanceData(index, node);
+    }
+    catch (const std::exception& e)
+    {
+        LOG (CRITICAL) << e.what();
+    }
+}
+
+void RiPRSceneHandler::createInstanceList (const WeakRenderableList& weakNodeList)
+{
+    if (travHandle == 0)
+        init();
+
+    for (const auto& weakNode : weakNodeList)
+    {
+        if (weakNode.expired()) continue;
+        RenderableNode node = weakNode.lock();
+
+        if (node->isInstance())
+        {
+            // Create a new OptiX instance
+            optixu::Instance instance = scene_->createInstance();
+
+            RiPRModelPtr optiXModel = modelHandler_->getRiPRModel (node->getID());
+            optiXModel->setOptiXInstance (instance);
+
+            RenderableNode instancedFrom = node->getInstancedFrom();
+            if (!instancedFrom) continue;
+
+            RiPRModelPtr instancedFromModel = modelHandler_->getRiPRModel (instancedFrom->getID());
+            if (!instancedFromModel) continue;
+
+            // Set the Geometry Acceleration Structure (GAS) using the InstancedFrom
+            instance.setChild (instancedFromModel->getGAS()->gas);
+
+            // Set the instance transform using the given pose
+            const Eigen::Matrix4f& m = node->getSpaceTime().worldTransform.matrix();
+            MatrixRowMajor34f t = m.block<3, 4> (0, 0);
+            instance.setTransform (t.data());
+
+            // Add the instance to the IAS
+            ias.addChild (instance);
+
+            // Set the flag to indicate this node is stored in RiPRSceneHandler
+            node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
+
+            uint32_t index = ias.findChildIndex (instance);
+            nodeMap[index] = weakNode;
+            
+            // Store index for later instance data population
+            populateInstanceData(index, node);
+        }
+        else
+        {
+            RiPRModelPtr optiXModel = modelHandler_->getRiPRModel (node->getID());
+            if (!optiXModel)
+            {
+                LOG (CRITICAL) << "Failed to find RiPRModelPtr";
                 continue;
             }
+
+            LOG (DBUG) << "Processing " << node->getName();
+
+            // Create a new OptiX instance
+            optixu::Instance instance = scene_->createInstance();
+            optiXModel->setOptiXInstance (instance);
+
+            // Set the Geometry Acceleration Structure (GAS)
+            instance.setChild (optiXModel->getGAS()->gas);
+
+            // Set the instance transform using the given pose
+            const Eigen::Matrix4f& m = node->getSpaceTime().worldTransform.matrix();
+            MatrixRowMajor34f t = m.block<3, 4> (0, 0);
+            instance.setTransform (t.data());
+
+            // Add the instance to the IAS
+            ias.addChild (instance);
+
+            // Set the flag to indicate this node is stored in RiPRSceneHandler
+            node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
+
+            uint32_t index = ias.findChildIndex (instance);
+            nodeMap[index] = weakNode;
+
+            GAS* gasData = optiXModel->getGAS();
+            gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, ctx->getASBuildScratchMem());
             
-            // Create GAS if not already created
-            if (!surfaceGroup->optixGas) {
-                surfaceGroup->optixGas = scene_->createGeometryAccelerationStructure();
-                surfaceGroup->optixGas.setConfiguration(
-                    optixu::ASTradeoff::PreferFastBuild,
-                    optixu::AllowUpdate::No,
-                    optixu::AllowCompaction::No);
-            }
-            
-            // Create and add geometry instances to GAS
-            for (const ripr::RiPRSurface* surfaceConst : surfaceGroup->geomInsts) {
-                // We need non-const access to create the optixGeomInst
-                ripr::RiPRSurface* surface = const_cast<ripr::RiPRSurface*>(surfaceConst);
-                
-                // Create OptiX geometry instance if needed
-                if (!surface->optixGeomInst) {
-                    if (const TriangleGeometry* triGeom = std::get_if<TriangleGeometry>(&surface->geometry)) {
-                        if (triGeom->vertexBuffer.isInitialized() && triGeom->triangleBuffer.isInitialized()) {
-                            surface->optixGeomInst = scene_->createGeometryInstance();
-                            surface->optixGeomInst.setVertexBuffer(triGeom->vertexBuffer);
-                            surface->optixGeomInst.setTriangleBuffer(triGeom->triangleBuffer);
-                            surface->optixGeomInst.setNumMaterials(1, optixu::BufferView());
-                            // NOTE: Don't set geometry flags - working sample doesn't do this
-                            // surface->optixGeomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
-                            
-                            // Set material BEFORE setUserData (following exact working sample order)
-                            // Use the default material with hit groups already set
-                            if (defaultMaterial_) {
-                                surface->optixGeomInst.setMaterial(0, 0, defaultMaterial_);
-                                LOG(INFO) << "Set material on geometry instance for surface " << surface->geomInstSlot 
-                                         << " with default material";
-                            } else {
-                                LOG(WARNING) << "No default material set! Geometry will not have hit groups!";
-                                // Fallback: create a material without hit groups (rays will miss)
-                                optixu::Material fallbackMat = ctx_->getOptiXContext().createMaterial();
-                                surface->optixGeomInst.setMaterial(0, 0, fallbackMat);
-                            }
-                            
-                            surface->optixGeomInst.setUserData(surface->geomInstSlot);
-                        }
-                    }
-                }
-                
-                if (surface->optixGeomInst) {
-                    surfaceGroup->optixGas.addChild(surface->optixGeomInst);
-                }
-            }
-            
-            // Prepare for build
-            OptixAccelBufferSizes asSizes;
-            surfaceGroup->optixGas.prepareForBuild(&asSizes);
-            
-            // Allocate memory for GAS
-            if (!surfaceGroup->optixGasMem.isInitialized()) {
-                surfaceGroup->optixGasMem.initialize(
-                    cudaContext, cudau::BufferType::Device,
-                    asSizes.outputSizeInBytes, 1);
-            } else if (surfaceGroup->optixGasMem.sizeInBytes() < asSizes.outputSizeInBytes) {
-                surfaceGroup->optixGasMem.resize(asSizes.outputSizeInBytes, 1);
-            }
-            
-            // Allocate scratch memory if needed
-            cudau::Buffer scratchMem;
-            scratchMem.initialize(cudaContext, cudau::BufferType::Device, asSizes.tempSizeInBytes, 1);
-            
-            // Build the GAS
-            surfaceGroup->optixGas.rebuild(cudaStream, surfaceGroup->optixGasMem, scratchMem);
-            
-            // Clean up scratch memory
-            scratchMem.finalize();
-            
-            // Log the GAS handle for debugging
-            OptixTraversableHandle gasHandle = surfaceGroup->optixGas.getHandle();
-            LOG(DBUG) << "Built GAS for model: " << name << ", handle: " << gasHandle;
-            
-            surfaceGroup->needsRebuild = 0;
+            // Populate instance data for GPU access
+            populateInstanceData(index, node);
         }
     }
+
+    prepareForBuild();
+
+    rebuild();
+}
+
+bool RiPRSceneHandler::updateMotion()
+{
+    // Updates node transformations and visibility in the scene
+    bool restartRender = false;
+    uint32_t bodyCount = nodeMap.size();
+    if (!bodyCount) return restartRender;
+    uint32_t invisibleBodies = 0;
+    uint32_t bodiesSleeping = 0;
+    for (auto& it : nodeMap)
+    {
+        RenderableWeakRef weakNode = it.second;
+        if (weakNode.expired()) continue;
+        RenderableNode node = weakNode.lock();
+        if (!node) continue;
+
+        bool isDeformed = node->getState().isDeformed();
+      
+        // Check for deformation state changes
+        if (node->getState().state & PRenderableState::DeformedStateChanged)
+        {
+            if (isDeformed)
+            {
+                // Handle transition to deformed state
+                updateDeformedNode (node);
+            }
+            else
+            {
+                // Handle transition to undeformed state
+                undeformNode (node);
+            }
+
+            // Clear the state change flag after handling
+            node->getState().state &= ~PRenderableState::DeformedStateChanged;
+
+        }
+        else if (isDeformed)
+        {
+            updateDeformedNode (node);
+        }
+       
+       
+        optixu::Instance instance = ias.getChild (it.first);
+        const SpaceTime& st = node->getSpaceTime();
+        MatrixRowMajor34f t;
+
+        // deformed meshes are already in world space and have scale applied
+        getWorldTransform (t, isDeformed ? Eigen::Affine3f::Identity() : st.worldTransform, isDeformed ? Eigen::Vector3f::Ones() : st.scale);
+        instance.setTransform (t.data());
+        // check visibility state
+        uint32_t visiblityMask = node->getState().isVisible() ? 255 : 0;
+        if (visiblityMask == 0) ++invisibleBodies;
+        instance.setVisibilityMask (visiblityMask);
+        if (node->description().sleepState)
+            ++bodiesSleeping;
+            
+        // Update instance data for this instance
+        populateInstanceData(it.first, node);
+    }
+    if (bodiesSleeping < bodyCount)
+    {
+        rebuildIAS();
+        restartRender = true;
+    }
+    return restartRender;
+}
+
+void RiPRSceneHandler::toggleSelectionMaterial (RenderableNode& node)
+{
+    // node is checked upstream
+    RiPRModelPtr optiXModel = modelHandler_->getRiPRModel (node->getID());
+
+    optixu::Instance& inst = optiXModel->getOptiXInstance();
+
+    if (node->isInstance())
+    {
+        RenderableNode instancedFrom = node->getInstancedFrom();
+        if (!instancedFrom) return; // FIXME better error handling
+
+        RiPRModelPtr instancedFromModel = modelHandler_->getRiPRModel (instancedFrom->getID());
+        if (!instancedFromModel) return; // FIXME better error handling
+
+        inst.setChild (instancedFromModel->getGAS()->gas, node->getState().isSelected() ? 1 : 0);
+    }
+    else
+    {
+        inst.setChild (optiXModel->getGAS()->gas, node->getState().isSelected() ? 1 : 0);
+    }
+
+    // apparently no need to resize SceneDependentSBT
+    rebuildIAS();
+}
+
+void RiPRSceneHandler::selectAll()
+{
+    for (auto& it : nodeMap)
+    {
+        if (it.second.expired()) continue;
+
+        RenderableNode node = it.second.lock();
+        node->getState().state |= sabi::PRenderableState::Selected;
+
+        RiPRModelPtr optiXModel = modelHandler_->getRiPRModel (node->getID());
+        if (!optiXModel) continue; // FIXME error handling
+
+        optixu::Instance& inst = optiXModel->getOptiXInstance();
+
+        if (node->isInstance())
+        {
+            RenderableNode instancedFrom = node->getInstancedFrom();
+            if (!instancedFrom) return; // FIXME better error handling
+
+            RiPRModelPtr instancedFromModel = modelHandler_->getRiPRModel (instancedFrom->getID());
+            if (!instancedFromModel) return; // FIXME better error handling
+
+            inst.setChild (instancedFromModel->getGAS()->gas, node->getState().isSelected() ? 1 : 0);
+        }
+        else
+        {
+            inst.setChild (optiXModel->getGAS()->gas, node->getState().isSelected() ? 1 : 0);
+        }
+    }
+
+    // apparently no need to resize SceneDependentSBT
+    rebuildIAS();
+}
+
+// FIXME lot of duplicate code here
+void RiPRSceneHandler::deselectAll()
+{
+    for (auto& it : nodeMap)
+    {
+        if (it.second.expired()) continue;
+
+        RenderableNode node = it.second.lock();
+        if (node->getState().isSelected())
+        {
+            node->getState().state ^= sabi::PRenderableState::Selected;
+        }
+
+        RiPRModelPtr optiXModel = modelHandler_->getRiPRModel (node->getID());
+        if (!optiXModel) continue; // FIXME error handling
+
+        optixu::Instance& inst = optiXModel->getOptiXInstance();
+
+        if (node->isInstance())
+        {
+            RenderableNode instancedFrom = node->getInstancedFrom();
+            if (!instancedFrom) return; // FIXME better error handling
+
+            RiPRModelPtr instancedFromModel = modelHandler_->getRiPRModel (instancedFrom->getID());
+            if (!instancedFromModel) return; // FIXME better error handling
+
+            inst.setChild (instancedFromModel->getGAS()->gas, node->getState().isSelected() ? 1 : 0);
+        }
+        else
+        {
+            inst.setChild (optiXModel->getGAS()->gas, node->getState().isSelected() ? 1 : 0);
+        }
+    }
+
+    // apparently no need to resize SceneDependentSBT
+    rebuildIAS();
+}
+
+// Rebuild the IAS after any updates to the instances
+void RiPRSceneHandler::rebuildIAS()
+{
+    // Perform the IAS rebuild
+    travHandle = ias.rebuild (ctx->getCudaStream(), instanceBuffer, iasMem, ctx->getASBuildScratchMem());
+
+    // Synchronize the CUDA stream to ensure completion
+    CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
+}
+
+void RiPRSceneHandler::updateIAS()
+{
+    // just update the IAS
+    ias.update (ctx->getCudaStream(), ctx->getASBuildScratchMem());
+
+    // Synchronize the CUDA stream to ensure completion
+    CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
+}
+
+void RiPRSceneHandler::rebuild()
+{
+    resizeSceneDependentSBT();
+    rebuildIAS();
+}
+
+// Area light support implementation
+void RiPRSceneHandler::updateEmissiveInstances()
+{
+    emissiveInstances_.clear();
     
-    // Build IAS if we have nodes and scene is set
-    if (!nodes_.empty() && scene_) {
-        // Create IAS if not already created
-        if (!ias_) {
-            try {
-                ias_ = scene_->createInstanceAccelerationStructure();
-                ias_.setConfiguration(
-                    optixu::ASTradeoff::PreferFastBuild,
-                    optixu::AllowUpdate::Yes);
-                LOG(DBUG) << "Created IAS for scene";
-            } catch (const std::exception& e) {
-                LOG(WARNING) << "Failed to create IAS: " << e.what();
-                return;
+    // Check if we have a valid model handler
+    if (!modelHandler_)
+    {
+        LOG(WARNING) << "No model handler set for emissive instance update";
+        return;
+    }
+    
+    // Iterate through all instances and check if they have emissive materials
+    for (const auto& [instanceIndex, weakRef] : nodeMap)
+    {
+        if (weakRef.expired()) continue;
+        
+        auto node = weakRef.lock();
+        if (!node) continue;
+        
+        // Get the model from the node
+        auto model = modelHandler_->getModel(node);
+        if (!model) continue;
+        
+        // Check if the model has any emissive materials
+        bool hasEmissive = false;
+        
+        // For RiPRTriangleModel, check if emitter distribution has non-zero integral
+        if (auto triModel = std::dynamic_pointer_cast<RiPRTriangleModel>(model))
+        {
+            const LightDistribution& emitterDist = triModel->getEmitterPrimDistribution();
+            if (emitterDist.getIntengral() > 0.0f)
+            {
+                hasEmissive = true;
             }
         }
         
-        try {
-            // Prepare instance buffer
-            if (!instanceBuffer_.isInitialized() || instanceBuffer_.numElements() < nodes_.size()) {
-                if (instanceBuffer_.isInitialized()) {
-                    instanceBuffer_.finalize();
-                }
-                instanceBuffer_.initialize(cudaContext, cudau::BufferType::Device, nodes_.size());
-            }
+        if (hasEmissive)
+        {
+            emissiveInstances_.push_back(instanceIndex);
             
-            // Create OptixInstance data for each node
-            std::vector<OptixInstance> instances;
-            instances.reserve(nodes_.size());
-            
-            for (size_t i = 0; i < nodes_.size(); ++i) {
-                ripr::RiPRNode* node = nodes_[i];
-                if (!node) continue;
-                
-                OptixInstance instance = {};
-                
-                // Set transform from node
-                const Matrix4x4& transform = node->matM2W;
-                instance.transform[0] = transform.c0.x;
-                instance.transform[1] = transform.c1.x;
-                instance.transform[2] = transform.c2.x;
-                instance.transform[3] = transform.c3.x;
-                instance.transform[4] = transform.c0.y;
-                instance.transform[5] = transform.c1.y;
-                instance.transform[6] = transform.c2.y;
-                instance.transform[7] = transform.c3.y;
-                instance.transform[8] = transform.c0.z;
-                instance.transform[9] = transform.c1.z;
-                instance.transform[10] = transform.c2.z;
-                instance.transform[11] = transform.c3.z;
-                
-                // Set instance ID and other properties
-                instance.instanceId = node->instSlot;
-                instance.visibilityMask = 255;  // Visible to all ray types
-                instance.flags = OPTIX_INSTANCE_FLAG_NONE;
-                
-                // Get the traversable handle from the surface group's GAS
-                OptixTraversableHandle gasHandle = 0;
-                if (node->geomGroupInst.geomGroup) {
-                    if (node->geomGroupInst.geomGroup->optixGas) {
-                        gasHandle = node->geomGroupInst.geomGroup->optixGas.getHandle();
-                        LOG(DBUG) << "Got GAS handle for node " << i << ": " << gasHandle;
-                    } else {
-                        LOG(WARNING) << "Node " << i << " surface group has no optixGas";
-                    }
-                } else {
-                    LOG(WARNING) << "Node " << i << " has no geomGroup";
+            // Mark instance as emissive in instance data
+            for (int bufferIdx = 0; bufferIdx < 2; ++bufferIdx)
+            {
+                shared::InstanceData* instDataOnHost = instanceDataBuffer_[bufferIdx].map();
+                if (instDataOnHost && instanceIndex < maxNumInstances)
+                {
+                    instDataOnHost[instanceIndex].isEmissive = 1;
+                    instDataOnHost[instanceIndex].emissiveScale = 1.0f;  // Default scale
                 }
-                instance.traversableHandle = gasHandle;
-                
-                if (gasHandle == 0) {
-                    LOG(WARNING) << "Node " << i << " has no GAS traversable handle";
-                }
-                
-                instances.push_back(instance);
+                instanceDataBuffer_[bufferIdx].unmap();
             }
-            
-            // Upload instances to GPU
-            if (!instances.empty()) {
-                instanceBuffer_.write(instances.data(), instances.size());
-                
-                // Mark IAS for rebuild
-                ias_.markDirty();
-                
-                // Clear existing children and add new ones
-                while (ias_.getNumChildren() > 0) {
-                    ias_.removeChildAt(ias_.getNumChildren() - 1);
-                }
-                
-                // Create instances with their GAS objects
-                for (size_t i = 0; i < nodes_.size(); ++i) {
-                    optixu::Instance inst = scene_->createInstance();
-                    
-                    // Get the GAS from the node's surface group
-                    auto node = nodes_[i];
-                    if (node && node->geomGroupInst.geomGroup && node->geomGroupInst.geomGroup->optixGas) {
-                        // Set the child using the GeometryAccelerationStructure object
-                        inst.setChild(node->geomGroupInst.geomGroup->optixGas);
-                        
-                        // Set instance ID (used to index into instance data buffer)
-                        inst.setID(static_cast<uint32_t>(i));
-                        
-                        // Set transform - use the node's model-to-world matrix
-                        // OptiX expects row-major 3x4 matrix
-                        // Matrix4x4_T stores data in column-major format (c0, c1, c2, c3)
-                        float transform[12] = {
-                            node->matM2W.c0.x, node->matM2W.c1.x, node->matM2W.c2.x, node->matM2W.c3.x,  // Row 0
-                            node->matM2W.c0.y, node->matM2W.c1.y, node->matM2W.c2.y, node->matM2W.c3.y,  // Row 1
-                            node->matM2W.c0.z, node->matM2W.c1.z, node->matM2W.c2.z, node->matM2W.c3.z   // Row 2
-                        };
-                        
-                        inst.setTransform(transform);
-                        
-                        LOG(DBUG) << "Instance " << i << " set with GAS handle " 
-                                  << node->geomGroupInst.geomGroup->optixGas.getHandle();
-                    } else {
-                        LOG(WARNING) << "Instance " << i << " has no GAS object";
-                    }
-                    ias_.addChild(inst);
-                }
-                
-                // CRITICAL: Generate SBT layout AFTER instances are added to the scene
-                // This ensures the scene knows about all geometry for proper SBT generation
-                size_t hitGroupSbtSize;
-                scene_->generateShaderBindingTableLayout(&hitGroupSbtSize);
-                LOG(INFO) << "Generated scene SBT layout after adding instances, size: " << hitGroupSbtSize << " bytes";
-                
-                // Prepare for build
-                OptixAccelBufferSizes bufferSizes;
-                ias_.prepareForBuild(&bufferSizes);
-                
-                // Allocate memory if needed
-                if (!iasMem_.isInitialized() || iasMem_.sizeInBytes() < bufferSizes.outputSizeInBytes) {
-                    if (iasMem_.isInitialized()) {
-                        iasMem_.finalize();
-                    }
-                    iasMem_.initialize(cudaContext, cudau::BufferType::Device, bufferSizes.outputSizeInBytes, 1);
-                }
-                
-                // Build the IAS
-                travHandle_ = ias_.rebuild(cudaStream, instanceBuffer_, iasMem_, ctx_->getASBuildScratchMem());
-                
-                // Synchronize to ensure build completes
-                CUDADRV_CHECK(cuStreamSynchronize(cudaStream));
-                
-                LOG(INFO) << "Built IAS with " << instances.size() << " instances, traversable handle: " << travHandle_;
-            }
-        } catch (const std::exception& e) {
-            LOG(WARNING) << "Failed to build IAS: " << e.what();
-            travHandle_ = 0;  // 0 is valid for empty scene
         }
-    } else if (nodes_.empty()) {
-        // Empty scene - traversable handle should be 0
-        travHandle_ = 0;
-        LOG(DBUG) << "No nodes in scene, traversable handle set to 0";
     }
     
-    LOG(INFO) << "Acceleration structures built";
+    lightDistributionDirty_ = true;
+   // LOG(DBUG) << "Found " << emissiveInstances_.size() << " emissive instances";
 }
 
-void RiPRSceneHandler::updateAccelerationStructures()
+void RiPRSceneHandler::buildLightInstanceDistribution()
 {
-    if (!modelHandler_) {
-        LOG(WARNING) << "Cannot update acceleration structures: model handler not set";
+    if (!lightDistributionDirty_) return;
+    
+    if (emissiveInstances_.empty())
+    {
+        // Initialize empty distribution
+        lightInstDistribution_.initialize(ctx->getCudaContext(), cudau::BufferType::Device, nullptr, 0);
+        lightDistributionDirty_ = false;
         return;
     }
-
-    // Updating acceleration structures
     
-    // Update any refittable surface acceleration structures
-    for (const auto& [name, model] : modelHandler_->getAllModels()) {
-        ripr::RiPRSurfaceGroup* surfaceGroup = model->getSurfaceGroup();
-        if (surfaceGroup && surfaceGroup->refittable) {
-            // TODO: Refit GAS when we have OptiX integration
-            // GAS refitted for surface group
+    // Collect importances for all emissive instances
+    std::vector<float> importances;
+    importances.reserve(emissiveInstances_.size());
+    
+    for (uint32_t instIdx : emissiveInstances_)
+    {
+        float importance = 0.0f;
+        
+        // Get node and model
+        auto it = nodeMap.find(instIdx);
+        if (it != nodeMap.end() && !it->second.expired())
+        {
+            auto node = it->second.lock();
+            auto model = modelHandler_->getModel(node);
+            
+            if (auto triModel = std::dynamic_pointer_cast<RiPRTriangleModel>(model))
+            {
+                // Get importance from the model's emitter distribution
+                importance = triModel->getEmitterPrimDistribution().getIntengral();
+                
+                // Account for instance scaling
+                const auto& spaceTime = node->getSpaceTime();
+                float uniformScale = spaceTime.scale.norm() / std::sqrt(3.0f);  // Approximate uniform scale
+                importance *= uniformScale * uniformScale;  // Area scales by square of scale
+            }
         }
+        
+        importances.push_back(std::max(importance, 1e-6f));  // Avoid zero importance
     }
     
-    // TODO: Update instance acceleration structure (IAS) when we have OptiX integration
+    // Build CDF for sampling
+    // Initialize light distribution with CUDA context, buffer type, and importance data
+    lightInstDistribution_.initialize(
+        ctx->getCudaContext(), 
+        cudau::BufferType::Device, 
+        importances.data(), 
+        static_cast<uint32_t>(importances.size()));
+    lightDistributionDirty_ = false;
     
-    // Acceleration structures updated
-}
-
-size_t RiPRSceneHandler::getSurfaceCount() const
-{
-    if (!modelHandler_) {
-        return 0;
-    }
-    return modelHandler_->getRiPRSurfaceCount();
-}
-
-size_t RiPRSceneHandler::getMaterialCount() const
-{
-    if (!materialHandler_) {
-        return 0;
-    }
-    return materialHandler_->getAllMaterials().size();
-}
-
-ripr::RiPRNode* RiPRSceneHandler::findNodeForSurface(ripr::RiPRSurface* surface) const
-{
-    if (!surface) {
-        return nullptr;
-    }
-    
-    // Search through all nodes to find the one containing this surface
-    // Note: RiPRSurfaceGroupInstance doesn't directly contain surfaces
-    // We need to find the model that contains this surface and then find the node
-    // For now, return nullptr as we need a different approach
-    // TODO: Implement proper surface-to-node mapping
-    
-    return nullptr;
+    LOG(DBUG) << "Built light instance distribution with " << importances.size() 
+              << " lights, total importance: " << lightInstDistribution_.getIntengral();
 }

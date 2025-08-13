@@ -1,158 +1,97 @@
 #pragma once
 
 // RiPRMaterialHandler.h
-// Manages material creation and assignment for RiPRModels
-// Converts CgMaterials to DisneyMaterials and assigns them to GeometryInstances
+// Manages material creation, updating, and texture processing for the OptiX rendering system
+// Implements physically-based materials and specialized visualization materials
 
 #include "../../../RenderContext.h"
 #include "../../../common/common_host.h"
 #include "../../../material/HostDisneyMaterial.h"
 #include "../../../material/DeviceDisneyMaterial.h"
-#include "../models/RiPRModel.h"
-#include "../models/RiPRCore.h"
 
-#include <sabi_core/sabi_core.h>
-
+using RiPRMaterialHandlerPtr = std::shared_ptr<class RiPRMaterialHandler>;
 using sabi::CgModelPtr;
-using sabi::CgMaterial;
 using sabi::CgTextureInfo;
-
-class RiPRMaterialHandler;
-class AreaLightHandler;
-using RiPRMaterialHandlerPtr = std::shared_ptr<RiPRMaterialHandler>;
-using AreaLightHandlerPtr = std::shared_ptr<AreaLightHandler>;
 
 class RiPRMaterialHandler
 {
-public:
-    // Factory method
-    static RiPRMaterialHandlerPtr create()
+ public:
+    // Factory method to create a new RiPRMaterialHandler instance
+    static RiPRMaterialHandlerPtr create (RenderContextPtr ctx)
     {
-        return std::make_shared<RiPRMaterialHandler>();
+        return std::make_shared<RiPRMaterialHandler> (ctx);
     }
-    
-    RiPRMaterialHandler();
+
+    // Constructor initializes the handler with texture samplers and context
+    RiPRMaterialHandler (RenderContextPtr ctx);
+
+    // Destructor cleans up materials and texture resources
     ~RiPRMaterialHandler();
-    
-    // Initialize the material handler
-    void initialize(RenderContext* ctx);
-    
-    // Set the area light handler for notifications
-    void setAreaLightHandler(AreaLightHandlerPtr areaLightHandler) { 
-        areaLightHandler_ = areaLightHandler; 
-    }
-    
-    // Clear all materials
-    void clear();
-    
-    // Process materials for a RiPRModel
-    // Creates DisneyMaterials for each surface and assigns them to RiPRSurfaces
-    void processMaterialsForModel(
-        RiPRModel* model,
-        const CgModelPtr& cgModel,
-        const std::filesystem::path& materialFolder = {});
-    
-    // Create a DisneyMaterial from a CgMaterial
-    DisneyMaterial* createMaterialFromCg(
-        const CgMaterial& cgMaterial,
-        const CgModelPtr& model = nullptr,
-        const std::filesystem::path& materialFolder = {});
-    
-    // Assign a material to a RiPRSurface (new type-safe version)
-    void assignMaterialToSurface(
-        ripr::RiPRSurface* surface,
-        DisneyMaterial* material);
-    
-   
-    // Get all created materials
-    const std::vector<std::unique_ptr<DisneyMaterial>>& getAllMaterials() const { 
-        return materials_; 
-    }
-    
-    // Get material by index
-    DisneyMaterial* getMaterial(size_t index) {
-        return index < materials_.size() ? materials_[index].get() : nullptr;
-    }
-    
-    // Get material data buffer for GPU
-    cudau::TypedBuffer<shared::DisneyData>* getMaterialDataBuffer() { 
-        return &materialDataBuffer_; 
-    }
-    
-    // Upload all material data to GPU
-    void uploadMaterialsToGPU();
-    
-    // Material capacity
-    static constexpr uint32_t MaxNumMaterials = 1024;
+
+    // Initialize the material handler with buffer allocation
+    void initialize();
+
+    // Finalizes material setup before rendering begins
+    void finalize();
+
+    // Creates a Disney BRDF material with physically-based rendering properties
+    // Implements the Disney Principled BRDF model with comprehensive parameter set
+    optixu::Material createDisneyMaterial (
+        const CgMaterial& material,              // Source material data
+        const std::filesystem::path& materialFolder, // Folder containing texture files
+        CgModelPtr model);                       // Model this material is associated with
+
+    // Updates an existing material with new properties
+    // Allows dynamic modification of material parameters during rendering
+    void updateMaterial (
+        const Material& sabiMaterial,            // Updated material data
+        optixu::Material& material,              // OptiX material to update
+        const std::filesystem::path& materialFolder, // Folder containing texture files
+        CgModelPtr model);                       // Model this material is associated with
+
+    // Get the material data buffer for launch parameters
+    cudau::TypedBuffer<shared::DisneyData>* getMaterialDataBuffer() { return &materialDataBuffer_; }
+
+    // Material capacity constant
+    static constexpr uint32_t maxNumMaterials = 1024;
     static constexpr uint32_t InvalidSlotIndex = SlotFinder::InvalidSlotIndex;
-    
-private:
-    // Convert specific material properties
-    void convertBaseProperties(
-        DisneyMaterial* disney,
-        const CgMaterial::CoreProperties& core);
-    
-    void convertMetallicProperties(
-        DisneyMaterial* disney,
-        const CgMaterial::MetallicProperties& metallic);
-    
-    void convertSheenProperties(
-        DisneyMaterial* disney,
-        const CgMaterial::SheenProperties& sheen);
-    
-    void convertClearcoatProperties(
-        DisneyMaterial* disney,
-        const CgMaterial::ClearcoatProperties& clearcoat);
-    
-    void convertSubsurfaceProperties(
-        DisneyMaterial* disney,
-        const CgMaterial::SubsurfaceProperties& subsurface);
-    
-    void convertTransparencyProperties(
-        DisneyMaterial* disney,
-        const CgMaterial::TransparencyProperties& transparency);
-    
-    void convertEmissionProperties(
-        DisneyMaterial* disney,
-        const CgMaterial::EmissionProperties& emission);
-    
-    // Process texture information
-    void processTextureInfo(
-        const std::optional<CgTextureInfo>& texInfo,
-        const cudau::Array** targetArray,
-        CUtexObject* targetTexObject,
-        const std::filesystem::path& materialFolder,
-        const CgModelPtr& model,
-        const std::string& requestedInput = "Color",
-        const Eigen::Vector3f& defaultValue = Eigen::Vector3f::Zero());
-    
-    // Create default material
-    DisneyMaterial* createDefaultMaterial();
-    
-    // Convert device data for GPU upload
-    shared::DisneyData convertToDeviceData(const DisneyMaterial* hostMaterial);
-    
-    // Calculate texture dimension information
-    shared::TexDimInfo calcDimInfo(
-        const cudau::Array* cuArray,
-        bool isLeftHanded = true);
-    
-private:
-    // Render context (may be null for testing)
-    RenderContext* ctx_ = nullptr;
-    
-    // Area light handler for notifications
-    AreaLightHandlerPtr areaLightHandler_ = nullptr;
-    
-    // Collection of all created materials
-    std::vector<std::unique_ptr<DisneyMaterial>> materials_;
-    
+
+ private:
+    RenderContextPtr ctx = nullptr;   // Render context for OptiX operations
+  
+    // Collection of all created materials for lifecycle management
+    std::vector<std::unique_ptr<DisneyMaterial>> materials;
+
     // Slot management for materials
     SlotFinder materialSlotFinder_;
     
-    // Material data buffer for GPU
+    // Material data buffer
     cudau::TypedBuffer<shared::DisneyData> materialDataBuffer_;
-    
-    // Track initialization state
+
+    // Track if initialized
     bool isInitialized_ = false;
+
+    // Texture samplers for different color spaces and formats
+    cudau::TextureSampler sampler_sRGB;      // For sRGB textures requiring gamma correction
+    cudau::TextureSampler sampler_float;     // For raw float textures
+    cudau::TextureSampler sampler_normFloat; // For normalized float textures
+
+    // Calculates texture dimension information including power-of-two status
+    shared::TexDimInfo calcDimInfo (
+        const cudau::Array* cuArray,     // CUDA array containing texture data
+        bool isLeftHanded = true);       // Coordinate system handedness
+
+    // Creates base OptiX material with hit groups and programs configured
+    optixu::Material createOptixMaterial();
+    
+    // Process texture information for a given texture type (albedo, normal, roughness, etc.)
+    // Handles texture loading, CUDA texture object creation, and material parameter updates
+    void processTextureInfo (
+        const std::optional<CgTextureInfo>& texInfo,  // Texture information from content
+        DisneyMaterial* hostDisney,                   // Host-side material to update
+        const cudau::Array** targetArray,             // Target array to load texture into
+        CUtexObject* targetTexObject,                 // Target texture object to create
+        const std::filesystem::path& materialFolder,  // Folder containing texture files
+        CgModelPtr model,                             // Model this texture is for
+        const Eigen::Vector3f& defaultVector = Eigen::Vector3f::Zero()); // Default value if no texture
 };

@@ -1,17 +1,28 @@
-#pragma once
+﻿#pragma once
 
-// ripr_shared.h
-// Shared definitions between host and device code for RiPREngine
-// Matches the pattern from sample code path_tracing_shared.h
+// much taken from OptiX_Utility
+// https://github.com/shocker-0x15/OptiX_Utility/blob/master/LICENSE.md
 
 #include "../../common/common_shared.h"
-#include "models/RiPRDeviceCore.h"
+#include "../../material/DeviceDisneyMaterial.h"
 
 namespace ripr_shared
 {
-
-    // Constants (matching sample code)
     static constexpr float probToSampleEnvLight = 0.25f;
+
+    /* enum PickRayType
+     {
+         PickRayType_Primary = 0,
+         PickRayType_Visibility,
+         NumPickRayTypes
+     };
+     */
+    enum RayType
+    {
+        RayType_Search = 0,
+        RayType_Visibility,
+        NumRayTypes
+    };
 
     struct GBufferRayType
     {
@@ -30,72 +41,56 @@ namespace ripr_shared
         }
     };
 
-    struct PathTracingRayType
-    {
-        enum Value
-        {
-            Closest,
-            Visibility,
-            NumTypes
-        } value;
+    /* struct PathTracingRayType
+     {
+         enum Value
+         {
+             Closest,
+             Visibility,
+             NumTypes
+         } value;
 
-        CUDA_DEVICE_FUNCTION constexpr PathTracingRayType (Value v = Closest) :
-            value (v) {}
+         CUDA_DEVICE_FUNCTION constexpr PathTracingRayType (Value v = Closest) :
+             value (v) {}
 
-        CUDA_DEVICE_FUNCTION operator uint32_t() const
-        {
-            return static_cast<uint32_t> (value);
-        }
-    };
+         CUDA_DEVICE_FUNCTION operator uint32_t() const
+         {
+             return static_cast<uint32_t> (value);
+         }
+     };*/
 
     constexpr uint32_t maxNumRayTypes = 2;
-    // Camera structure (matching sample code exactly)
+
+    // In PerspectiveCamera struct in shared.h
     struct PerspectiveCamera
     {
         float aspect;
         float fovY;
         Point3D position;
         Matrix3x3 orientation;
+        float lensSize = 0.0f;      // Size of camera aperture
+        float focusDistance = 5.0f; // Distance to focal plane
 
         CUDA_COMMON_FUNCTION Point2D calcScreenPosition (const Point3D& posInWorld) const
         {
-            const Matrix3x3 invOri = invert (orientation);
-            const Point3D posInView (invOri * (posInWorld - position));
-            const Point2D posAtZ1 (posInView.x / posInView.z, posInView.y / posInView.z);
-            const float h = 2 * std::tan (fovY / 2);
-            const float w = aspect * h;
+            Matrix3x3 invOri = invert (orientation);
+            Point3D posInView (invOri * (posInWorld - position));
+            Point2D posAtZ1 (posInView.x / posInView.z, posInView.y / posInView.z);
+            float h = 2 * std::tan (fovY / 2);
+            float w = aspect * h;
             return Point2D (1 - (posAtZ1.x + 0.5f * w) / w,
                             1 - (posAtZ1.y + 0.5f * h) / h);
         }
     };
 
-    // Hit point parameters
-    struct HitPointParams
-    {
-        RGB albedo;
-        Point3D positionInWorld;
-        Point3D prevPositionInWorld;
-        Normal3D shadingNormalInWorld;
-        uint32_t instSlot;
-        uint32_t geomInstSlot;
-        uint32_t primIndex;
-        uint16_t qbcB; // Quantized barycentric B
-        uint16_t qbcC; // Quantized barycentric C
-    };
-
-    // Light sample structure
     struct LightSample
     {
         RGB emittance;
         Point3D position;
         Normal3D normal;
-        uint32_t atInfinity : 1;
-
-        CUDA_COMMON_FUNCTION LightSample() :
-            atInfinity (false) {}
+        unsigned int atInfinity : 1;
     };
 
-    // Pick info structure for mouse interaction
     struct PickInfo
     {
         uint32_t instSlot;
@@ -108,6 +103,21 @@ namespace ripr_shared
         RGB emittance;
         uint32_t hit : 1;
     };
+
+    struct HitPointParams
+    {
+        RGB albedo;
+        Point3D positionInWorld;
+        Point3D prevPositionInWorld;
+        Normal3D normalInWorld;
+        Point2D texCoord;
+        uint32_t instSlot;
+        uint32_t geomInstSlot;
+        uint32_t primIndex;
+        uint16_t qbcB;
+        uint16_t qbcC;
+    };
+
 
     struct GBuffer0Elements
     {
@@ -123,137 +133,99 @@ namespace ripr_shared
         Vector2D motionVector;
     };
 
-    // Static pipeline launch parameters
     struct StaticPipelineLaunchParameters
     {
+        OptixTraversableHandle travHandle;
         int2 imageSize;
+        uint32_t numAccumFrames;
+        uint32_t bufferIndex;
 
-        // RNG buffer
         optixu::BlockBuffer2D<shared::PCG32RNG, 1> rngBuffer;
+        optixu::NativeBlockBuffer2D<float4> colorAccumBuffer;
+        optixu::NativeBlockBuffer2D<float4> albedoAccumBuffer;
+        optixu::NativeBlockBuffer2D<float4> normalAccumBuffer;
+        optixu::NativeBlockBuffer2D<float4> flowAccumBuffer;
 
-        // G-buffers (double buffered)
-        optixu::NativeBlockBuffer2D<GBuffer0Elements> GBuffer0[2];
-        optixu::NativeBlockBuffer2D<GBuffer1Elements> GBuffer1[2];
+        PerspectiveCamera camera;
+        PerspectiveCamera prevCamera; // Previous frame camera for temporal reprojection
+        uint32_t useCameraSpaceNormal : 1;
+        uint32_t bounceLimit; // Maximum path length for path tracing
 
-        // Disney material and instance data (using RiPR types from RiPRDeviceCore.h)
-        shared::ROBuffer<shared::DisneyData> disneyMaterialBuffer;
-        shared::ROBuffer<ripr::RiPRNodeData> instanceDataBufferArray[2]; // Double buffered for temporal effects
-        shared::ROBuffer<ripr::RiPRSurfaceData> geometryInstanceDataBuffer;
+        // Experimental
+        uint32_t makeAllGlass : 1;
+        uint32_t globalGlassType : 1;
+        float globalGlassIOR;
+        float globalTransmittanceDist;
 
-        // Light data
+        // skydome environment
+        uint32_t enableEnvLight : 1;
+        float envLightPowerCoeff;
+        float envLightRotation;
+        uint32_t useSolidBackground : 1;
+        float3 backgroundColor; // Solid background color when not using HDR
+
+        // Area light support
         shared::LightDistribution lightInstDist;
+        uint32_t numLightInsts;        // Number of emissive instances
+        uint32_t enableAreaLights : 1; // Enable/disable area lights
+        float areaLightPowerCoeff;     // Area light power multiplier
+
         shared::RegularConstantContinuousDistribution2D envLightImportanceMap;
         CUtexObject envLightTexture;
 
-        // Accumulation buffers
-        optixu::NativeBlockBuffer2D<float4> beautyAccumBuffer;
-        optixu::NativeBlockBuffer2D<float4> albedoAccumBuffer;
-        optixu::NativeBlockBuffer2D<float4> normalAccumBuffer;
-        optixu::NativeBlockBuffer2D<float2> motionAccumBuffer;
+        // Material data buffer
+        shared::ROBuffer<shared::DisneyData> materialDataBuffer;
 
-        // Pick info for mouse interaction
-        PickInfo* pickInfos[2];
+        // Geometry instance data buffer
+        shared::ROBuffer<shared::GeometryInstanceData> geometryInstanceDataBuffer;
+
+        // Instance data buffer array (double buffered for async updates)
+        shared::ROBuffer<shared::InstanceData> instanceDataBufferArray[2];
+
+        // Pick info buffer
+        PickInfo* pickInfoBuffer[2]; // Double buffered
+        
+
+        // geometry buffers 
+        optixu::NativeBlockBuffer2D<GBuffer0Elements> geoBuffer0[2];
+        optixu::NativeBlockBuffer2D<GBuffer1Elements> geoBuffer1[2];
+
+        // Firefly reduction
+        float maxRadiance; // Maximum radiance value to clamp fireflies
+
+        int2 mousePosition;
     };
-
-    // Per-frame pipeline launch parameters
     struct PerFramePipelineLaunchParameters
     {
-        OptixTraversableHandle travHandle;
-        uint32_t numAccumFrames;
-        uint32_t frameIndex;
-
-        PerspectiveCamera camera;
-        PerspectiveCamera prevCamera;
-
-        // Environment light
-        float envLightPowerCoeff;
-        float envLightRotation;
-
-        // Interaction
-        int2 mousePosition;
-
-        // Render settings (bit flags matching sample code)
-        uint32_t maxPathLength : 4;
-        uint32_t bufferIndex : 1;
-        uint32_t resetFlowBuffer : 1; // For optical flow
-        uint32_t enableJittering : 1;
-        uint32_t enableEnvLight : 1;
-        uint32_t enableBumpMapping : 1;
-        uint32_t enableDebugPrint : 1;
-        uint32_t enableDenoiser : 1;
-        uint32_t renderMode : 3; // 0=GBuffer, 1=PathTrace, 2+=Debug modes
-
-        // Debug switches
-        uint32_t debugSwitches;
-        void setDebugSwitch (int32_t idx, bool b)
-        {
-            debugSwitches &= ~(1 << idx);
-            debugSwitches |= b << idx;
-        }
-        CUDA_COMMON_FUNCTION bool getDebugSwitch (int32_t idx) const
-        {
-            return (debugSwitches >> idx) & 0b1;
-        }
     };
 
-    // Main pipeline launch parameters structure
     struct PipelineLaunchParameters
     {
         StaticPipelineLaunchParameters* s;
         PerFramePipelineLaunchParameters* f;
     };
 
-    // Buffer display modes for debugging
-    enum class BufferToDisplay
+    struct SearchRayPayload
     {
-        NoisyBeauty = 0,
-        Albedo,
-        Normal,
-        Flow,
-        DenoisedBeauty,
-    };
-
-    // Payload structures for OptiX ray tracing
-
-    //// G-Buffer ray payload (simple, single bounce)
-    //struct GBufferPayload
-    //{
-    //    HitPointParams* hitPoint;
-    //    PickInfo* pickInfo;
-    //};
-
-    // Path tracing payload (complex, multi-bounce)
-    struct PathTraceWriteOnlyPayload
-    {
-        Point3D nextOrigin;
-        Vector3D nextDirection;
-    };
-
-    struct PathTraceReadWritePayload
-    {
-        shared::PCG32RNG rng;
-        float initImportance;
         RGB alpha;
         RGB contribution;
-        float prevDirPDensity;
-        uint32_t maxLengthTerminate : 1;
-        uint32_t terminate : 1;
-        uint32_t pathLength : 6;
+        Point3D origin;
+        Vector3D direction;
+        float prevDirPDensity; // PDF of the previous direction for MIS
+        struct
+        {
+            uint32_t pathLength : 30;
+            uint32_t terminate : 1;
+            uint32_t deltaSampled : 1;
+        };
     };
 
-    // Visibility/shadow ray payload
-    struct VisibilityPayload
-    {
-        float visibility; // 0.0 = blocked, 1.0 = visible
-    };
-
-    // Payload signatures for OptiX (matching sample code pattern)
-    using PrimaryRayPayloadSignature =
-        optixu::PayloadSignature<HitPointParams*, PickInfo*>;
-    using PathTraceRayPayloadSignature =
-        optixu::PayloadSignature<PathTraceWriteOnlyPayload*, PathTraceReadWritePayload*>;
-    using VisibilityRayPayloadSignature =
-        optixu::PayloadSignature<float>;
+    // Primary ray payload for GBuffer generation
+    using PrimaryRayPayloadSignature = optixu::PayloadSignature<HitPointParams*, PickInfo*>;
+    
+    // Path tracing payloads
+    using SearchRayPayloadSignature = optixu::PayloadSignature<shared::PCG32RNG, SearchRayPayload*, HitPointParams*, RGB*, Normal3D*>;
+    using VisibilityRayPayloadSignature = optixu::PayloadSignature<float>;
 
 } // namespace ripr_shared
 
@@ -270,19 +242,50 @@ RT_PIPELINE_LAUNCH_PARAMETERS ripr_shared::PipelineLaunchParameters ripr_plp;
 
 namespace ripr_shared
 {
+    using namespace shared;
 
-    // Hit group SBT record data
+    // This struct is used to fetch geometry instance and material data from
+    // the Shader Binding Table (SBT) in OptiX.
     struct HitGroupSBTRecordData
     {
-        uint32_t geomInstSlot;
+        uint32_t geomInstSlot; // Geometry instance slot index in the global buffer
+        uint32_t materialSlot; // Material slot index in the material buffer
 
+        // Static member function to retrieve the SBT record data
         CUDA_DEVICE_FUNCTION CUDA_INLINE static const HitGroupSBTRecordData& get()
         {
+            // Use optixGetSbtDataPointer() to get the pointer to the SBT data
+            // Cast the pointer to type HitGroupSBTRecordData and dereference it
             return *reinterpret_cast<HitGroupSBTRecordData*> (optixGetSbtDataPointer());
         }
     };
 
-    // Hit point parameter helper
+    // Define a struct called HitPointParameter to hold hit point info
+    //struct HitPointParameter
+    //{
+    //    float b1, b2;      // Barycentric coordinates
+    //    int32_t primIndex; // Index of the primitive hit by the ray
+
+    //    // Static member function to get hit point parameters
+    //    CUDA_DEVICE_FUNCTION CUDA_INLINE static HitPointParameter get()
+    //    {
+    //        HitPointParameter ret; // Create an instance of the struct
+
+    //        // Get barycentric coordinates from OptiX API
+    //        float2 bc = optixGetTriangleBarycentrics();
+
+    //        // Store the barycentric coordinates in the struct
+    //        ret.b1 = bc.x;
+    //        ret.b2 = bc.y;
+
+    //        // Get the index of the primitive hit by the ray from OptiX API
+    //        ret.primIndex = optixGetPrimitiveIndex();
+
+    //        // Return the populated struct
+    //        return ret;
+    //    }
+    //};
+
     struct HitPointParameter
     {
         float bcB, bcC;
@@ -302,65 +305,94 @@ namespace ripr_shared
     // Check if current pixel is under cursor
     CUDA_DEVICE_FUNCTION CUDA_INLINE bool isCursorPixel()
     {
-        return ripr_plp.f->mousePosition == make_int2 (optixGetLaunchIndex());
+        // return ripr_plp.f->mousePosition == make_int2 (optixGetLaunchIndex());
+        return false;
     }
 
     // Get debug print status
     CUDA_DEVICE_FUNCTION CUDA_INLINE bool getDebugPrintEnabled()
     {
-        return ripr_plp.f->enableDebugPrint;
+        // return ripr_plp.f->enableDebugPrint;
+        return false;
     }
 
-    // Compute surface point from barycentric coordinates
+    // This function calculates various attributes of a surface point
+    // given its barycentric coordinates (b1, b2) and the index (primIndex)
+    // of the triangle it belongs to. It computes the world-space position,
+    // shading normal, texture coordinates, and so forth for this surface point.
+    // It also computes a hypothetical area PDF (hypAreaPDensity) that could
+    // be used in light sampling.
     CUDA_DEVICE_FUNCTION CUDA_INLINE void computeSurfacePoint (
-        const ripr::RiPRNodeData& inst,
-        const ripr::RiPRSurfaceData& geomInst,
-        uint32_t primIndex, float bcB, float bcC,
-        Point3D* positionInWorld,
-        Normal3D* shadingNormalInWorld,
-        Vector3D* texCoord0DirInWorld,
-        Normal3D* geometricNormalInWorld,
-        Point2D* texCoord)
+        const shared::GeometryInstanceData& geomInst,
+        uint32_t primIndex, float b1, float b2,
+        const Point3D& referencePoint,
+        Point3D* positionInWorld, Normal3D* shadingNormalInWorld, Vector3D* texCoord0DirInWorld,
+        Normal3D* geometricNormalInWorld, Point2D* texCoord,
+        float* hypAreaPDensity)
     {
-        const shared::Triangle& tri = geomInst.triangleBuffer[primIndex];
-        const shared::Vertex& vA = geomInst.vertexBuffer[tri.index0];
-        const shared::Vertex& vB = geomInst.vertexBuffer[tri.index1];
-        const shared::Vertex& vC = geomInst.vertexBuffer[tri.index2];
-        const float bcA = 1 - (bcB + bcC);
+        // Fetch the vertices of the triangle given its index
+        const Triangle& tri = geomInst.triangleBuffer[primIndex];
+        const Vertex& v0 = geomInst.vertexBuffer[tri.index0];
+        const Vertex& v1 = geomInst.vertexBuffer[tri.index1];
+        const Vertex& v2 = geomInst.vertexBuffer[tri.index2];
 
-        // Compute position in world space
-        const Point3D positionInObj = bcA * vA.position + bcB * vB.position + bcC * vC.position;
-        *positionInWorld = inst.transform * positionInObj;
+        // Transform vertex positions to world space
+        const Point3D p[3] = {
+            transformPointFromObjectToWorldSpace (v0.position),
+            transformPointFromObjectToWorldSpace (v1.position),
+            transformPointFromObjectToWorldSpace (v2.position),
+        };
 
-        // Compute geometric normal
-        *geometricNormalInWorld = normalize (
-            inst.normalMatrix * Normal3D (cross (vB.position - vA.position, vC.position - vA.position)));
+        // Calculate barycentric coordinates
+        float b0 = 1 - (b1 + b2);
 
-        // Interpolate shading normal
-        const Normal3D shadingNormalInObj = bcA * vA.normal + bcB * vB.normal + bcC * vC.normal;
-        *shadingNormalInWorld = normalize (inst.normalMatrix * shadingNormalInObj);
+        // Compute the position in world space using barycentric coordinates
+        *positionInWorld = b0 * p[0] + b1 * p[1] + b2 * p[2];
 
-        // Interpolate texture coordinates
-        *texCoord = bcA * vA.texCoord + bcB * vB.texCoord + bcC * vC.texCoord;
+        // Compute interpolated shading normal and texture direction
+        Normal3D shadingNormal = b0 * v0.normal + b1 * v1.normal + b2 * v2.normal;
+        Vector3D texCoord0Dir = b0 * v0.texCoord0Dir + b1 * v1.texCoord0Dir + b2 * v2.texCoord0Dir;
 
-        // Compute texture coordinate direction
-        const Vector3D texCoord0DirInObj = bcA * vA.texCoord0Dir + bcB * vB.texCoord0Dir + bcC * vC.texCoord0Dir;
-        *texCoord0DirInWorld = inst.transform * texCoord0DirInObj;
-        *texCoord0DirInWorld = normalize (
-            *texCoord0DirInWorld - dot (*shadingNormalInWorld, *texCoord0DirInWorld) * *shadingNormalInWorld);
+        // Compute geometric normal and area of the triangle
+        Normal3D geometricNormal (cross (p[1] - p[0], p[2] - p[0]));
+        float area = 0.5f * length (geometricNormal);
 
-        // Handle degenerate cases
+        // Compute the texture coordinates
+        *texCoord = b0 * v0.texCoord + b1 * v1.texCoord + b2 * v2.texCoord;
+
+        // Transform shading normal and texture direction to world space
+        *shadingNormalInWorld = normalize (transformNormalFromObjectToWorldSpace (shadingNormal));
+        *texCoord0DirInWorld = normalize (transformVectorFromObjectToWorldSpace (texCoord0Dir));
+        *geometricNormalInWorld = normalize (geometricNormal);
+
+        // Check for invalid normals and give them a default value
         if (!shadingNormalInWorld->allFinite())
         {
-            *geometricNormalInWorld = Normal3D (0, 0, 1);
             *shadingNormalInWorld = Normal3D (0, 0, 1);
             *texCoord0DirInWorld = Vector3D (1, 0, 0);
         }
+
+        // Check for invalid texture directions and correct them
         if (!texCoord0DirInWorld->allFinite())
         {
             Vector3D bitangent;
             makeCoordinateSystem (*shadingNormalInWorld, texCoord0DirInWorld, &bitangent);
         }
+
+        // Compute the probability of sampling this light
+        float lightProb = 1.0f;
+        if (ripr_plp.s->envLightTexture && ripr_plp.s->enableEnvLight)
+            lightProb *= (1 - probToSampleEnvLight);
+
+        // Check for invalid probabilities
+        if (!isfinite (lightProb))
+        {
+            *hypAreaPDensity = 0.0f;
+            return;
+        }
+
+        // Compute the hypothetical area PDF
+        *hypAreaPDensity = lightProb / area;
     }
 
 } // namespace ripr_shared

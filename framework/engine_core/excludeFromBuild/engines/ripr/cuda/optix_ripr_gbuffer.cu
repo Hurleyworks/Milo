@@ -1,6 +1,4 @@
-// optix_ripr_gbuffer.cu
-// OptiX G-buffer generation kernels for the RiPR engine
-// STUB VERSION - no implementation
+
 
 #include "principledDisney_ripr.h"
 #include "../ripr_shared.h"
@@ -10,14 +8,15 @@ using namespace ripr_shared;
 // Global declaration of pipeline launch parameters - must match the name in pipeline configuration
 RT_PIPELINE_LAUNCH_PARAMETERS ripr_shared::PipelineLaunchParameters ripr_plp;
 
-CUDA_DEVICE_KERNEL void RT_RG_NAME(setupGBuffers)() {
+CUDA_DEVICE_KERNEL void RT_RG_NAME (setupGBuffers)()
+{
     const uint2 launchIndex = make_uint2 (optixGetLaunchIndex().x, optixGetLaunchIndex().y);
-    const uint32_t bufIdx = ripr_plp.f->bufferIndex;
+    const uint32_t bufIdx = ripr_plp.s->bufferIndex;
 
-    const PerspectiveCamera& camera = ripr_plp.f->camera;
+    const PerspectiveCamera& camera = ripr_plp.s->camera;
     float jx = 0.5f;
     float jy = 0.5f;
-    if (ripr_plp.f->enableJittering)
+    if (true)
     {
         PCG32RNG rng = ripr_plp.s->rngBuffer.read (launchIndex);
         jx = rng.getFloat0cTo1o();
@@ -36,7 +35,7 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(setupGBuffers)() {
     hitPointParams.albedo = RGB (0.0f);
     hitPointParams.positionInWorld = Point3D (NAN);
     hitPointParams.prevPositionInWorld = Point3D (NAN);
-    hitPointParams.shadingNormalInWorld = Normal3D (NAN);
+    hitPointParams.normalInWorld = Normal3D (NAN);
     hitPointParams.instSlot = 0xFFFFFFFF;
     hitPointParams.geomInstSlot = 0xFFFFFFFF;
     hitPointParams.primIndex = 0xFFFFFFFF;
@@ -45,43 +44,21 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(setupGBuffers)() {
 
     PickInfo pickInfo = {};
 
-    // // Debug: Print traversable handle and ray info for first pixel
-    //if (launchIndex.x == 0 && launchIndex.y == 0) {
-    //    printf("RiPRGBuffer RG: travHandle=%llu, origin=(%.2f,%.2f,%.2f), dir=(%.2f,%.2f,%.2f)\n",
-    //           ripr_plp.f->travHandle, origin.x, origin.y, origin.z, direction.x, direction.y, direction.z);
-    //}
-
     HitPointParams* hitPointParamsPtr = &hitPointParams;
     PickInfo* pickInfoPtr = &pickInfo;
-    
-    //// Debug: Print ray type values
-    //if (launchIndex.x == 0 && launchIndex.y == 0) {
-    //    printf("RiPRGBuffer RG: Ray types - SBT offset=%u, SBT stride=%u, miss index=%u\n",
-    //           (uint32_t)GBufferRayType::Primary, (uint32_t)maxNumRayTypes, (uint32_t)GBufferRayType::Primary);
-    //}
-    
     PrimaryRayPayloadSignature::trace (
-        ripr_plp.f->travHandle, origin.toNative(), direction.toNative(),
+        ripr_plp.s->travHandle, origin.toNative(), direction.toNative(),
         0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
         GBufferRayType::Primary, maxNumRayTypes, GBufferRayType::Primary,
         hitPointParamsPtr, pickInfoPtr);
 
-    // Debug: ONLY print if there's a hit
-    if (hitPointParams.instSlot != 0xFFFFFFFF) {
-        // Found a hit! Print details for sampled pixels
-        if (launchIndex.x % 50 == 0 && launchIndex.y % 50 == 0) {
-            printf("RiPRGBuffer RG: HIT at [%u,%u]! instSlot=%u, primIndex=%u, pos=(%.2f,%.2f,%.2f)\n",
-                   launchIndex.x, launchIndex.y, hitPointParams.instSlot, hitPointParams.primIndex,
-                   hitPointParams.positionInWorld.x, hitPointParams.positionInWorld.y, hitPointParams.positionInWorld.z);
-        }
-    }
-
     const Point2D curRasterPos (launchIndex.x + 0.5f, launchIndex.y + 0.5f);
     const Point2D prevRasterPos =
-        ripr_plp.f->prevCamera.calcScreenPosition (hitPointParams.prevPositionInWorld) * Point2D (ripr_plp.s->imageSize.x, ripr_plp.s->imageSize.y);
+        ripr_plp.s->prevCamera.calcScreenPosition (hitPointParams.prevPositionInWorld) * Point2D (ripr_plp.s->imageSize.x, ripr_plp.s->imageSize.y);
     Vector2D motionVector = curRasterPos - prevRasterPos;
-    if (ripr_plp.f->resetFlowBuffer || isnan (hitPointParams.prevPositionInWorld.x))
-        motionVector = Vector2D (0.0f, 0.0f);
+    // FIXME
+    //  if (ripr_plp.s->resetFlowBuffer || isnan (hitPointParams.prevPositionInWorld.x))
+    motionVector = Vector2D (0.0f, 0.0f);
 
     GBuffer0Elements gb0Elems = {};
     gb0Elems.instSlot = hitPointParams.instSlot;
@@ -92,52 +69,55 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME(setupGBuffers)() {
     GBuffer1Elements gb1Elems = {};
     gb1Elems.motionVector = motionVector;
 
-    ripr_plp.s->GBuffer0[bufIdx].write (launchIndex, gb0Elems);
-    ripr_plp.s->GBuffer1[bufIdx].write (launchIndex, gb1Elems);
+    ripr_plp.s->geoBuffer0[bufIdx].write (launchIndex, gb0Elems);
+    ripr_plp.s->geoBuffer1[bufIdx].write (launchIndex, gb1Elems);
 
-      if (launchIndex.x == ripr_plp.f->mousePosition.x &&
-        launchIndex.y == ripr_plp.f->mousePosition.y)
+    if (launchIndex.x == ripr_plp.s->mousePosition.x &&
+        launchIndex.y == ripr_plp.s->mousePosition.y)
     {
         pickInfo.instSlot = hitPointParams.instSlot;
         pickInfo.geomInstSlot = hitPointParams.geomInstSlot;
         pickInfo.primIndex = hitPointParams.primIndex;
         pickInfo.positionInWorld = hitPointParams.positionInWorld;
-        pickInfo.normalInWorld = hitPointParams.shadingNormalInWorld;
+        pickInfo.normalInWorld = hitPointParams.normalInWorld;
         pickInfo.albedo = hitPointParams.albedo;
-        *ripr_plp.s->pickInfos[bufIdx] = pickInfo;
+        *ripr_plp.s->pickInfoBuffer[bufIdx] = pickInfo;
     }
 
-  
     // EN: Output information required for the denoiser.
     RGB prevAlbedoResult (0.0f, 0.0f, 0.0f);
     Normal3D prevNormalResult (0.0f, 0.0f, 0.0f);
-    if (ripr_plp.f->numAccumFrames > 0)
+    if (ripr_plp.s->numAccumFrames > 0)
     {
         prevAlbedoResult = RGB (getXYZ (ripr_plp.s->albedoAccumBuffer.read (launchIndex)));
         prevNormalResult = Normal3D (getXYZ (ripr_plp.s->normalAccumBuffer.read (launchIndex)));
     }
-    const float curWeight = 1.0f / (1 + ripr_plp.f->numAccumFrames);
+    const float curWeight = 1.0f / (1 + ripr_plp.s->numAccumFrames);
     const RGB albedoResult = (1 - curWeight) * prevAlbedoResult + curWeight * hitPointParams.albedo;
-    const Normal3D normalResult = (1 - curWeight) * prevNormalResult + curWeight * hitPointParams.shadingNormalInWorld;
+    const Normal3D normalResult = (1 - curWeight) * prevNormalResult + curWeight * hitPointParams.normalInWorld;
     ripr_plp.s->albedoAccumBuffer.write (launchIndex, make_float4 (albedoResult.toNative(), 1.0f));
     ripr_plp.s->normalAccumBuffer.write (launchIndex, make_float4 (normalResult.toNative(), 1.0f));
 }
 
-CUDA_DEVICE_KERNEL void RT_CH_NAME(setupGBuffers)() {
+CUDA_DEVICE_KERNEL void RT_CH_NAME (setupGBuffers)()
+{
+
     const uint2 launchIndex = make_uint2 (optixGetLaunchIndex().x, optixGetLaunchIndex().y);
-    const uint32_t bufIdx = ripr_plp.f->bufferIndex;
-
-    // Debug: Print for ANY hit to confirm CH is being called
-    // Just print for specific pixels to avoid spam
-    if (launchIndex.x % 100 == 0 && launchIndex.y % 100 == 0) {
-        printf("RiPRGBuffer CH: HIT DETECTED! pixel (%u, %u), instance %u, ray t=%.3f\n", 
-               launchIndex.x, launchIndex.y, optixGetInstanceId(), optixGetRayTmax());
+#if 0
+    if (launchIndex.x % 100 == 0 && launchIndex.y % 100 == 0)
+    {
+        printf ("RiPR GBuffer CH: HIT DETECTED! pixel (%u, %u), instance %u, ray t=%.3f\n",
+                launchIndex.x, launchIndex.y, optixGetInstanceId(), optixGetRayTmax());
     }
+#endif
 
-    const auto sbtr = HitGroupSBTRecordData::get();
-    const ripr::RiPRNodeData& inst = ripr_plp.s->instanceDataBufferArray[bufIdx][optixGetInstanceId()];
-    const ripr::RiPRSurfaceData& geomInst = ripr_plp.s->geometryInstanceDataBuffer[sbtr.geomInstSlot];
-    const shared::DisneyData& mat = ripr_plp.s->disneyMaterialBuffer[geomInst.disneyMaterialSlot];
+    auto sbtr = HitGroupSBTRecordData::get();
+    const shared::DisneyData& mat = ripr_plp.s->materialDataBuffer[sbtr.materialSlot];
+    const shared::GeometryInstanceData& geomInst = ripr_plp.s->geometryInstanceDataBuffer[sbtr.geomInstSlot];
+
+    // Get instance data using buffer index from launch parameters
+    const uint32_t bufIdx = ripr_plp.s->bufferIndex;
+    const shared::InstanceData& inst = ripr_plp.s->instanceDataBufferArray[bufIdx][optixGetInstanceId()];
 
     HitPointParams* hitPointParams;
     PickInfo* pickInfo;
@@ -148,22 +128,16 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(setupGBuffers)() {
     hitPointParams->geomInstSlot = sbtr.geomInstSlot;
     hitPointParams->primIndex = hp.primIndex;
 
-    // Debug: Print hit information for specific pixels
-    if (launchIndex.x == 400 && launchIndex.y == 300) {
-        printf("RiPRGBuffer CH Detail: primIndex=%u, geomInstSlot=%u, bcB=%.3f, bcC=%.3f\n",
-               hp.primIndex, sbtr.geomInstSlot, hp.bcB, hp.bcC);
-    }
-
     Point3D positionInWorld;
     Point3D prevPositionInWorld;
     Normal3D shadingNormalInWorld;
     Vector3D texCoord0DirInWorld;
     Point2D texCoord;
     {
-        const shared::Triangle& tri = geomInst.triangleBuffer[hp.primIndex];
-        const shared::Vertex& vA = geomInst.vertexBuffer[tri.index0];
-        const shared::Vertex& vB = geomInst.vertexBuffer[tri.index1];
-        const shared::Vertex& vC = geomInst.vertexBuffer[tri.index2];
+        const Triangle& tri = geomInst.triangleBuffer[hp.primIndex];
+        const Vertex& vA = geomInst.vertexBuffer[tri.index0];
+        const Vertex& vB = geomInst.vertexBuffer[tri.index1];
+        const Vertex& vC = geomInst.vertexBuffer[tri.index2];
         const float bcB = hp.bcB;
         const float bcC = hp.bcC;
         const float bcA = 1 - (bcB + bcC);
@@ -185,69 +159,45 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME(setupGBuffers)() {
             shadingNormalInWorld = Normal3D (0, 0, 1);
             texCoord0DirInWorld = Vector3D (1, 0, 0);
         }
-
-        // Debug: Print world position for center pixel
-        if (launchIndex.x == 400 && launchIndex.y == 300) {
-            printf("RiPRGBuffer CH: World pos=(%.2f, %.2f, %.2f), normal=(%.2f, %.2f, %.2f)\n",
-                   positionInWorld.x, positionInWorld.y, positionInWorld.z,
-                   shadingNormalInWorld.x, shadingNormalInWorld.y, shadingNormalInWorld.z);
-        }
     }
 
     hitPointParams->positionInWorld = positionInWorld;
     hitPointParams->prevPositionInWorld = prevPositionInWorld;
 
-    // TODO: Implement Disney BSDF evaluation
-    // For now, just use base color as albedo
+    // Create DisneyPrincipled instance directly instead of using BSDF
+    DisneyPrincipled bsdf = DisneyPrincipled::create (
+        mat, texCoord, 0.0f, ripr_plp.s->makeAllGlass, ripr_plp.s->globalGlassIOR,
+        ripr_plp.s->globalTransmittanceDist, ripr_plp.s->globalGlassType);
+
     ReferenceFrame shadingFrame (shadingNormalInWorld, texCoord0DirInWorld);
-    if (ripr_plp.f->enableBumpMapping && mat.normal)
-    {
-        // TODO: Implement bump mapping with Disney normal texture
-        // const Normal3D modLocalNormal = readNormalMap(mat.normal, texCoord);
-        // applyBumpMapping (modLocalNormal, &shadingFrame);
-    }
+    /* if (plp.f->enableBumpMapping)
+     {
+         const Normal3D modLocalNormal = mat.readModifiedNormal (mat.normal, mat.normalDimInfo, texCoord, 0.0f);
+         applyBumpMapping (modLocalNormal, &shadingFrame);
+     }*/
+    const Vector3D vOut (-Vector3D (optixGetWorldRayDirection()));
+    const Vector3D vOutLocal = shadingFrame.toLocal (normalize (vOut));
 
-    hitPointParams->shadingNormalInWorld = shadingFrame.normal;
-    
-    // Read base color for albedo
-    RGB albedo(0.8f, 0.8f, 0.8f); // Default gray
-    if (mat.baseColor) {
-        float4 texValue = tex2DLod<float4>(mat.baseColor, texCoord.x, texCoord.y, 0.0f);
-        albedo = RGB(texValue.x, texValue.y, texValue.z);
-    }
-    hitPointParams->albedo = albedo;
+    hitPointParams->normalInWorld = shadingFrame.normal;
+    hitPointParams->albedo = bsdf.evaluateDHReflectanceEstimate (vOutLocal);
 
-    // Debug: Print albedo for first hit
-    static bool firstHit = true;
-    if (firstHit && launchIndex.x < 10 && launchIndex.y < 10) {
-        printf("RiPRGBuffer CH: Albedo set to (%.2f, %.2f, %.2f) at pixel (%u, %u)\n",
-               albedo.r, albedo.g, albedo.b, launchIndex.x, launchIndex.y);
-        firstHit = false;
-    }
-
-    // JP: ??????????????????????
-    // EN: Export the information of the pixel on which the mouse is.
-    if (launchIndex.x == ripr_plp.f->mousePosition.x &&
-        launchIndex.y == ripr_plp.f->mousePosition.y)
+    if (launchIndex.x == ripr_plp.s->mousePosition.x &&
+        launchIndex.y == ripr_plp.s->mousePosition.y)
     {
         pickInfo->hit = true;
-        pickInfo->matSlot = geomInst.disneyMaterialSlot;
+        pickInfo->matSlot = sbtr.materialSlot;
         RGB emittance (0.0f, 0.0f, 0.0f);
         if (mat.emissive)
         {
             float4 texValue = tex2DLod<float4> (mat.emissive, texCoord.x, texCoord.y, 0.0f);
             emittance = RGB (getXYZ (texValue));
-            // Apply emissive strength if available
-            if (mat.emissiveStrength) {
-                float4 strengthValue = tex2DLod<float4> (mat.emissiveStrength, texCoord.x, texCoord.y, 0.0f);
-                emittance *= strengthValue.x;
-            }
         }
         pickInfo->emittance = emittance;
     }
 }
 
-CUDA_DEVICE_KERNEL void RT_MS_NAME(setupGBuffers)() {
+CUDA_DEVICE_KERNEL void RT_MS_NAME (setupGBuffers)()
+{
     const uint2 launchIndex = make_uint2 (optixGetLaunchIndex().x, optixGetLaunchIndex().y);
 
     const Vector3D vOut (-Vector3D (optixGetWorldRayDirection()));
@@ -256,7 +206,7 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(setupGBuffers)() {
     float posPhi, posTheta;
     toPolarYUp (Vector3D (p), &posPhi, &posTheta);
 
-    const float phi = posPhi + ripr_plp.f->envLightRotation;
+    const float phi = posPhi + ripr_plp.s->envLightRotation;
 
     float u = phi / (2 * pi_v<float>);
     u -= floorf (u);
@@ -266,33 +216,23 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME(setupGBuffers)() {
     PickInfo* pickInfo;
     PrimaryRayPayloadSignature::get (&hitPointParams, &pickInfo);
 
-    // Debug: Confirm miss shader is setting values  
-    if (launchIndex.x == 400 && launchIndex.y == 300) {
-        printf("RiPRGBuffer MS: Setting miss values for pixel (%u,%u)\n", launchIndex.x, launchIndex.y);
-    }
-
     hitPointParams->positionInWorld = p;
     hitPointParams->prevPositionInWorld = p;
-    hitPointParams->shadingNormalInWorld = Normal3D (vOut);
+    hitPointParams->normalInWorld = Normal3D (vOut);
     hitPointParams->qbcB = encodeBarycentric (u);
     hitPointParams->qbcC = encodeBarycentric (v);
-    
-    // IMPORTANT: Miss shader should keep instSlot as 0xFFFFFFFF to indicate no hit!
-    // The ray gen was detecting "hits" because miss shader wasn't leaving this unchanged
 
-    // JP: ??????????????????????
-    // EN: Export the information of the pixel on which the mouse is.
-    if (launchIndex.x == ripr_plp.f->mousePosition.x &&
-        launchIndex.y == ripr_plp.f->mousePosition.y)
+     if (launchIndex.x == ripr_plp.s->mousePosition.x &&
+        launchIndex.y == ripr_plp.s->mousePosition.y)
     {
         pickInfo->hit = true;
         pickInfo->matSlot = 0xFFFFFFFF;
         RGB emittance (0.0f, 0.0f, 0.0f);
-        if (ripr_plp.s->envLightTexture && ripr_plp.f->enableEnvLight)
+        if (ripr_plp.s->envLightTexture)
         {
             float4 texValue = tex2DLod<float4> (ripr_plp.s->envLightTexture, u, v, 0.0f);
             emittance = RGB (getXYZ (texValue));
-            emittance *= pi_v<float> * ripr_plp.f->envLightPowerCoeff;
+            emittance *= pi_v<float> * ripr_plp.s->envLightPowerCoeff;
         }
         pickInfo->emittance = emittance;
     }

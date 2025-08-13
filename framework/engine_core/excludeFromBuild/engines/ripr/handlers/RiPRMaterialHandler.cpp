@@ -1,470 +1,130 @@
-// RiPRMaterialHandler.cpp
-// Implementation of material handling for RiPRModels
-
 #include "RiPRMaterialHandler.h"
-#include "../../../handlers/AreaLightHandler.h"
-#include "../models/RiPRModel.h"
-#include "../../../handlers/TextureHandler.h"
 #include "../../../handlers/Handlers.h"
-#include <mace_core/mace_core.h>
 
-RiPRMaterialHandler::RiPRMaterialHandler()
+using sabi::Image;
+// using sabi::Texture;  // Commented out to avoid conflict
+using sabi::TextureInfo;
+
+using sabi::CgImage;
+using sabi::CgTexture;
+using sabi::CgTextureInfo;
+
+// Constructor initializes texture samplers with appropriate filtering and wrapping modes
+RiPRMaterialHandler::RiPRMaterialHandler (RenderContextPtr ctx) :
+    ctx (ctx)
 {
+    LOG (DBUG) << _FN_;
+
+    // Setup sRGB sampler for color textures
+    sampler_sRGB.setXyFilterMode (cudau::TextureFilterMode::Linear);
+    sampler_sRGB.setWrapMode (0, cudau::TextureWrapMode::Repeat);
+    sampler_sRGB.setWrapMode (1, cudau::TextureWrapMode::Repeat);
+    sampler_sRGB.setMipMapFilterMode (cudau::TextureFilterMode::Linear);
+    sampler_sRGB.setReadMode (cudau::TextureReadMode::NormalizedFloat_sRGB);
+
+    // Setup float sampler for HDR textures
+    sampler_float.setXyFilterMode (cudau::TextureFilterMode::Linear);
+    sampler_float.setWrapMode (0, cudau::TextureWrapMode::Repeat);
+    sampler_float.setWrapMode (1, cudau::TextureWrapMode::Repeat);
+    sampler_float.setMipMapFilterMode (cudau::TextureFilterMode::Linear);
+    sampler_float.setReadMode (cudau::TextureReadMode::ElementType);
+
+    // Setup normalized float sampler for technical textures
+    sampler_normFloat.setXyFilterMode (cudau::TextureFilterMode::Linear);
+    sampler_normFloat.setWrapMode (0, cudau::TextureWrapMode::Repeat);
+    sampler_normFloat.setWrapMode (1, cudau::TextureWrapMode::Repeat);
+    sampler_normFloat.setMipMapFilterMode (cudau::TextureFilterMode::Linear);
+    sampler_normFloat.setReadMode (cudau::TextureReadMode::NormalizedFloat);
 }
 
+// Destructor logs cleanup and materials are cleaned up through smart pointers
 RiPRMaterialHandler::~RiPRMaterialHandler()
 {
-    clear();
+    LOG (DBUG) << _FN_;
+    finalize();
 }
 
-void RiPRMaterialHandler::initialize(RenderContext* ctx)
+// Initialize the material handler with buffer allocation
+void RiPRMaterialHandler::initialize()
 {
-    ctx_ = ctx;
-    
-    // Initialize material data buffer for GPU if we have a context
-    if (ctx_ && ctx_->getCudaContext()) {
-        // Initialize CUDA buffer for material data
-        materialDataBuffer_.initialize(
-            ctx_->getCudaContext(),
-            cudau::BufferType::Device,
-            MaxNumMaterials
-        );
+    if (isInitialized_)
+    {
+        LOG(WARNING) << "RiPRMaterialHandler already initialized";
+        return;
     }
     
-    // Initialize slot finder
-    materialSlotFinder_.initialize(MaxNumMaterials);
+    LOG(INFO) << "Initializing RiPRMaterialHandler";
+    
+    if (!ctx)
+    {
+        LOG(WARNING) << "RenderContext is null, cannot initialize";
+        return;
+    }
+    
+    CUcontext cuContext = ctx->getCudaContext();
+    if (!cuContext)
+    {
+        LOG(WARNING) << "CUDA context not available";
+        return;
+    }
+    
+    // Initialize slot finder for materials
+    materialSlotFinder_.initialize(maxNumMaterials);
+    LOG(INFO) << "Initialized material slot finder with capacity: " << maxNumMaterials;
+    
+    // Initialize material data buffer
+    materialDataBuffer_.initialize(cuContext, cudau::BufferType::Device, maxNumMaterials);
+    LOG(INFO) << "Initialized material data buffer";
     
     isInitialized_ = true;
-    
-    LOG(INFO) << "RiPRMaterialHandler initialized with capacity: " << MaxNumMaterials;
+    LOG(INFO) << "RiPRMaterialHandler initialized successfully";
 }
 
-void RiPRMaterialHandler::clear()
+// Safely releases all texture and material resources
+void RiPRMaterialHandler::finalize()
 {
-    materials_.clear();
-    materialSlotFinder_.reset();
-    
-    if (materialDataBuffer_.isInitialized()) {
-        materialDataBuffer_.finalize();
-    }
-    
-    isInitialized_ = false;
-    
-    LOG(INFO) << "RiPRMaterialHandler cleared";
-}
-
-void RiPRMaterialHandler::processMaterialsForModel(
-    RiPRModel* model,
-    const CgModelPtr& cgModel,
-    const std::filesystem::path& materialFolder)
-{
-    if (!model) {
-        LOG(WARNING) << "processMaterialsForModel: null model provided";
+    if (!isInitialized_)
         return;
-    }
+        
+    LOG(INFO) << "Finalizing RiPRMaterialHandler";
     
-    // Get RiPRSurfaces from the model
-    std::vector<ripr::RiPRSurface*> shockerSurfaces;
-    for (const auto& surface : model->getSurfaces()) {
-        if (surface) {
-            shockerSurfaces.push_back(surface.get());
+    try
+    {
+        // First sync CUDA operations
+        if (ctx && ctx->getCudaStream())
+        {
+            CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
         }
-    }
-    
-    if (!cgModel) {
-        LOG(WARNING) << "processMaterialsForModel: null CgModel provided";
-        // Assign default material to all surfaces
-        DisneyMaterial* defaultMat = getMaterial(0); // Default is always at index 0
-        for (auto* surface : shockerSurfaces) {
-            assignMaterialToSurface(surface, defaultMat);
-        }
-        return;
-    }
-    
-    const auto& cgSurfaces = cgModel->S;
-    
-    // Each CG surface should have a corresponding RiPRSurface
-    if (shockerSurfaces.size() != cgSurfaces.size()) {
-        LOG(WARNING) << "Mismatch: " << shockerSurfaces.size() 
-                     << " RiPR surfaces but " << cgSurfaces.size() << " CG surfaces";
-    }
-    
-    // Process each surface's material
-    for (size_t i = 0; i < std::min(shockerSurfaces.size(), cgSurfaces.size()); ++i) {
-        ripr::RiPRSurface* surface = shockerSurfaces[i];
-        const auto& cgSurface = cgSurfaces[i];
+
+        // Clear material references which will destroy OptiX/CUDA resources
+        materials.clear();
+
+        // Clean up material data buffer
+        if (materialDataBuffer_.isInitialized())
+            materialDataBuffer_.finalize();
         
-        // Get material from surface directly
-        const CgMaterial& cgMat = cgSurface.cgMaterial;
+        // Clean up slot finder
+        materialSlotFinder_.finalize();
         
-        // Create material for this surface (TextureHandler already caches textures)
-        DisneyMaterial* material = createMaterialFromCg(cgMat, cgModel, materialFolder);
-        
-        // If no material was created, use default
-        if (!material) {
-            material = getMaterial(0); // Default material
-            LOG(DBUG) << "Using default material for surface " << i;
-        }
-        
-        // Assign material to RiPRSurface
-        assignMaterialToSurface(surface, material);
+        isInitialized_ = false;
+        LOG (INFO) << "RiPRMaterialHandler finalized";
     }
-    
-    // Materials processed for model
-}
-
-DisneyMaterial* RiPRMaterialHandler::createMaterialFromCg(
-    const CgMaterial& cgMaterial,
-    const CgModelPtr& model,
-    const std::filesystem::path& materialFolder)
-{
-    // Allocate a new slot
-    uint32_t slot = materialSlotFinder_.getFirstAvailableSlot();
-    if (slot == InvalidSlotIndex) {
-        LOG(WARNING) << "No available material slots";
-        return nullptr;
-    }
-    materialSlotFinder_.setInUse(slot);
-    
-    // Create new Disney material
-    auto disney = std::make_unique<DisneyMaterial>();
-    
-    // Convert properties from CgMaterial to DisneyMaterial
-    convertBaseProperties(disney.get(), cgMaterial.core);
-    convertMetallicProperties(disney.get(), cgMaterial.metallic);
-    convertSheenProperties(disney.get(), cgMaterial.sheen);
-    convertClearcoatProperties(disney.get(), cgMaterial.clearcoat);
-    convertSubsurfaceProperties(disney.get(), cgMaterial.subsurface);
-    convertTransparencyProperties(disney.get(), cgMaterial.transparency);
-    convertEmissionProperties(disney.get(), cgMaterial.emission);
-    
-    // Process texture information for all material properties
-    if (model) {
-        // Base color texture
-        processTextureInfo(
-            cgMaterial.core.baseColorTexture,
-            &disney->baseColor,
-            &disney->texBaseColor,
-            materialFolder,
-            model,
-            "Color",
-            cgMaterial.core.baseColor);
-        
-        // Roughness texture
-        processTextureInfo(
-            cgMaterial.core.roughnessTexture,
-            &disney->roughness,
-            &disney->texRoughness,
-            materialFolder,
-            model,
-            "Roughness",
-            Eigen::Vector3f(cgMaterial.core.roughness, cgMaterial.core.roughness, cgMaterial.core.roughness));
-        
-        // Metallic texture
-        processTextureInfo(
-            cgMaterial.metallic.metallicTexture,
-            &disney->metallic,
-            &disney->texMetallic,
-            materialFolder,
-            model,
-            "Metallic",
-            Eigen::Vector3f(cgMaterial.metallic.metallic, cgMaterial.metallic.metallic, cgMaterial.metallic.metallic));
-        
-        // Normal texture
-        processTextureInfo(
-            cgMaterial.normalTexture,
-            &disney->normal,
-            &disney->texNormal,
-            materialFolder,
-            model,
-            "Normal",
-            Eigen::Vector3f(0.5f, 0.5f, 1.0f));
-        
-        // Emissive texture
-        processTextureInfo(
-            cgMaterial.emission.luminousTexture,
-            &disney->emissive,
-            &disney->texEmissive,
-            materialFolder,
-            model,
-            "Luminous",
-            cgMaterial.emission.luminousColor);
-    }
-    
-    // Handle material flags
-    disney->useAlphaForTransparency = 
-        (cgMaterial.flags.alphaMode == sabi::AlphaMode::Blend);
-    
-    // Store and return
-    DisneyMaterial* result = disney.get();
-    materials_.push_back(std::move(disney));
-    
-    return result;
-}
-
-void RiPRMaterialHandler::assignMaterialToSurface(
-    ripr::RiPRSurface* surface,
-    DisneyMaterial* material)
-{
-    if (!surface) {
-        LOG(WARNING) << "assignMaterialToSurface: null surface";
-        return;
-    }
-    
-    if (!material) {
-        LOG(WARNING) << "assignMaterialToSurface: null material";
-        return;
-    }
-    
-    // Store old material for notification (const cast is safe here as we only read from it)
-    DisneyMaterial* oldMaterial = const_cast<DisneyMaterial*>(surface->mat);
-    
-    // Direct assignment - no casting needed!
-    surface->mat = material;
-    
-    // Note: AreaLightHandler notifications are handled at scene level
-}
-
-
-
-void RiPRMaterialHandler::uploadMaterialsToGPU()
-{
-    if (!ctx_ || !materialDataBuffer_.isInitialized()) {
-        LOG(WARNING) << "Cannot upload materials: context or buffer not initialized";
-        return;
-    }
-    
-    // Map the buffer for writing
-    shared::DisneyData* matDataOnHost = materialDataBuffer_.map();
-    if (!matDataOnHost) {
-        LOG(WARNING) << "Failed to map material data buffer";
-        return;
-    }
-    
-    // Convert all materials to device format and copy to mapped buffer
-    size_t materialCount = 0;
-    for (const auto& material : materials_) {
-        if (materialCount >= MaxNumMaterials) {
-            LOG(WARNING) << "Reached maximum material limit: " << MaxNumMaterials;
-            break;
-        }
-        matDataOnHost[materialCount] = convertToDeviceData(material.get());
-        materialCount++;
-    }
-    
-    // Unmap the buffer to upload to GPU
-    materialDataBuffer_.unmap();
-    
-    LOG(INFO) << "Uploaded " << materialCount << " materials to GPU";
-}
-
-void RiPRMaterialHandler::convertBaseProperties(
-    DisneyMaterial* disney,
-    const CgMaterial::CoreProperties& core)
-{
-    // Properties are now handled by processTextureInfo in createMaterialFromCg
-    // This function is kept for potential future non-texture property conversion
-}
-
-void RiPRMaterialHandler::convertMetallicProperties(
-    DisneyMaterial* disney,
-    const CgMaterial::MetallicProperties& metallic)
-{
-    disney->metallic = nullptr;
-    disney->texMetallic = 0;
-    
-    disney->anisotropic = nullptr;
-    disney->texAnisotropic = 0;
-    
-    disney->anisotropicRotation = nullptr;
-    disney->texAnisotropicRotation = 0;
-}
-
-void RiPRMaterialHandler::convertSheenProperties(
-    DisneyMaterial* disney,
-    const CgMaterial::SheenProperties& sheen)
-{
-    disney->sheenColor = nullptr;
-    disney->texSheenColor = 0;
-    
-    disney->sheenRoughness = nullptr;
-    disney->texSheenRoughness = 0;
-}
-
-void RiPRMaterialHandler::convertClearcoatProperties(
-    DisneyMaterial* disney,
-    const CgMaterial::ClearcoatProperties& clearcoat)
-{
-    disney->clearcoat = nullptr;
-    disney->texClearcoat = 0;
-    
-    disney->clearcoatGloss = nullptr;
-    disney->texClearcoatGloss = 0;
-    
-    disney->clearcoatNormal = nullptr;
-    disney->texClearcoatNormal = 0;
-}
-
-void RiPRMaterialHandler::convertSubsurfaceProperties(
-    DisneyMaterial* disney,
-    const CgMaterial::SubsurfaceProperties& subsurface)
-{
-    disney->subsurface = nullptr;
-    disney->texSubsurface = 0;
-    
-    disney->subsurfaceColor = nullptr;
-    disney->texSubsurfaceColor = 0;
-    
-    disney->subsurfaceRadius = nullptr;
-    disney->texSubsurfaceRadius = 0;
-}
-
-void RiPRMaterialHandler::convertTransparencyProperties(
-    DisneyMaterial* disney,
-    const CgMaterial::TransparencyProperties& transparency)
-{
-    disney->transparency = nullptr;
-    disney->texTransparency = 0;
-    
-    disney->transmittance = nullptr;
-    disney->texTransmittance = 0;
-    
-    disney->transmittanceDistance = nullptr;
-    disney->texTransmittanceDistance = 0;
-    
-    disney->ior = nullptr;
-    disney->texIOR = 0;
-}
-
-void RiPRMaterialHandler::convertEmissionProperties(
-    DisneyMaterial* disney,
-    const CgMaterial::EmissionProperties& emission)
-{
-    disney->emissive = nullptr;
-    disney->texEmissive = 0;
-    
-    disney->emissiveStrength = nullptr;
-    disney->texEmissiveStrength = 0;
-}
-
-void RiPRMaterialHandler::processTextureInfo(
-    const std::optional<CgTextureInfo>& texInfo,
-    const cudau::Array** targetArray,
-    CUtexObject* targetTexObject,
-    const std::filesystem::path& materialFolder,
-    const CgModelPtr& model,
-    const std::string& requestedInput,
-    const Eigen::Vector3f& defaultValue)
-{
-    if (!ctx_ || !ctx_->getHandlers().textureHandler) {
-        // No texture handler available - this is expected in tests
-        return;
-    }
-    
-    auto texHandler = ctx_->getHandlers().textureHandler;
-    bool textureLoaded = false;
-    bool needsDegamma = false;
-    bool isHDR = false;
-    
-    // Try to load texture if specified
-    if (texInfo && model && !model->cgTextures.empty()) {
-        if (texInfo->textureIndex < model->cgTextures.size()) {
-            const auto& texture = model->cgTextures[texInfo->textureIndex];
-            if (texture.imageIndex && *texture.imageIndex < model->cgImages.size()) {
-                const auto& image = model->cgImages[*texture.imageIndex];
-                
-                std::filesystem::path texturePath(image.uri);
-                if (texturePath.is_absolute()) {
-                    textureLoaded = texHandler->loadTexture(
-                        texturePath,
-                        targetArray,
-                        &needsDegamma,
-                        &isHDR,
-                        requestedInput);
-                } else {
-                    auto fullPath = FileServices::findFileInFolder(
-                        materialFolder,
-                        texturePath.filename().string());
-                    if (fullPath) {
-                        textureLoaded = texHandler->loadTexture(
-                            fullPath.value(),
-                            targetArray,
-                            &needsDegamma,
-                            &isHDR,
-                            requestedInput);
-                    } else {
-                        LOG(DBUG) << "Could not find texture: " << texturePath.filename().string()
-                                  << " in folder: " << materialFolder;
-                    }
-                }
-            }
-        }
-    }
-    
-    // Create immediate texture with default value if loading failed
-    if (!textureLoaded) {
-        float4 immValue = make_float4(
-            defaultValue.x(),
-            defaultValue.y(),
-            defaultValue.z(),
-            1.0f);
-        texHandler->createImmTexture(immValue, true, targetArray);
-        needsDegamma = (requestedInput == "Color" || requestedInput == "Luminous");
-    }
-    
-    // Create texture object if array was created
-    if (*targetArray) {
-        cudau::TextureSampler sampler;
-        sampler.setXyFilterMode(cudau::TextureFilterMode::Linear);
-        sampler.setWrapMode(0, cudau::TextureWrapMode::Repeat);
-        sampler.setWrapMode(1, cudau::TextureWrapMode::Repeat);
-        sampler.setMipMapFilterMode(cudau::TextureFilterMode::Linear);
-        
-        if (needsDegamma) {
-            sampler.setReadMode(cudau::TextureReadMode::NormalizedFloat_sRGB);
-        } else {
-            sampler.setReadMode(cudau::TextureReadMode::NormalizedFloat);
-        }
-        
-        *targetTexObject = sampler.createTextureObject(**targetArray);
-        
-        // Note: Alpha channel handling would need the DisneyMaterial pointer
-        // which isn't available in this context. This could be handled
-        // in the calling function if needed.
+    catch (const std::exception& e)
+    {
+        LOG (WARNING) << "Error during material handler finalization: " << e.what();
     }
 }
-
-DisneyMaterial* RiPRMaterialHandler::createDefaultMaterial()
-{
-    // Allocate slot 0 for default material
-    uint32_t slot = materialSlotFinder_.getFirstAvailableSlot();
-    if (slot != 0) {
-        LOG(WARNING) << "Default material not allocated to slot 0, got slot " << slot;
-    }
-    materialSlotFinder_.setInUse(slot);
-    
-    // Create default material with neutral gray appearance
-    auto disney = std::make_unique<DisneyMaterial>();
-    
-    // All properties are already initialized to nullptr/0 by the constructor
-    // This represents a simple gray diffuse material
-    
-    DisneyMaterial* result = disney.get();
-    materials_.push_back(std::move(disney));
-    
-    LOG(INFO) << "Created default material at slot " << slot;
-    
-    return result;
-}
-
-shared::TexDimInfo RiPRMaterialHandler::calcDimInfo(
+// Calculates texture dimension information including power-of-two and BC compression status
+shared::TexDimInfo RiPRMaterialHandler::calcDimInfo (
     const cudau::Array* cuArray,
     bool isLeftHanded)
 {
     shared::TexDimInfo dimInfo = {};
-    
+
     // Handle null array case
-    if (!cuArray) {
+    if (!cuArray)
+    {
+        // LOG (DBUG) << "Creating default 1x1 dimension info (null array)";
         dimInfo.dimX = 1;
         dimInfo.dimY = 1;
         dimInfo.isNonPowerOfTwo = 0;
@@ -472,30 +132,41 @@ shared::TexDimInfo RiPRMaterialHandler::calcDimInfo(
         dimInfo.isLeftHanded = isLeftHanded;
         return dimInfo;
     }
-    
-    try {
+
+    try
+    {
         // Get dimensions safely
-        uint32_t w = static_cast<uint32_t>(cuArray->getWidth());
-        uint32_t h = static_cast<uint32_t>(cuArray->getHeight());
-        
+        uint32_t w = static_cast<uint32_t> (cuArray->getWidth());
+        uint32_t h = static_cast<uint32_t> (cuArray->getHeight());
+
+        // LOG (DBUG) << "Processing dimensions: " << w << "x" << h;
+
         // Validate dimensions
-        if (w == 0 || h == 0) {
-            LOG(WARNING) << "Invalid texture dimensions: " << w << "x" << h << ", using 1x1";
+        if (w == 0 || h == 0)
+        {
+            LOG (WARNING) << "Invalid texture dimensions: " << w << "x" << h << ", using 1x1";
             w = 1;
             h = 1;
         }
-        
+
         bool wIsPowerOfTwo = (w & (w - 1)) == 0;
         bool hIsPowerOfTwo = (h & (h - 1)) == 0;
-        
+
         dimInfo.dimX = w;
         dimInfo.dimY = h;
         dimInfo.isNonPowerOfTwo = !wIsPowerOfTwo || !hIsPowerOfTwo;
         dimInfo.isBCTexture = cuArray->isBCTexture();
         dimInfo.isLeftHanded = isLeftHanded;
+
+        #if 0
+        LOG (DBUG) << "Created dimension info: " << w << "x" << h
+                   << " POT: " << (!dimInfo.isNonPowerOfTwo)
+                   << " BC: " << dimInfo.isBCTexture;
+        #endif
     }
-    catch (const std::exception& e) {
-        LOG(WARNING) << "Exception in calcDimInfo: " << e.what();
+    catch (const std::exception& e)
+    {
+        LOG (WARNING) << "Exception in calcDimInfo: " << e.what();
         // Return safe defaults
         dimInfo.dimX = 1;
         dimInfo.dimY = 1;
@@ -503,66 +174,474 @@ shared::TexDimInfo RiPRMaterialHandler::calcDimInfo(
         dimInfo.isBCTexture = 0;
         dimInfo.isLeftHanded = isLeftHanded;
     }
-    
+
     return dimInfo;
 }
 
-shared::DisneyData RiPRMaterialHandler::convertToDeviceData(const DisneyMaterial* hostMaterial)
+// Creates base OptiX material and configures hit groups for ray types
+optixu::Material RiPRMaterialHandler::createOptixMaterial()
 {
-    shared::DisneyData deviceData;
+    optixu::Material mat = ctx->getOptiXContext().createMaterial();
+
+    // NOTE: Hit groups will be set by RiPREngine after pipelines are created
+    // This differs from production code where PipelineHandler is accessible via Handlers
     
-    // Copy texture object handles
-    deviceData.baseColor = hostMaterial->texBaseColor;
-    deviceData.roughness = hostMaterial->texRoughness;
-    deviceData.metallic = hostMaterial->texMetallic;
-    deviceData.specular = hostMaterial->texSpecular;
-    deviceData.anisotropic = hostMaterial->texAnisotropic;
-    deviceData.anisotropicRotation = hostMaterial->texAnisotropicRotation;
-    deviceData.sheenColor = hostMaterial->texSheenColor;
-    deviceData.sheenRoughness = hostMaterial->texSheenRoughness;
-    deviceData.clearcoat = hostMaterial->texClearcoat;
-    deviceData.clearcoatGloss = hostMaterial->texClearcoatGloss;
-    deviceData.clearcoatNormal = hostMaterial->texClearcoatNormal;
-    deviceData.subsurface = hostMaterial->texSubsurface;
-    deviceData.subsurfaceColor = hostMaterial->texSubsurfaceColor;
-    deviceData.subsurfaceRadius = hostMaterial->texSubsurfaceRadius;
-    deviceData.translucency = hostMaterial->texTranslucency;
-    deviceData.transparency = hostMaterial->texTransparency;
-    deviceData.transmittance = hostMaterial->texTransmittance;
-    deviceData.transmittanceDistance = hostMaterial->texTransmittanceDistance;
-    deviceData.ior = hostMaterial->texIOR;
-    deviceData.normal = hostMaterial->texNormal;
-    deviceData.emissive = hostMaterial->texEmissive;
-    deviceData.emissiveStrength = hostMaterial->texEmissiveStrength;
+    return mat;
+}
+
+optixu::Material RiPRMaterialHandler::createDisneyMaterial (const CgMaterial& material,
+                                                        const std::filesystem::path& materialFolder, CgModelPtr model)
+{
+    // Create the OptiX material first
+    optixu::Material mat = createOptixMaterial();
     
-    // Calculate actual dimension info from textures
-    deviceData.baseColor_dimInfo = calcDimInfo(hostMaterial->baseColor);
-    deviceData.roughness_dimInfo = calcDimInfo(hostMaterial->roughness);
-    deviceData.metallic_dimInfo = calcDimInfo(hostMaterial->metallic);
-    deviceData.specular_dimInfo = calcDimInfo(hostMaterial->specular);
-    deviceData.anisotropic_dimInfo = calcDimInfo(hostMaterial->anisotropic);
-    deviceData.anisotropicRotation_dimInfo = calcDimInfo(hostMaterial->anisotropicRotation);
-    deviceData.sheenColor_dimInfo = calcDimInfo(hostMaterial->sheenColor);
-    deviceData.sheenRoughness_dimInfo = calcDimInfo(hostMaterial->sheenRoughness);
-    deviceData.clearcoat_dimInfo = calcDimInfo(hostMaterial->clearcoat);
-    deviceData.clearcoatGloss_dimInfo = calcDimInfo(hostMaterial->clearcoatGloss);
-    deviceData.clearcoatNormal_dimInfo = calcDimInfo(hostMaterial->clearcoatNormal, false); // Normal maps are right-handed
-    deviceData.subsurface_dimInfo = calcDimInfo(hostMaterial->subsurface);
-    deviceData.subsurfaceColor_dimInfo = calcDimInfo(hostMaterial->subsurfaceColor);
-    deviceData.subsurfaceRadius_dimInfo = calcDimInfo(hostMaterial->subsurfaceRadius);
-    deviceData.translucency_dimInfo = calcDimInfo(hostMaterial->translucency);
-    deviceData.transparency_dimInfo = calcDimInfo(hostMaterial->transparency);
-    deviceData.transmittance_dimInfo = calcDimInfo(hostMaterial->transmittance);
-    deviceData.transmittanceDistance_dimInfo = calcDimInfo(hostMaterial->transmittanceDistance);
-    deviceData.ior_dimInfo = calcDimInfo(hostMaterial->ior);
-    deviceData.normal_dimInfo = calcDimInfo(hostMaterial->normal, false); // Normal maps are right-handed
-    deviceData.emissive_dimInfo = calcDimInfo(hostMaterial->emissive);
-    deviceData.emissiveStrength_dimInfo = calcDimInfo(hostMaterial->emissiveStrength);
+    if (!isInitialized_)
+    {
+        LOG(WARNING) << "RiPRMaterialHandler not initialized - falling back to legacy mode";
+        // Fall back to the old way without buffer
+        auto hostDisney = std::make_unique<DisneyMaterial>();
+        // ... process textures and set user data as before
+        shared::DisneyData disneyData = {};
+        mat.setUserData(disneyData);
+        materials.push_back(std::move(hostDisney));
+        return mat;
+    }
     
-    // Set flags
-    deviceData.thinWalled = 0;
-    deviceData.doubleSided = 0;
-    deviceData.useAlphaForTransparency = hostMaterial->useAlphaForTransparency ? 1 : 0;
+    CUcontext cuContext = ctx->getCudaContext();
+    if (!cuContext)
+    {
+        LOG(WARNING) << "No CUDA context available for material creation";
+        return mat;
+    }
     
-    return deviceData;
+    // Allocate a material slot
+    uint32_t materialSlot = materialSlotFinder_.getFirstAvailableSlot();
+    if (materialSlot == InvalidSlotIndex)
+    {
+        LOG(WARNING) << "No available material slots";
+        return mat;
+    }
+    materialSlotFinder_.setInUse(materialSlot);
+    
+    // Map the material data buffer for CPU access
+    shared::DisneyData* matDataOnHost = materialDataBuffer_.map();
+    if (!matDataOnHost)
+    {
+        LOG(WARNING) << "Failed to map material data buffer";
+        materialSlotFinder_.setNotInUse(materialSlot);
+        return mat;
+    }
+    
+    shared::DisneyData& disneyData = matDataOnHost[materialSlot];
+    
+    // Create host-side material for texture management
+    auto hostDisney = std::make_unique<DisneyMaterial>();
+
+    // Process core properties
+    processTextureInfo (material.core.baseColorTexture, hostDisney.get(),
+                        &hostDisney->baseColor, &hostDisney->texBaseColor, materialFolder, model,
+                        material.core.baseColor);
+
+    processTextureInfo (material.core.roughnessTexture, hostDisney.get(),
+                        &hostDisney->roughness, &hostDisney->texRoughness, materialFolder, model,
+                        Eigen::Vector3f::Constant (material.core.roughness));
+
+    processTextureInfo (material.metallic.metallicTexture, hostDisney.get(),
+                        &hostDisney->metallic, &hostDisney->texMetallic, materialFolder, model,
+                        Eigen::Vector3f::Constant (material.metallic.metallic));
+
+    processTextureInfo (std::nullopt, hostDisney.get(),
+                        &hostDisney->transparency, &hostDisney->texTransparency, materialFolder, model,
+                        Eigen::Vector3f::Constant (material.transparency.transparency));
+
+    processTextureInfo (material.transparency.transmittanceTexture, hostDisney.get(),
+                        &hostDisney->transmittance, &hostDisney->texTransmittance, materialFolder, model,
+                        material.transparency.transmittance);
+
+    processTextureInfo (std::nullopt, hostDisney.get(),
+                        &hostDisney->ior, &hostDisney->texIOR, materialFolder, model,
+                        Eigen::Vector3f::Constant (material.transparency.refractionIndex));
+
+    processTextureInfo (std::nullopt, hostDisney.get(),
+                        &hostDisney->transmittanceDistance, &hostDisney->texTransmittanceDistance, materialFolder, model,
+                        Eigen::Vector3f::Constant (material.transparency.transmittanceDistance));
+
+    processTextureInfo (material.sheen.sheenColorTexture, hostDisney.get(),
+                        &hostDisney->sheenColor, &hostDisney->texSheenColor, materialFolder, model,
+                        material.sheen.sheenColorFactor);
+
+    processTextureInfo (material.clearcoat.clearcoatTexture, hostDisney.get(),
+                        &hostDisney->clearcoat, &hostDisney->texClearcoat, materialFolder, model,
+                        Eigen::Vector3f::Constant (material.clearcoat.clearcoat));
+
+    processTextureInfo (material.normalTexture, hostDisney.get(),
+                        &hostDisney->normal, &hostDisney->texNormal, materialFolder, model);
+
+    processTextureInfo (material.emission.luminousTexture, hostDisney.get(),
+                        &hostDisney->emissive, &hostDisney->texEmissive,
+                        materialFolder, model,
+                        material.emission.luminousColor * material.emission.luminous);
+
+    processTextureInfo (std::nullopt, hostDisney.get(),
+                        &hostDisney->emissiveStrength, &hostDisney->texEmissiveStrength,
+                        materialFolder, model,
+                        Eigen::Vector3f::Constant (material.emission.luminous)); // Process emissive properties
+
+    // Fill in the DisneyData structure directly in the buffer
+    // Core properties
+    disneyData.baseColor = hostDisney->texBaseColor;
+    disneyData.metallic = hostDisney->texMetallic;
+    disneyData.roughness = hostDisney->texRoughness;
+
+    // Transparency properties
+    disneyData.transparency = hostDisney->texTransparency;
+    disneyData.transmittance = hostDisney->texTransmittance;
+    disneyData.ior = hostDisney->texIOR;
+    disneyData.transmittanceDistance = hostDisney->texTransmittanceDistance;
+    disneyData.thinWalled = material.transparency.thin ? 1 : 0;
+
+    // Add emissive properties
+    disneyData.emissive = hostDisney->texEmissive;
+    disneyData.emissiveStrength = hostDisney->texEmissiveStrength;
+
+    // Sheen properties
+    disneyData.sheenColor = hostDisney->texSheenColor;
+
+    // Clearcoat properties
+    disneyData.clearcoat = hostDisney->texClearcoat;
+
+    // Normal mapping
+    disneyData.normal = hostDisney->texNormal;
+
+    // Set dimension info for all textures
+    disneyData.baseColor_dimInfo = calcDimInfo (hostDisney->baseColor);
+    disneyData.metallic_dimInfo = calcDimInfo (hostDisney->metallic);
+    disneyData.roughness_dimInfo = calcDimInfo (hostDisney->roughness);
+    disneyData.transparency_dimInfo = calcDimInfo (hostDisney->transparency);
+    disneyData.translucency_dimInfo = calcDimInfo (hostDisney->translucency);
+    disneyData.transmittance_dimInfo = calcDimInfo (hostDisney->transmittance);
+    disneyData.transmittanceDistance_dimInfo = calcDimInfo (hostDisney->transmittanceDistance);
+    disneyData.ior_dimInfo = calcDimInfo (hostDisney->ior);
+    disneyData.emissive_dimInfo = calcDimInfo (hostDisney->emissive);
+    disneyData.emissiveStrength_dimInfo = calcDimInfo (hostDisney->emissiveStrength);
+    disneyData.sheenColor_dimInfo = calcDimInfo (hostDisney->sheenColor);
+    disneyData.clearcoat_dimInfo = calcDimInfo (hostDisney->clearcoat);
+    disneyData.normal_dimInfo = calcDimInfo (hostDisney->normal);
+    disneyData.useAlphaForTransparency = hostDisney->useAlphaForTransparency ? 1 : 0;
+
+    // Unmap the buffer after we're done writing
+    materialDataBuffer_.unmap();
+    
+    // Store the host material for texture lifetime management
+    materials.push_back (std::move (hostDisney));
+    
+    // Set the material slot index in the OptiX material's user data
+    // This allows the GPU code to find the material data in the buffer
+    mat.setUserData(materialSlot);
+    
+    LOG(DBUG) << "Created Disney material in slot " << materialSlot;
+
+    return mat;
+}
+
+// Process texture information to load and configure a texture
+void RiPRMaterialHandler::processTextureInfo (
+    const std::optional<CgTextureInfo>& texInfo,
+    DisneyMaterial* hostDisney,
+    const cudau::Array** targetArray,
+    CUtexObject* targetTexObject,
+    const std::filesystem::path& materialFolder,
+    CgModelPtr model,
+    const Eigen::Vector3f& defaultVector)
+{
+    bool needsDegamma = false;
+    bool textureLoaded = false;
+    bool isHDR = false;
+
+    // Determine which texture we're processing based on the targetArray
+    std::string requestedInput;
+    if (targetArray == &hostDisney->baseColor)
+    {
+        requestedInput = "Color";
+    }
+    else if (targetArray == &hostDisney->roughness)
+    {
+        requestedInput = "Roughness";
+    }
+    else if (targetArray == &hostDisney->metallic)
+    {
+        requestedInput = "Metallic";
+    }
+    else if (targetArray == &hostDisney->sheenColor)
+    {
+        requestedInput = "Sheen";
+    }
+    else if (targetArray == &hostDisney->normal)
+    {
+        requestedInput = "Normal";
+    }
+    else if (targetArray == &hostDisney->clearcoat)
+    {
+        requestedInput = "Clearcoat";
+    }
+    else if (targetArray == &hostDisney->subsurface)
+    {
+        requestedInput = "Subsurface";
+    }
+    else if (targetArray == &hostDisney->emissive)
+    {
+        requestedInput = "Luminous";
+    }
+    else if (targetArray == &hostDisney->transmittance)
+    {
+        requestedInput = "Transmittance";
+    }
+    else
+    {
+        requestedInput = "Color"; // Default fallback
+    }
+
+    if (requestedInput == "Luminous")
+    {
+       // LOG (DBUG) << "Processing luminous texture with default value: "
+         //          << defaultVector.transpose();
+
+        if (texInfo)
+        {
+           // LOG (DBUG) << "Has texture info - index: "
+             //          << texInfo->textureIndex;
+        }
+        else
+        {
+          //  LOG (DBUG) << "Using immediate luminous value";
+        }
+    }
+
+    if (texInfo)
+    {
+        const auto& texture = model->cgTextures[texInfo->textureIndex];
+        if (texture.imageIndex)
+        {
+            const auto& image = model->cgImages[*texture.imageIndex];
+
+            //   LOG (DBUG) << "Attempting to load texture: " << image.uri;
+
+            std::filesystem::path texturePath (image.uri);
+            if (texturePath.is_absolute())
+            {
+                // LOG (DBUG) << "Using absolute path: " << texturePath;
+                textureLoaded = ctx->getHandlers().textureHandler->loadTexture (
+                    texturePath,
+                    targetArray,
+                    &needsDegamma,
+                    &isHDR,
+                    requestedInput);
+            }
+            else
+            {
+                auto fullPath = FileServices::findFileInFolder (
+                    materialFolder,
+                    texturePath.filename().string());
+                if (fullPath)
+                {
+                    // LOG (DBUG) << "Found texture at: " << fullPath.value();
+                    textureLoaded = ctx->getHandlers().textureHandler->loadTexture (
+                        fullPath.value(),
+                        targetArray,
+                        &needsDegamma,
+                        &isHDR,
+                        requestedInput);
+                }
+                else
+                {
+                    LOG (WARNING) << "Could not find texture: " << texturePath.filename().string()
+                                  << " in folder: " << materialFolder;
+                }
+            }
+        }
+    }
+
+    if (!textureLoaded)
+    {
+      //  mace::vecStr3f (defaultVector, DBUG, "IMMEDIATE VALUE");
+        float4 immValue = make_float4 (
+            defaultVector.x(),
+            defaultVector.y(),
+            defaultVector.z(),
+            1.0f);
+
+        ctx->getHandlers().textureHandler->createImmTexture (immValue, true, targetArray);
+        needsDegamma = true;
+    }
+
+    if (!*targetArray)
+    {
+        LOG (WARNING) << "Failed to create texture array";
+        return;
+    }
+
+    *targetTexObject = needsDegamma ? sampler_sRGB.createTextureObject (**targetArray) : sampler_normFloat.createTextureObject (**targetArray);
+
+    // *** NEW CODE: Check for alpha in base color texture ***
+    if (targetArray == &hostDisney->baseColor && requestedInput == "Color")
+    {
+        bool hasAlpha = ctx->getHandlers().textureHandler->textureHasAlpha (*targetArray);
+
+        if (hasAlpha)
+        {
+           // LOG (DBUG) << "Texture has meaningful alpha, adjusting transparency";
+
+            // Only apply alpha to transparency if the material isn't already transparent
+            if (hostDisney->texTransparency == 0)
+            {
+                // Use alpha as a transparency source with a 0.5 blend weight for compatibility
+                // We'll create a transparency texture, but allow the material system to decide
+                // how much to rely on it versus the existing transparency parameter
+
+                // Flag that this material should use alpha-driven transparency
+                hostDisney->useAlphaForTransparency = true;
+
+                // The shader will read alpha from the baseColor texture directly
+                // so we don't need to create a separate texture
+            }
+        }
+    }
+}
+
+// Updates an existing material with new properties
+void RiPRMaterialHandler::updateMaterial (
+    const Material& sabiMaterial,
+    optixu::Material& material,
+    const std::filesystem::path& materialFolder,
+    CgModelPtr model)
+{
+#if 0
+    // Get existing host material if available
+    HostMaterial* hostMat = nullptr;
+    if (materials.size())
+    {
+        hostMat = materials[0];
+    }
+    else
+    {
+        hostMat = new HostMaterial();
+    }
+
+    // Initialize as SimplePBR type
+    hostMat->initializeAs (HostMaterial::Type::SimplePBR);
+
+    bool needsDegamma = false;
+    bool textureLoaded = false;
+
+    // Process base color texture if present
+    if (sabiMaterial.pbrMetallicRoughness.baseColorTexture)
+    {
+        TextureInfo info = sabiMaterial.pbrMetallicRoughness.baseColorTexture.value();
+        Texture texture = model->textures[info.textureIndex];
+        Image image = model->images[texture.source];
+        std::string textureName = image.uri;
+
+        std::filesystem::path texturePath (textureName);
+        if (texturePath.is_absolute())
+        {
+            textureLoaded = ctx->getHandlers().textureHandler->loadTexture (
+                texturePath,
+                &hostMat->body.asSimplePBR.baseColor_opacity,
+                &needsDegamma);
+        }
+        else
+        {
+            std::filesystem::path p (textureName);
+            auto fullPath = FileServices::findFileInFolder (materialFolder, p.filename().string());
+            if (fullPath)
+            {
+                textureLoaded = ctx->getHandlers().textureHandler->loadTexture (
+                    fullPath.value(),
+                    &hostMat->body.asSimplePBR.baseColor_opacity,
+                    &needsDegamma);
+            }
+        }
+    }
+
+    // Create immediate base color if no texture
+    if (!hostMat->body.asSimplePBR.baseColor_opacity)
+    {
+        float4 immBaseColor = make_float4 (
+            sabiMaterial.pbrMetallicRoughness.baseColorFactor[0],
+            sabiMaterial.pbrMetallicRoughness.baseColorFactor[1],
+            sabiMaterial.pbrMetallicRoughness.baseColorFactor[2],
+            1.0f);
+        ctx->getHandlers().textureHandler->createImmTexture (
+            immBaseColor,
+            true,
+            &hostMat->body.asSimplePBR.baseColor_opacity);
+        needsDegamma = true;
+    }
+
+    // Create texture object with appropriate sampler
+    if (needsDegamma)
+        hostMat->body.asSimplePBR.texBaseColor_opacity =
+            sampler_sRGB.createTextureObject (*hostMat->body.asSimplePBR.baseColor_opacity);
+    else
+        hostMat->body.asSimplePBR.texBaseColor_opacity =
+            sampler_normFloat.createTextureObject (*hostMat->body.asSimplePBR.baseColor_opacity);
+
+    // Process metallic-roughness texture if present
+    if (sabiMaterial.pbrMetallicRoughness.metallicRoughnessTexture)
+    {
+        TextureInfo info = sabiMaterial.pbrMetallicRoughness.metallicRoughnessTexture.value();
+        Texture texture = model->textures[info.textureIndex];
+        Image image = model->images[texture.source];
+        std::string textureName = image.uri;
+
+        std::filesystem::path texturePath (textureName);
+        bool metallicNeedsDegamma = false;
+        if (texturePath.is_absolute())
+        {
+            textureLoaded = ctx->getHandlers().textureHandler->loadTexture (
+                texturePath,
+                &hostMat->body.asSimplePBR.occlusion_roughness_metallic,
+                &metallicNeedsDegamma);
+        }
+        else
+        {
+            std::filesystem::path p (textureName);
+            auto fullPath = FileServices::findFileInFolder (materialFolder, p.filename().string());
+            if (fullPath)
+            {
+                textureLoaded = ctx->getHandlers().textureHandler->loadTexture (
+                    fullPath.value(),
+                    &hostMat->body.asSimplePBR.occlusion_roughness_metallic,
+                    &metallicNeedsDegamma);
+            }
+        }
+    }
+
+    // Create immediate metallic value if no texture
+    if (!hostMat->body.asSimplePBR.occlusion_roughness_metallic)
+    {
+        float metallic = sabiMaterial.pbrMetallicRoughness.metallicFactor;
+        ctx->getHandlers().textureHandler->createImmTexture (
+            metallic,
+            true,
+            &hostMat->body.asSimplePBR.occlusion_roughness_metallic);
+    }
+
+    // Create texture object for metallic-roughness
+    hostMat->body.asSimplePBR.texOcclusion_roughness_metallic =
+        sampler_normFloat.createTextureObject (*hostMat->body.asSimplePBR.occlusion_roughness_metallic);
+
+    // Setup material data for GPU
+    shared::MaterialData matData = {};
+    matData.asSimplePBR.baseColor_opacity = hostMat->body.asSimplePBR.texBaseColor_opacity;
+    matData.asSimplePBR.occlusion_roughness_metallic = hostMat->body.asSimplePBR.texOcclusion_roughness_metallic;
+    matData.asSimplePBR.baseColor_opacity_dimInfo =
+        calcDimInfo (*hostMat->body.asSimplePBR.baseColor_opacity);
+    matData.asSimplePBR.occlusion_roughness_metallic_dimInfo =
+        calcDimInfo (*hostMat->body.asSimplePBR.occlusion_roughness_metallic);
+
+    // Update the OptiX material with new data
+    material.setUserData (matData);
+
+#endif
 }

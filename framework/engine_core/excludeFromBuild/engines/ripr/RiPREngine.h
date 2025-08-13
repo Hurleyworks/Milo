@@ -11,17 +11,6 @@ using RiPRModelPtr = std::shared_ptr<class RiPRModel>;
 class RiPREngine : public BaseRenderingEngine
 {
 public:
-    // Entry point enums for dual pipeline architecture
-    enum class GBufferEntryPoint
-    {
-        setupGBuffers = 0,
-    };
-
-    enum class PathTracingEntryPoint
-    {
-        pathTrace = 0,
-    };
-
     RiPREngine();
     ~RiPREngine() override;
 
@@ -33,57 +22,52 @@ public:
     void render(const mace::InputEvent& input, bool updateMotion, uint32_t frameNumber) override;
     void onEnvironmentChanged() override;
     std::string getName() const override { return "RiPR Engine"; }
-    std::string getDescription() const override { return "Dual-pipeline ray tracing engine with G-buffer and path tracing modes"; }
+    std::string getDescription() const override { return "RiPR Path Tracing with adaptive sampling and improved convergence"; }
     
     // Pipeline accessors for material handler
-    std::shared_ptr<engine_core::RenderPipeline<GBufferEntryPoint>> getGBufferPipeline() const { return gbufferPipeline_; }
-    std::shared_ptr<engine_core::RenderPipeline<PathTracingEntryPoint>> getPathTracePipeline() const { return pathTracePipeline_; }
-    
-    // Render mode control
-    enum class RenderMode
-    {
-        GBufferPreview = 0,
-        PathTraceFinal = 1,
-        DebugNormals = 2,
-        DebugAlbedo = 3,
-        DebugDepth = 4,
-        DebugMotion = 5
-    };
-    
-    void setRenderMode(RenderMode mode) { renderMode_ = mode; }
-    RenderMode getRenderMode() const { return renderMode_; }
-    
-    // Handle window resize
-    void resize(uint32_t width, uint32_t height);
+    std::shared_ptr<engine_core::RenderPipeline<engine_core::PathTracingEntryPoint>> getPathTracePipeline() const { return pathTracePipeline_; }
     
     // Light probability computation kernels structure
-    struct ComputeProbTex
-    {
-        CUmodule cudaModule = 0;
+    struct ComputeProbTex {
+        CUmodule cudaModule = nullptr;
         cudau::Kernel computeFirstMip;
         cudau::Kernel computeTriangleProbTexture;
         cudau::Kernel computeGeomInstProbTexture;
         cudau::Kernel computeInstProbTexture;
         cudau::Kernel computeMip;
         cudau::Kernel computeTriangleProbBuffer;
-        cudau::Kernel computeAreaLightProbBuffer;
+        cudau::Kernel computeGeomInstProbBuffer;
+        cudau::Kernel computeInstProbBuffer;
         cudau::Kernel finalizeDiscreteDistribution1D;
         cudau::Kernel test;
     };
     
     // Accessor for light probability computation kernels
     const ComputeProbTex& getComputeProbTex() const { return computeProbTex_; }
+    
+    // GBuffer entry points
+    enum GBufferEntryPoint
+    {
+        GBufferEntryPoint_SetupGBuffers = 0,
+        GBufferEntryPoint_Count
+    };
 
 private:
     // Pipeline setup methods
     void setupPipelines();
     void createModules();
     void createPrograms();
-    void initializeLightProbabilityKernels();
     void createSBT();
     void updateSBT();  // Update SBT after scene changes
     void linkPipelines();
-    void updateMaterialHitGroups(RiPRModelPtr model = nullptr);  // Set hit groups on model's materials (nullptr = all models)
+    void updateMaterialHitGroups(RiPRModelPtr model);  // Set hit groups on a specific model's materials
+    void initializeLightProbabilityKernels();  // Initialize CUDA kernels for light probability computation
+    
+    // GBuffer rendering
+    void renderGBuffer(CUstream stream);
+    void outputGBufferDebugInfo(CUstream stream);
+    void setGBufferDebugEnabled(bool enabled) { enableGBufferDebug_ = enabled; }
+    bool isGBufferDebugEnabled() const { return enableGBufferDebug_; }
     
     // Launch parameter management
     void updateLaunchParameters(const mace::InputEvent& input);
@@ -93,18 +77,11 @@ private:
     void updateCameraBody(const mace::InputEvent& input);
     void updateCameraSensor();
     
-    // Rendering methods
-    void renderGBuffer(CUstream stream);
-    void renderPathTracing(CUstream stream);
-    
-    // Dual pipelines
+    // Pipelines
+    std::shared_ptr<engine_core::RenderPipeline<engine_core::PathTracingEntryPoint>> pathTracePipeline_;
     std::shared_ptr<engine_core::RenderPipeline<GBufferEntryPoint>> gbufferPipeline_;
-    std::shared_ptr<engine_core::RenderPipeline<PathTracingEntryPoint>> pathTracePipeline_;
     
-    // Default material with hit groups set (following working sample pattern)
-    optixu::Material defaultMaterial_;
-    
-    // Scene management (RiPR-specific handlers)
+    // Scene management
     std::shared_ptr<class RiPRSceneHandler> sceneHandler_;
     std::shared_ptr<class RiPRMaterialHandler> materialHandler_;
     std::shared_ptr<class RiPRModelHandler> modelHandler_;
@@ -112,40 +89,55 @@ private:
     // Render handler
     std::shared_ptr<class RiPRRenderHandler> renderHandler_;
     
-    // Denoiser handler
+    // Denoiser handler (RiPR-specific to avoid conflicts with other engines)
     std::shared_ptr<class RiPRDenoiserHandler> denoiserHandler_;
     
-    // Area light handler
-    std::shared_ptr<class AreaLightHandler> areaLightHandler_;
-    
-    // Launch parameters (split into static and per-frame)
-    ripr_shared::StaticPipelineLaunchParameters staticPlp_;
-    ripr_shared::PerFramePipelineLaunchParameters perFramePlp_;
+    // Launch parameters
+   // ripr_shared::PipelineLaunchParameters plp_;
+   // CUdeviceptr plpOnDevice_ = 0;
+
+     // Pipeline parameter structures
+    ripr_shared::StaticPipelineLaunchParameters static_plp_;
+    ripr_shared::PerFramePipelineLaunchParameters per_frame_plp_;
     ripr_shared::PipelineLaunchParameters plp_;
-    
-    // Device pointers for launch parameters (matching sample code)
-    CUdeviceptr staticPlpOnDevice_ = 0;
-    CUdeviceptr perFramePlpOnDevice_ = 0;
-    CUdeviceptr plpOnDevice_ = 0;
-    
+
+    // Device memory for pipeline parameters
+    CUdeviceptr static_plp_on_device_ = 0;
+    CUdeviceptr per_frame_plp_on_device_ = 0;
+    CUdeviceptr plp_on_device_ = 0;
+
+     // G-buffer storage
+    struct GBuffers
+    {
+        cudau::Array gBuffer0[2];
+        cudau::Array gBuffer1[2];
+
+        void initialize (CUcontext cuContext, uint32_t width, uint32_t height);
+        void resize (uint32_t width, uint32_t height);
+        void finalize();
+    };
+
+    GBuffers gbuffers_;
+    //
     // Camera state
     ripr_shared::PerspectiveCamera lastCamera_;
     ripr_shared::PerspectiveCamera prevCamera_;  // For temporal effects
     mace::InputEvent lastInput_;
+    bool cameraChanged_ = false;
     
     // Render state
-    RenderMode renderMode_ = RenderMode::PathTraceFinal;
+    bool restartRender_ = true;
+    uint32_t frameCounter_ = 0;
     
     // RNG buffer
     optixu::HostBlockBuffer2D<shared::PCG32RNG, 1> rngBuffer_;
     
-    // G-buffers (matching sample code structure)
-    cudau::Array gBuffer0_[2];  // Double buffered for temporal effects
-    cudau::Array gBuffer1_[2];  // Double buffered for temporal effects
-    
-    // Pick info buffers for mouse interaction (double buffered)
-    cudau::TypedBuffer<ripr_shared::PickInfo> pickInfoBuffers_[2];
+    // Environment light state
+    bool environmentDirty_ = true;
     
     // Light probability computation kernels
     ComputeProbTex computeProbTex_;
+    
+    // Debug settings
+    bool enableGBufferDebug_ = false;
 };

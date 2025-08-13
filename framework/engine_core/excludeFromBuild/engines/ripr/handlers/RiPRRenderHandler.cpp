@@ -2,6 +2,7 @@
 #include "../../../RenderContext.h"
 #include "../../../tools/PTXManager.h"
 #include "../../../tools/GPUTimerManager.h"
+#include "../ripr_shared.h"
 #include "RiPRDenoiserHandler.h"
 
 RiPRRenderHandler::RiPRRenderHandler(RenderContextPtr ctx)
@@ -39,7 +40,6 @@ bool RiPRRenderHandler::initialize(uint32_t width, uint32_t height)
     
     width_ = width;
     height_ = height;
-    accumulationCount_ = 0;
     
     CUcontext cuContext = renderContext_->getCudaContext();
     
@@ -73,10 +73,10 @@ bool RiPRRenderHandler::initialize(uint32_t width, uint32_t height)
             width, height, 1
         );
         
-        // Motion accumulation buffer (motion vectors for temporal denoising)
-        motionAccumBuffer_.initialize2D(
+        // Flow accumulation buffer (motion vectors)
+        flowAccumBuffer_.initialize2D(
             cuContext, 
-            cudau::ArrayElementType::Float32, 4,  // float4 (using float4 for consistency, even though we only need float2)
+            cudau::ArrayElementType::Float32, 4,  // float4
             cudau::ArraySurface::Enable, 
             cudau::ArrayTextureGather::Disable,
             width, height, 1
@@ -86,7 +86,7 @@ bool RiPRRenderHandler::initialize(uint32_t width, uint32_t height)
         linearBeautyBuffer_.initialize(cuContext, cudau::BufferType::Device, width * height);
         linearAlbedoBuffer_.initialize(cuContext, cudau::BufferType::Device, width * height);
         linearNormalBuffer_.initialize(cuContext, cudau::BufferType::Device, width * height);
-        linearMotionBuffer_.initialize(cuContext, cudau::BufferType::Device, width * height);
+        linearFlowBuffer_.initialize(cuContext, cudau::BufferType::Device, width * height);
         
         // Initialize pick info buffers (double buffered)
         for (int i = 0; i < 2; ++i)
@@ -128,8 +128,8 @@ void RiPRRenderHandler::finalize()
         albedoAccumBuffer_.finalize();
     if (normalAccumBuffer_.isInitialized())
         normalAccumBuffer_.finalize();
-    if (motionAccumBuffer_.isInitialized())
-        motionAccumBuffer_.finalize();
+    if (flowAccumBuffer_.isInitialized())
+        flowAccumBuffer_.finalize();
     
     if (linearBeautyBuffer_.isInitialized())
         linearBeautyBuffer_.finalize();
@@ -137,8 +137,8 @@ void RiPRRenderHandler::finalize()
         linearAlbedoBuffer_.finalize();
     if (linearNormalBuffer_.isInitialized())
         linearNormalBuffer_.finalize();
-    if (linearMotionBuffer_.isInitialized())
-        linearMotionBuffer_.finalize();
+    if (linearFlowBuffer_.isInitialized())
+        linearFlowBuffer_.finalize();
     
     // Finalize pick info buffers
     for (int i = 0; i < 2; ++i)
@@ -149,7 +149,6 @@ void RiPRRenderHandler::finalize()
     
     width_ = 0;
     height_ = 0;
-    accumulationCount_ = 0;
     initialized_ = false;
     
     LOG(DBUG) << "RiPRRenderHandler resources finalized";
@@ -170,15 +169,8 @@ void RiPRRenderHandler::loadKernels()
     
     if (ptxData.empty())
     {
-        // Fall back to Milo kernels if RiPR-specific ones aren't available yet
-        LOG(WARNING) << "RiPR-specific PTX not found, falling back to Milo kernels";
-        ptxData = renderContext_->getPTXManager()->getPTXData("optix_milo_copybuffers");
-        
-        if (ptxData.empty())
-        {
-            LOG(WARNING) << "Failed to get PTX data for copy buffers";
-            return;
-        }
+        LOG(WARNING) << "Failed to get PTX data for optix_ripr_copybuffers";
+        return;
     }
     
     LOG(DBUG) << "Loading PTX data for RiPR copy buffers (" << ptxData.size() << " bytes)";
@@ -186,26 +178,26 @@ void RiPRRenderHandler::loadKernels()
     CUcontext cuContext = renderContext_->getCudaContext();
     
     // Load the module
-    CUDADRV_CHECK(cuModuleLoadData(&moduleRiPRCopyBuffers_, ptxData.data()));
+    CUDADRV_CHECK(cuModuleLoadData(&moduleCopyBuffers_, ptxData.data()));
     
-    // Set up the kernels
-    kernelCopySurfacesToLinear_.set(moduleRiPRCopyBuffers_, "copySurfacesToLinear", cudau::dim3(8, 8), 0);
-  
+    // Set up the combined kernel
+    kernelCopySurfacesToLinear_.set(moduleCopyBuffers_, "copySurfacesToLinear", cudau::dim3(8, 8), 0);
+    
     LOG(INFO) << "RiPR copy buffers module loaded successfully";
 }
 
 void RiPRRenderHandler::cleanupKernels()
 {
-    if (moduleRiPRCopyBuffers_)
+    if (moduleCopyBuffers_)
     {
-        CUDADRV_CHECK(cuModuleUnload(moduleRiPRCopyBuffers_));
-        moduleRiPRCopyBuffers_ = nullptr;
+        CUDADRV_CHECK(cuModuleUnload(moduleCopyBuffers_));
+        moduleCopyBuffers_ = nullptr;
     }
 }
 
 void RiPRRenderHandler::copyAccumToLinearBuffers(CUstream stream)
 {
-    if (!initialized_ || !moduleRiPRCopyBuffers_)
+    if (!initialized_ || !moduleCopyBuffers_)
     {
         LOG(WARNING) << "RiPRRenderHandler not properly initialized";
         return;
@@ -217,13 +209,27 @@ void RiPRRenderHandler::copyAccumToLinearBuffers(CUstream stream)
         beautyAccumBuffer_.getSurfaceObject(0),
         albedoAccumBuffer_.getSurfaceObject(0),
         normalAccumBuffer_.getSurfaceObject(0),
-        motionAccumBuffer_.getSurfaceObject(0),
+        flowAccumBuffer_.getSurfaceObject(0),
         linearBeautyBuffer_.getDevicePointer(),
         linearAlbedoBuffer_.getDevicePointer(),
         linearNormalBuffer_.getDevicePointer(),
-        linearMotionBuffer_.getDevicePointer(),
+        linearFlowBuffer_.getDevicePointer(),
         uint2{width_, height_}
     );
+}
+
+
+void RiPRRenderHandler::clearAccumBuffers(CUstream stream)
+{
+    if (!initialized_)
+    {
+        LOG(WARNING) << "RiPRRenderHandler not initialized";
+        return;
+    }
+    
+    // For now, we'll rely on the RiPR kernels to handle initialization
+    // The clearAccumBuffers kernel is available in optix_ripr_copybuffers if needed
+    LOG(DBUG) << "Accumulation buffer clearing requested - RiPR kernels will handle initialization";
 }
 
 
@@ -253,14 +259,10 @@ bool RiPRRenderHandler::denoise(CUstream stream, bool isNewSequence, RiPRDenoise
     inputBuffers.noisyBeauty = linearBeautyBuffer_;
     inputBuffers.albedo = linearAlbedoBuffer_;
     inputBuffers.normal = linearNormalBuffer_;
-    inputBuffers.flow = linearMotionBuffer_;  // Motion vectors for temporal denoising
+    inputBuffers.flow = linearFlowBuffer_;  // Motion vectors for temporal denoising
     
     // For temporal denoising: if new sequence, use noisy beauty as previous
-    // Otherwise, the denoised result from previous frame is already in the beauty buffer
-    if (denoiserHandler->isTemporalDenoiser())
-    {
-        inputBuffers.previousDenoisedBeauty = isNewSequence ? linearBeautyBuffer_ : linearBeautyBuffer_;
-    }
+    inputBuffers.previousDenoisedBeauty = linearBeautyBuffer_;
     
     // Set all formats
     inputBuffers.beautyFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
@@ -292,7 +294,7 @@ bool RiPRRenderHandler::denoise(CUstream stream, bool isNewSequence, RiPRDenoise
     
     // Denoise (output goes back to beauty buffer since we don't have separate denoised buffer)
     const auto& denoisingTasks = denoiserHandler->getTasks();
-    for (size_t i = 0; i < denoisingTasks.size(); ++i)
+    for (int i = 0; i < denoisingTasks.size(); ++i)
     {
         denoiserHandler->getDenoiser().invoke(
             stream, denoisingTasks[i],
@@ -307,9 +309,6 @@ bool RiPRRenderHandler::denoise(CUstream stream, bool isNewSequence, RiPRDenoise
     {
         timer->denoise.stop(stream);
     }
-    
-   // LOG(DBUG) << "RiPR denoising completed (temporal: " << denoiserHandler->isTemporalDenoiser() 
-     //         << ", new sequence: " << isNewSequence << ")";
     
     return true;  // Successfully invoked denoiser
 }

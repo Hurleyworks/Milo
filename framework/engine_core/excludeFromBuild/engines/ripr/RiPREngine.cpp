@@ -1,31 +1,44 @@
 #include "RiPREngine.h"
+#include "../../RenderContext.h"
 #include "handlers/RiPRSceneHandler.h"
 #include "handlers/RiPRMaterialHandler.h"
 #include "handlers/RiPRModelHandler.h"
 #include "handlers/RiPRRenderHandler.h"
 #include "handlers/RiPRDenoiserHandler.h"
-#include "../../handlers/AreaLightHandler.h"
 #include "models/RiPRModel.h"
-#include "../../tools/PTXManager.h"
 
 RiPREngine::RiPREngine()
 {
-    LOG (DBUG) << "RiPREngine constructor";
+    LOG (INFO) << "RiPREngine created";
+    engineName_ = "RiPREngine";
 }
 
 RiPREngine::~RiPREngine()
 {
-    LOG (DBUG) << "RiPREngine destructor";
     cleanup();
 }
 
 void RiPREngine::initialize (RenderContext* ctx)
 {
-    LOG (DBUG) << "Initializing RiPREngine";
+    LOG (INFO) << "RiPREngine::initialize()";
 
-    // Call base class initialization first
+    // Call base class initialization
     // This will set up renderContext_, context_, ptxManager_ and initialize dimensions
     BaseRenderingEngine::initialize (ctx);
+
+    // Allocate device memory for pipeline parameters
+    CUDADRV_CHECK (cuMemAlloc (&static_plp_on_device_, sizeof (static_plp_)));
+    CUDADRV_CHECK (cuMemAlloc (&per_frame_plp_on_device_, sizeof (per_frame_plp_)));
+    CUDADRV_CHECK (cuMemAlloc (&plp_on_device_, sizeof (plp_)));
+
+    // Initialize parameter structures to defaults
+    static_plp_ = {};
+    per_frame_plp_ = {};
+
+    // Set up the pipeline parameter pointers to point to device memory
+    // These are device pointers that will be uploaded to the device
+    plp_.s = reinterpret_cast<ripr_shared::StaticPipelineLaunchParameters*> (static_plp_on_device_);
+    plp_.f = reinterpret_cast<ripr_shared::PerFramePipelineLaunchParameters*> (per_frame_plp_on_device_);
 
     if (!isInitialized_)
     {
@@ -33,171 +46,126 @@ void RiPREngine::initialize (RenderContext* ctx)
         return;
     }
 
-    // Initialize handlers
-    auto ctxPtr = std::shared_ptr<RenderContext> (renderContext_, [] (RenderContext*) {});
-    sceneHandler_ = RiPRSceneHandler::create (ctxPtr);
-    materialHandler_ = std::make_shared<RiPRMaterialHandler>();
-    materialHandler_->initialize (renderContext_);
-    modelHandler_ = std::make_shared<RiPRModelHandler>();
-    modelHandler_->initialize (ctxPtr);
-    renderHandler_ = RiPRRenderHandler::create (ctxPtr);
-    denoiserHandler_ = RiPRDenoiserHandler::create (ctxPtr);
-    areaLightHandler_ = std::make_shared<AreaLightHandler>();
-    areaLightHandler_->initialize (renderContext_->getCudaContext(), 100000);
-    
-    // Pass the scene from BaseRenderingEngine to the scene handler
-    sceneHandler_->setScene(&scene_);
-    
-    // Set up handler dependencies
-    modelHandler_->setMaterialHandler(materialHandler_.get());
-    modelHandler_->setAreaLightHandler(areaLightHandler_);
-    sceneHandler_->setModelHandler(modelHandler_);
-    sceneHandler_->setMaterialHandler(materialHandler_);
-    sceneHandler_->setAreaLightHandler(areaLightHandler_);
+    // Create handlers
+    RenderContextPtr renderContext = ctx->shared_from_this();
 
-    if (!sceneHandler_ || !materialHandler_ || !modelHandler_ || !renderHandler_)
-    {
-        LOG (WARNING) << "Failed to create handlers";
-        return;
-    }
+    // Create material handler first
+    materialHandler_ = RiPRMaterialHandler::create (renderContext);
+    materialHandler_->initialize();
 
-    // Initialize render handler with dimensions from base class
-    initializeHandlerWithDimensions (renderHandler_, "RenderHandler");
+    // Create scene handler and give it the scene
+    sceneHandler_ = RiPRSceneHandler::create (renderContext);
+    sceneHandler_->setScene (&scene_);
 
-    // Initialize denoiser if available
-    if (initializeHandlerWithDimensions (denoiserHandler_, "DenoiserHandler"))
-    {
-        // Setup denoiser state after initialization
-        denoiserHandler_->setupState (renderContext_->getCudaStream());
-        LOG (INFO) << "RiPRDenoiserHandler state setup completed";
-    }
+    // Create model handler and connect it to other handlers
+    modelHandler_ = RiPRModelHandler::create (renderContext);
+    modelHandler_->initialize();
+    modelHandler_->setHandlers (materialHandler_, sceneHandler_);
 
-    // Setup pipelines
+    // Also give model handler to scene handler
+    sceneHandler_->setModelHandler (modelHandler_);
+
+    // Set number of ray types
+    constexpr uint32_t numRayTypes = ripr_shared::NumRayTypes;
+    // Note: Ray types and material sets are set on geometry instances, not the scene
+    // scene_.setNumRayTypes(numRayTypes);
+    // scene_.setNumMaterialSets(MATERIAL_SETS);
+
+    LOG (INFO) << "RiPR handlers created and configured with " << numRayTypes << " ray types";
+
+    // Create and setup pipelines
     setupPipelines();
 
-    // Initialize buffers first (before allocating launch parameters)
-    if (renderWidth_ > 0 && renderHeight_ > 0 && renderContext_)
-    {
-        CUcontext cuContext = renderContext_->getCudaContext();
+    // Create render handler
+    renderHandler_ = RiPRRenderHandler::create (renderContext);
+    initializeHandlerWithDimensions (renderHandler_, "RenderHandler");
 
-        // Initialize RNG buffer
-        rngBuffer_.initialize (cuContext, cudau::BufferType::Device, renderWidth_, renderHeight_);
-        uint64_t seed = 12345;
+    // Initialize RiPR-specific denoiser handler
+    denoiserHandler_ = RiPRDenoiserHandler::create (ctx->shared_from_this());
+    if (denoiserHandler_ && renderWidth_ > 0 && renderHeight_ > 0)
+    {
+        if (!denoiserHandler_->initialize (renderWidth_, renderHeight_, true)) // true = use temporal denoiser
+        {
+            LOG (WARNING) << "Failed to initialize RiPRDenoiserHandler";
+        }
+        else
+        {
+            // Setup denoiser state after initialization
+            denoiserHandler_->setupState (renderContext_->getCudaStream());
+            LOG (INFO) << "RiPRDenoiserHandler initialized successfully";
+        }
+    }
+
+    // Allocate launch parameters on device
+    allocateLaunchParameters();
+
+    // Initialize RNG buffer with dimensions already set from camera
+    if (renderWidth_ > 0 && renderHeight_ > 0)
+    {
+        rngBuffer_.initialize (renderContext_->getCudaContext(), cudau::BufferType::Device,
+                               renderWidth_, renderHeight_);
+
+        // Initialize RNG states
+        std::mt19937_64 rng (591842031321323413);
         rngBuffer_.map();
         for (int y = 0; y < renderHeight_; ++y)
         {
             for (int x = 0; x < renderWidth_; ++x)
             {
-                shared::PCG32RNG& rng = rngBuffer_ (x, y);
-                rng.setState (seed + (y * renderWidth_ + x) * 1234567);
+                rngBuffer_ (x, y).setState (rng());
             }
         }
         rngBuffer_.unmap();
 
-        // Initialize G-buffers (double buffered, matching sample code pattern)
-        for (int i = 0; i < 2; ++i)
-        {
-            gBuffer0_[i].initialize2D (
-                cuContext, cudau::ArrayElementType::UInt32,
-                (sizeof (ripr_shared::GBuffer0Elements) + 3) / 4,
-                cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
-                renderWidth_, renderHeight_, 1);
-
-            gBuffer1_[i].initialize2D (
-                cuContext, cudau::ArrayElementType::UInt32,
-                (sizeof (ripr_shared::GBuffer1Elements) + 3) / 4,
-                cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
-                renderWidth_, renderHeight_, 1);
-        }
-        LOG (DBUG) << "G-buffers initialized";
-
-        // Initialize pick info buffers (double buffered for temporal stability)
-        ripr_shared::PickInfo initPickInfo = {};
-        initPickInfo.hit = false;
-        initPickInfo.instSlot = 0xFFFFFFFF;
-        initPickInfo.geomInstSlot = 0xFFFFFFFF;
-        initPickInfo.matSlot = 0xFFFFFFFF;
-        initPickInfo.primIndex = 0xFFFFFFFF;
-        initPickInfo.positionInWorld = Point3D (0.0f);
-        initPickInfo.normalInWorld = Normal3D (0.0f);
-        initPickInfo.albedo = RGB (0.0f);
-        initPickInfo.emittance = RGB (0.0f);
-
-        for (int i = 0; i < 2; ++i)
-        {
-            pickInfoBuffers_[i].initialize (cuContext, cudau::BufferType::Device, 1, initPickInfo);
-        }
-        LOG (DBUG) << "Pick info buffers initialized";
-
-        // Now populate static launch parameters with buffer pointers
-        // IMPORTANT: Initialize ALL fields to avoid accessing uninitialized memory
-        memset (&staticPlp_, 0, sizeof (staticPlp_)); // Zero initialize everything first
-
-        staticPlp_.imageSize = make_int2 (renderWidth_, renderHeight_);
-        staticPlp_.rngBuffer = rngBuffer_.getBlockBuffer2D();
-
-        // Setup G-buffers
-        for (int i = 0; i < 2; ++i)
-        {
-            staticPlp_.GBuffer0[i] = gBuffer0_[i].getSurfaceObject (0);
-            staticPlp_.GBuffer1[i] = gBuffer1_[i].getSurfaceObject (0);
-        }
-
-        // Setup pick info buffers
-        staticPlp_.pickInfos[0] = pickInfoBuffers_[0].getDevicePointer();
-        staticPlp_.pickInfos[1] = pickInfoBuffers_[1].getDevicePointer();
-
-        // Initialize material and instance buffers to empty (will be set when models are loaded)
-        staticPlp_.disneyMaterialBuffer = shared::ROBuffer<shared::DisneyData>();
-        staticPlp_.instanceDataBufferArray[0] = shared::ROBuffer<ripr::RiPRNodeData>();
-        staticPlp_.instanceDataBufferArray[1] = shared::ROBuffer<ripr::RiPRNodeData>();
-        
-        // Set geometry instance data buffer if model handler has already initialized it
-        if (modelHandler_) {
-            auto* buffer = modelHandler_->getGeometryInstanceDataBuffer();
-            if (buffer && buffer->isInitialized()) {
-                staticPlp_.geometryInstanceDataBuffer = buffer->getROBuffer<shared::enableBufferOobCheck>();
-                LOG(INFO) << "Set geometry instance data buffer in static launch parameters";
-            } else {
-                staticPlp_.geometryInstanceDataBuffer = shared::ROBuffer<ripr::RiPRSurfaceData>();
-            }
-        } else {
-            staticPlp_.geometryInstanceDataBuffer = shared::ROBuffer<ripr::RiPRSurfaceData>();
-        }
-
-        // Initialize light distribution to empty
-        staticPlp_.lightInstDist = shared::LightDistribution();
-
-        // Initialize environment map structures
-        staticPlp_.envLightImportanceMap = shared::RegularConstantContinuousDistribution2D();
-        staticPlp_.envLightTexture = 0; // No texture initially
-
-        // Update accumulation buffer references from render handler if available
-        if (renderHandler_)
-        {
-            staticPlp_.beautyAccumBuffer = renderHandler_->getBeautyAccumSurfaceObject();
-            staticPlp_.albedoAccumBuffer = renderHandler_->getAlbedoAccumSurfaceObject();
-            staticPlp_.normalAccumBuffer = renderHandler_->getNormalAccumSurfaceObject();
-            staticPlp_.motionAccumBuffer = renderHandler_->getMotionAccumSurfaceObject();
-        }
+        LOG (INFO) << "RNG buffer initialized for " << renderWidth_ << "x" << renderHeight_;
+    }
+    else
+    {
+        LOG (WARNING) << "Invalid render dimensions for RNG buffer initialization";
     }
 
-    // Now allocate and upload launch parameters with populated data
-    allocateLaunchParameters();
-
-    // Initialize camera
-    lastCamera_.aspect = static_cast<float> (renderWidth_) / renderHeight_;
-    lastCamera_.fovY = 45.0f * pi_v<float> / 180.0f;
-    lastCamera_.position = Point3D (0, 0, 5);
-    lastCamera_.orientation.c0 = Vector3D (1, 0, 0);
-    lastCamera_.orientation.c1 = Vector3D (0, 1, 0);
-    lastCamera_.orientation.c2 = Vector3D (0, 0, 1);
-    prevCamera_ = lastCamera_;
-
-    isInitialized_ = true;
-    LOG (DBUG) << "RiPREngine initialized successfully";
+    gbuffers_.initialize (renderContext_->getCudaContext(), renderWidth_, renderHeight_);
 }
 
+#if 1
+// GBuffers implementation
+void RiPREngine::GBuffers::initialize (CUcontext cuContext, uint32_t width, uint32_t height)
+{
+    for (int i = 0; i < 2; ++i)
+    {
+        gBuffer0[i].initialize2D (
+            cuContext, cudau::ArrayElementType::UInt32, (sizeof (ripr_shared::GBuffer0Elements) + 3) / 4,
+            cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+            width, height, 1);
+        gBuffer1[i].initialize2D (
+            cuContext, cudau::ArrayElementType::UInt32, (sizeof (ripr_shared::GBuffer1Elements) + 3) / 4,
+            cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+            width, height, 1);
+    }
+    LOG (INFO) << "G-buffers initialized";
+}
+
+void RiPREngine::GBuffers::resize (uint32_t width, uint32_t height)
+{
+    for (int i = 0; i < 2; ++i)
+    {
+        gBuffer0[i].resize (width, height);
+        gBuffer1[i].resize (width, height);
+    }
+    LOG (INFO) << "G-buffers resized to " << width << "x" << height;
+}
+
+void RiPREngine::GBuffers::finalize()
+{
+    for (int i = 1; i >= 0; --i)
+    {
+        gBuffer1[i].finalize();
+        gBuffer0[i].finalize();
+    }
+    LOG (INFO) << "G-buffers finalized";
+}
+
+#endif
 void RiPREngine::cleanup()
 {
     if (!isInitialized_)
@@ -205,49 +173,91 @@ void RiPREngine::cleanup()
         return;
     }
 
-    LOG (DBUG) << "Cleaning up RiPREngine";
-    
-    // IMPORTANT: Cleanup order matters!
-    // 1. First clear handlers to destroy all geometry instances and acceleration structures
-    //    This ensures all references to materials are removed
-    if (sceneHandler_)
+    LOG (INFO) << "RiPREngine::cleanup()";
+
+    //// Clean up device memory
+    // if (plpOnDevice_)
+    //{
+    //     try {
+    //         CUDADRV_CHECK(cuMemFree(plpOnDevice_));
+    //     } catch (...) {
+    //         LOG(WARNING) << "Failed to free plpOnDevice_";
+    //     }
+    //     plpOnDevice_ = 0;
+    // }
+    gbuffers_.finalize();
+
+    // Free device memory
+    if (static_plp_on_device_)
     {
-        sceneHandler_->clear();
+        CUDADRV_CHECK (cuMemFree (static_plp_on_device_));
+        static_plp_on_device_ = 0;
     }
-    
-    // 2. Then destroy pipelines (which reference the default material)
-    if (gbufferPipeline_)
+    if (per_frame_plp_on_device_)
     {
-        gbufferPipeline_->destroy();
-        gbufferPipeline_.reset();
+        CUDADRV_CHECK (cuMemFree (per_frame_plp_on_device_));
+        per_frame_plp_on_device_ = 0;
     }
+    if (plp_on_device_)
+    {
+        CUDADRV_CHECK (cuMemFree (plp_on_device_));
+        plp_on_device_ = 0;
+    }
+
+    // Clean up pipeline
 
     if (pathTracePipeline_)
     {
-        pathTracePipeline_->destroy();
+        if (pathTracePipeline_->sbt.isInitialized())
+            pathTracePipeline_->sbt.finalize();
+
+        for (auto& pair : pathTracePipeline_->programs)
+            pair.second.destroy();
+
+        for (auto& pair : pathTracePipeline_->hitPrograms)
+            pair.second.destroy();
+
+        for (auto& pair : pathTracePipeline_->entryPoints)
+            pair.second.destroy();
+
+        if (pathTracePipeline_->optixModule)
+            pathTracePipeline_->optixModule.destroy();
+
+        if (pathTracePipeline_->optixPipeline)
+            pathTracePipeline_->optixPipeline.destroy();
+
         pathTracePipeline_.reset();
     }
-    
-    // 3. Finally destroy the default material
-    if (defaultMaterial_) {
-        defaultMaterial_.destroy();
+
+    // Clean up handlers
+    if (renderHandler_)
+    {
+        renderHandler_->finalize();
+        renderHandler_.reset();
     }
 
-    // Clean up launch parameters (matching sample code)
-    if (plpOnDevice_)
+    if (modelHandler_)
     {
-        CUDADRV_CHECK (cuMemFree (plpOnDevice_));
-        plpOnDevice_ = 0;
+        modelHandler_->finalize();
+        modelHandler_.reset();
     }
-    if (staticPlpOnDevice_)
+
+    if (sceneHandler_)
     {
-        CUDADRV_CHECK (cuMemFree (staticPlpOnDevice_));
-        staticPlpOnDevice_ = 0;
+        sceneHandler_->finalize();
+        sceneHandler_.reset();
     }
-    if (perFramePlpOnDevice_)
+
+    if (materialHandler_)
     {
-        CUDADRV_CHECK (cuMemFree (perFramePlpOnDevice_));
-        perFramePlpOnDevice_ = 0;
+        materialHandler_->finalize();
+        materialHandler_.reset();
+    }
+
+    // Clean up scene
+    if (scene_)
+    {
+        scene_.destroy();
     }
 
     // Clean up RNG buffer
@@ -256,74 +266,90 @@ void RiPREngine::cleanup()
         rngBuffer_.finalize();
     }
 
-    // Clean up G-buffers
-    for (int i = 1; i >= 0; --i)
-    {
-        if (gBuffer1_[i].isInitialized())
-        {
-            gBuffer1_[i].finalize();
-        }
-        if (gBuffer0_[i].isInitialized())
-        {
-            gBuffer0_[i].finalize();
-        }
-    }
-
-    // Clean up pick info buffers
-    for (int i = 1; i >= 0; --i)
-    {
-        if (pickInfoBuffers_[i].isInitialized())
-        {
-            pickInfoBuffers_[i].finalize();
-        }
-    }
-
-    // Clean up handlers
-    // Note: Scene is destroyed in BaseRenderingEngine::cleanup()
+    // Clean up RiPR-specific denoiser handler
     if (denoiserHandler_)
     {
         denoiserHandler_->finalize();
         denoiserHandler_.reset();
     }
 
-    if (renderHandler_)
+    // Clean up light probability computation module
+    if (computeProbTex_.cudaModule)
     {
-        renderHandler_->finalize();
-        renderHandler_.reset();
+        try
+        {
+            CUDADRV_CHECK (cuModuleUnload (computeProbTex_.cudaModule));
+        }
+        catch (...)
+        {
+            LOG (WARNING) << "Failed to unload compute_light_probs module";
+        }
+        computeProbTex_.cudaModule = nullptr;
     }
 
-    if (areaLightHandler_)
-    {
-        areaLightHandler_->finalize();
-        areaLightHandler_.reset();
-    }
+    // TODO: Clean up RiPR-specific resources
+    // - Temporal buffers
+    // - Light sampling structures
 
-    // Explicitly clear handlers before resetting to ensure proper cleanup
-    if (sceneHandler_)
-    {
-        sceneHandler_->clear();
-        sceneHandler_.reset();
-    }
-    
-    if (materialHandler_)
-    {
-        materialHandler_->clear();
-        materialHandler_.reset();
-    }
-    
-    if (modelHandler_)
-    {
-        modelHandler_->clear();
-        modelHandler_.reset();
-    }
-
-    // Call base class cleanup to destroy scene and reset state
+    // Call base class cleanup
     BaseRenderingEngine::cleanup();
-    
-    LOG (DBUG) << "RiPREngine cleanup complete";
 }
 
 void RiPREngine::addGeometry (sabi::RenderableNode node)
+{
+    LOG (INFO) << "RiPREngine::addGeometry()";
+
+    if (!node)
+    {
+        LOG (WARNING) << "Invalid RenderableNode";
+        return;
+    }
+
+    if (!modelHandler_)
+    {
+        LOG (WARNING) << "Model handler not initialized";
+        return;
+    }
+
+    // Create a weak reference to pass to the model handler
+    sabi::RenderableWeakRef weakRef = node;
+
+    // Add the model through the model handler
+    modelHandler_->addCgModel (weakRef);
+
+    LOG (INFO) << "Added geometry: " << node->getName();
+
+    // Get the model that was just created and update its material hit groups
+    // This is necessary because materials are created during addCgModel
+    // but pipelines/hit groups are already set up by this point
+    RiPRModelPtr newModel = modelHandler_->getRiPRModel (node->getClientID());
+    if (newModel)
+    {
+        updateMaterialHitGroups (newModel);
+    }
+
+    // Update SBT after adding new geometry
+    updateSBT();
+
+    // Reset accumulation when scene changes
+    restartRender_ = true;
+
+    // TODO: Additional RiPR-specific handling
+    // - Update light lists
+    // - Invalidate temporal history
+}
+
+void RiPREngine::clearScene()
+{
+    LOG (INFO) << "RiPREngine::clearScene() - STUB";
+
+    // TODO: Implement RiPR scene clearing
+    // - Clear acceleration structures
+    // - Reset temporal buffers
+    // - Clear light lists
+}
+
+void RiPREngine::render (const mace::InputEvent& input, bool updateMotion, uint32_t frameNumber)
 {
     if (!isInitialized_)
     {
@@ -331,247 +357,134 @@ void RiPREngine::addGeometry (sabi::RenderableNode node)
         return;
     }
 
-    LOG (DBUG) << "Adding geometry to RiPREngine: " << node->getName();
-
-    // Process the node through the scene handler
-    // This will create the RiPRModel and RiPRNode
-    if (sceneHandler_)
+    if (!renderContext_)
     {
-        sceneHandler_->processRenderableNode(node);
-        
-        // Update geometry instance data buffer with surface data from model handler
-        if (modelHandler_) {
-            modelHandler_->updateGeometryInstanceDataBuffer();
-        }
-        
-        // Build/update acceleration structures after adding geometry
-        sceneHandler_->buildAccelerationStructures();
-        
-        // Update SBT to include the new geometry
-        updateSBT();
-        
-        
-        // Update traversable handle from scene
-        perFramePlp_.travHandle = sceneHandler_->getTraversableHandle();
-        
-        // Mark that we need to restart accumulation
-        restartRender_ = true;
-        perFramePlp_.numAccumFrames = 0;
-        
-        LOG (INFO) << "Added geometry: " << node->getName() 
-                   << " (Total nodes: " << sceneHandler_->getNodeCount() 
-                   << ", traversable: " << perFramePlp_.travHandle << ")";
-    }
-    else
-    {
-        LOG (WARNING) << "Scene handler not initialized";
-    }
-}
-
-void RiPREngine::clearScene()
-{
-    if (!isInitialized_)
-    {
+        LOG (WARNING) << "No render context available";
         return;
     }
 
-    LOG (DBUG) << "Clearing RiPREngine scene";
-
-    // Clear all nodes and models through scene handler
-    if (sceneHandler_)
+    if (!pathTracePipeline_ || !pathTracePipeline_->optixPipeline)
     {
-        sceneHandler_->clear();
-    }
-
-    // Reset scene traversable handle  
-    perFramePlp_.travHandle = 0;  // Will be 0 after clearing
-    
-    // Update SBT after clearing the scene
-    updateSBT();
-
-    // Mark that we need to restart accumulation
-    restartRender_ = true;
-    perFramePlp_.numAccumFrames = 0;
-    
-    LOG (INFO) << "Scene cleared";
-}
-
-void RiPREngine::resize (uint32_t width, uint32_t height)
-{
-    if (!isInitialized_ || width == 0 || height == 0)
-    {
-        return;
-    }
-
-    LOG (DBUG) << "Resizing RiPREngine from " << renderWidth_ << "x" << renderHeight_
-               << " to " << width << "x" << height;
-
-    renderWidth_ = width;
-    renderHeight_ = height;
-
-    CUcontext cuContext = renderContext_->getCudaContext();
-
-    // Resize RNG buffer
-    if (rngBuffer_.isInitialized())
-    {
-        rngBuffer_.finalize();
-    }
-    rngBuffer_.initialize (cuContext, cudau::BufferType::Device, width, height);
-    uint64_t seed = 12345;
-    rngBuffer_.map();
-    for (int y = 0; y < height; ++y)
-    {
-        for (int x = 0; x < width; ++x)
-        {
-            shared::PCG32RNG& rng = rngBuffer_ (x, y);
-            rng.setState (seed + (y * width + x) * 1234567);
-        }
-    }
-    rngBuffer_.unmap();
-
-    // Resize G-buffers
-    for (int i = 0; i < 2; ++i)
-    {
-        if (gBuffer0_[i].isInitialized())
-        {
-            gBuffer0_[i].resize (width, height);
-        }
-        else
-        {
-            gBuffer0_[i].initialize2D (
-                cuContext, cudau::ArrayElementType::UInt32,
-                (sizeof (ripr_shared::GBuffer0Elements) + 3) / 4,
-                cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
-                width, height, 1);
-        }
-
-        if (gBuffer1_[i].isInitialized())
-        {
-            gBuffer1_[i].resize (width, height);
-        }
-        else
-        {
-            gBuffer1_[i].initialize2D (
-                cuContext, cudau::ArrayElementType::UInt32,
-                (sizeof (ripr_shared::GBuffer1Elements) + 3) / 4,
-                cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
-                width, height, 1);
-        }
-    }
-
-    // Resize render handler
-    if (renderHandler_)
-    {
-        renderHandler_->resize (width, height);
-    }
-
-    // Resize denoiser handler
-    if (denoiserHandler_)
-    {
-        denoiserHandler_->resize (width, height);
-        // Setup state after resize
-        denoiserHandler_->setupState (renderContext_->getCudaStream());
-    }
-
-    // Update camera aspect ratio
-    lastCamera_.aspect = static_cast<float> (width) / height;
-
-    // Mark for render restart
-    restartRender_ = true;
-    LOG (DBUG) << "RiPREngine resize complete";
-}
-
-void RiPREngine::render (const mace::InputEvent& input, bool updateMotion, uint32_t frameNumber)
-{
-    if (!isInitialized_)
-    {
+        LOG (WARNING) << "Path tracing pipeline not ready";
         return;
     }
 
     // Get the CUDA stream from StreamChain for better GPU/CPU overlap
     CUstream stream = streamChain_->waitAvailableAndGetCurrentStream();
-    
+
     // Get current timer
     auto timer = getCurrentTimer();
     if (!timer)
     {
-        LOG(WARNING) << "GPU timer not available for " << getName();
-        // Continue without timing
-    }
-    
-    // Start frame timer
-    if (timer)
-    {
-        timer->frame.start(stream);
+        LOG (WARNING) << "GPU timer not available for " << getName();
+        return;
     }
 
-    // Ensure launch parameters are initialized on first render
-    static bool firstRender = true;
-    if (firstRender)
-    {
-        // Force initial upload of all launch parameters
-        updateLaunchParameters (input);
-        restartRender_ = true; // Force static parameter upload
-        firstRender = false;
-    }
+    // Start frame timer
+    timer->frame.start (stream);
 
     // Update camera if needed
+    updateCameraBody (input);
 
-    auto camera = renderContext_->getCamera();
-    if (camera->isDirty())
+    // Handle motion updates if requested
+    if (updateMotion && sceneHandler_)
     {
-        updateCameraBody (input);
-
-        lastInput_ = input;
+        bool motionUpdated = sceneHandler_->updateMotion();
+        if (motionUpdated) restartRender_ = true;
     }
 
-    // Update launch parameters
+    // Update scene if needed
+    if (sceneHandler_)
+    {
+        // TODO: Update IAS when scene handler supports it
+        // sceneHandler_->updateIAS();
+    }
+
+    // Reset accumulation if needed
+    if (restartRender_)
+    {
+        numAccumFrames_ = 0;
+        restartRender_ = false;
+        LOG (DBUG) << "Restarting accumulation";
+    }
+
+    // Update launch parameters with current state
     updateLaunchParameters (input);
 
-    // Start path trace timer (includes both G-buffer and path tracing)
-    if (timer)
+    // Render GBuffer first (for temporal reprojection and other effects)
+    renderGBuffer (stream);
+
+    // Synchronize after GBuffer launch to ensure pick info is ready
+    CUDADRV_CHECK (cuStreamSynchronize (stream));
+
+    // Output debug info for GBuffer (if enabled)
+    // if (enableGBufferDebug_)
+    if (true)
     {
-        timer->pathTrace.start(stream);
-    }
-    
-    renderGBuffer(stream);
-    
-    // Synchronize to ensure G-buffer is complete before path tracing
-    CUDADRV_CHECK(cuStreamSynchronize(stream));
-    
-    renderPathTracing(stream);
-    
-    // Stop path trace timer
-    if (timer)
-    {
-        timer->pathTrace.stop(stream);
+        outputGBufferDebugInfo (stream);
     }
 
+    // Launch path tracing kernel - it will handle empty scenes and render the environment
+    timer->pathTrace.start (stream);
+    {
+        // Log launch parameters for debugging
+        /* LOG(DBUG) << "Launching OptiX pipeline:"
+                   << " dimensions=" << renderWidth_ << "x" << renderHeight_
+                   << " numAccumFrames=" << numAccumFrames_
+                   << " IAS handle=" << static_plp_.travHandle;*/
+
+        // Launch the path tracing pipeline with exact render dimensions
+        try
+        {
+            pathTracePipeline_->optixPipeline.launch (
+                stream,
+                plp_on_device_,
+                renderWidth_,  // Use exact width, not rounded
+                renderHeight_, // Use exact height, not rounded
+                1              // depth
+            );
+        }
+        catch (const std::exception& e)
+        {
+            LOG (WARNING) << "OptiX launch failed: " << e.what();
+            timer->frame.stop (stream);
+            return;
+        }
+    }
+    timer->pathTrace.stop (stream);
+
+    // TODO: Run temporal resampling
+    // TODO: Run spatial resampling
+
+    // Update accumulation counter
+    numAccumFrames_++;
+
+    // Copy accumulation buffers to linear buffers for display
+    if (renderHandler_ && renderHandler_->isInitialized())
+    {
+        // Copy accumulation buffers to linear buffers
+        renderHandler_->copyAccumToLinearBuffers (stream);
+
+        // Denoise if denoiser is available
+        bool isNewSequence = (numAccumFrames_ == 1);
+        renderHandler_->denoise (stream, isNewSequence, denoiserHandler_.get(), timer);
+    }
+
+    // Update camera sensor with rendered image
     updateCameraSensor();
-    
-    // Stop frame timer
-    if (timer)
-    {
-        timer->frame.stop(stream);
-    }
 
-    // Update frame counter
+    // Stop frame timer
+    timer->frame.stop (stream);
+
+    // Increment frame counter and report timings periodically
     frameCounter_++;
-    
-    // Report timings periodically
-    reportTimings(frameCounter_);
-    
+    reportTimings (frameCounter_);
+
     // Switch to next timer buffer for next frame
     switchTimerBuffer();
-    
+
     // Swap StreamChain buffers for next frame
     streamChain_->swap();
-
-    // Update motion state
-    if (updateMotion)
-    {
-        prevCamera_ = lastCamera_;
-    }
 }
 
 void RiPREngine::onEnvironmentChanged()
@@ -582,48 +495,12 @@ void RiPREngine::onEnvironmentChanged()
     environmentDirty_ = true;
 
     // Reset accumulation since lighting has changed
+    numAccumFrames_ = 0;
     restartRender_ = true;
-    perFramePlp_.numAccumFrames = 0;
 
-    // Update environment texture immediately
-    if (renderContext_)
-    {
-        auto& handlers = renderContext_->getHandlers();
-        if (handlers.skyDomeHandler && handlers.skyDomeHandler->hasEnvironmentTexture())
-        {
-            staticPlp_.envLightTexture = handlers.skyDomeHandler->getEnvironmentTexture();
-
-            // Get the environment light importance map
-            handlers.skyDomeHandler->getImportanceMap().getDeviceType (&staticPlp_.envLightImportanceMap);
-
-            LOG (INFO) << "Environment texture updated: " << std::hex << staticPlp_.envLightTexture << std::dec;
-        }
-        else
-        {
-            // Clear environment if no texture
-            staticPlp_.envLightTexture = 0;
-            staticPlp_.envLightImportanceMap = shared::RegularConstantContinuousDistribution2D();
-            LOG (INFO) << "Environment texture cleared";
-        }
-
-        // Upload the updated static parameters to device immediately
-        if (staticPlpOnDevice_)
-        {
-            CUcontext prevContext;
-            CUDADRV_CHECK (cuCtxGetCurrent (&prevContext));
-            CUDADRV_CHECK (cuCtxSetCurrent (renderContext_->getCudaContext()));
-
-            CUDADRV_CHECK (cuMemcpyHtoD (staticPlpOnDevice_, &staticPlp_, sizeof (staticPlp_)));
-
-            // Also update the main plp structure
-            plp_.s = reinterpret_cast<ripr_shared::StaticPipelineLaunchParameters*> (staticPlpOnDevice_);
-            CUDADRV_CHECK (cuMemcpyHtoD (plpOnDevice_, &plp_, sizeof (plp_)));
-
-            CUDADRV_CHECK (cuCtxSetCurrent (prevContext));
-
-            LOG (INFO) << "Environment parameters uploaded to device";
-        }
-    }
+    // TODO: When temporal resampling is implemented:
+    // - Invalidate temporal reservoir history
+    // - Reset light sampling structures
 
     LOG (INFO) << "Environment changed - accumulation reset";
 }
@@ -640,38 +517,51 @@ void RiPREngine::setupPipelines()
 
     optixu::Context optixContext = renderContext_->getOptiXContext();
 
-    // Create G-buffer pipeline
-    gbufferPipeline_ = std::make_shared<engine_core::RenderPipeline<GBufferEntryPoint>>();
-    gbufferPipeline_->optixPipeline = optixContext.createPipeline();
-
-    // Configure G-buffer pipeline options
-    gbufferPipeline_->optixPipeline.setPipelineOptions (
-        std::max ({ripr_shared::PrimaryRayPayloadSignature::numDwords}), // Payload dwords for G-buffer
-        optixu::calcSumDwords<float2>(),
-        "ripr_plp", // Pipeline launch parameters name - matches CUDA code
-        sizeof (ripr_shared::PipelineLaunchParameters),
-        OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-        OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
-        OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
-
-    LOG (INFO) << "RiPR G-buffer pipeline configured";
+    // Create default material for the scene (using inherited member from BaseRenderingEngine)
+    defaultMaterial_ = optixContext.createMaterial();
+    // Note: optixu::Scene doesn't have setMaterialDefault, materials are set per geometry instance
 
     // Create path tracing pipeline
-    pathTracePipeline_ = std::make_shared<engine_core::RenderPipeline<PathTracingEntryPoint>>();
+    pathTracePipeline_ = std::make_shared<engine_core::RenderPipeline<engine_core::PathTracingEntryPoint>>();
     pathTracePipeline_->optixPipeline = optixContext.createPipeline();
+
+    // Calculate max payload size for path tracing
+    uint32_t maxPayloadDwords = std::max (
+        ripr_shared::SearchRayPayloadSignature::numDwords,
+        ripr_shared::VisibilityRayPayloadSignature::numDwords);
 
     // Configure path tracing pipeline options
     pathTracePipeline_->optixPipeline.setPipelineOptions (
-        std::max ({ripr_shared::PathTraceRayPayloadSignature::numDwords,
-                   ripr_shared::VisibilityRayPayloadSignature::numDwords}), // Payload dwords for path tracing
-        optixu::calcSumDwords<float2>(),                                       // Attribute dwords for barycentrics
-        "ripr_plp",                                                            // Pipeline launch parameters name - matches CUDA code
+        maxPayloadDwords,
+        optixu::calcSumDwords<float2>(), // Attribute dwords for barycentrics
+        "ripr_plp",                   // Pipeline launch parameters name - matches CUDA code
         sizeof (ripr_shared::PipelineLaunchParameters),
         OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
         OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
-    LOG (INFO) << "RiPR path tracing pipeline configured";
+    LOG (INFO) << "RiPR path tracing pipeline configured with max payload dwords: " << maxPayloadDwords;
+
+    // Create GBuffer pipeline
+    gbufferPipeline_ = std::make_shared<engine_core::RenderPipeline<GBufferEntryPoint>>();
+    gbufferPipeline_->optixPipeline = optixContext.createPipeline();
+
+    // Configure GBuffer pipeline options
+    // GBuffer needs payload for primary ray information
+    uint32_t gbufferPayloadDwords = ripr_shared::PrimaryRayPayloadSignature::numDwords;
+
+    gbufferPipeline_->optixPipeline.setPipelineOptions (
+        gbufferPayloadDwords,
+        optixu::calcSumDwords<float2>(), // Attribute dwords for barycentrics
+        "ripr_plp",                   // Same pipeline launch parameters name
+        sizeof (ripr_shared::PipelineLaunchParameters),
+        OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
+        OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
+        OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
+
+    LOG (INFO) << "RiPR GBuffer pipeline configured with payload dwords: " << gbufferPayloadDwords;
+
+    // Ray type configuration is now handled in the pipeline setup
 
     // Create modules
     createModules();
@@ -693,178 +583,6 @@ void RiPREngine::setupPipelines()
 
     // Create shader binding tables
     createSBT();
-}
-
-void RiPREngine::createModules()
-{
-    LOG (INFO) << "RiPREngine::createModules()";
-
-    if (!ptxManager_ || !gbufferPipeline_ || !gbufferPipeline_->optixPipeline ||
-        !pathTracePipeline_ || !pathTracePipeline_->optixPipeline)
-    {
-        LOG (WARNING) << "PTXManager or Pipelines not ready";
-        return;
-    }
-
-    // Load PTX for G-buffer kernels
-    std::vector<char> gbufferPtxData = ptxManager_->getPTXData ("optix_ripr_gbuffer");
-    if (gbufferPtxData.empty())
-    {
-        LOG (WARNING) << "Failed to load PTX for optix_ripr_gbuffer";
-        return;
-    }
-
-    // Create module for G-buffer pipeline
-    std::string gbufferPtxString (gbufferPtxData.begin(), gbufferPtxData.end());
-    gbufferPipeline_->optixModule = gbufferPipeline_->optixPipeline.createModuleFromPTXString (
-        gbufferPtxString,
-        OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-        DEBUG_SELECT (OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
-        DEBUG_SELECT (OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
-
-    LOG (INFO) << "RiPR G-buffer module created successfully";
-
-    // Load PTX for path tracing kernels
-    std::vector<char> pathTracePtxData = ptxManager_->getPTXData ("optix_ripr_kernels");
-    if (pathTracePtxData.empty())
-    {
-        LOG (WARNING) << "Failed to load PTX for optix_ripr_kernels";
-        return;
-    }
-
-    // Create module for path tracing pipeline
-    std::string pathTracePtxString (pathTracePtxData.begin(), pathTracePtxData.end());
-    pathTracePipeline_->optixModule = pathTracePipeline_->optixPipeline.createModuleFromPTXString (
-        pathTracePtxString,
-        OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-        DEBUG_SELECT (OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
-        DEBUG_SELECT (OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
-
-    LOG (INFO) << "RiPR path tracing module created successfully";
-}
-
-void RiPREngine::createPrograms()
-{
-    LOG (INFO) << "RiPREngine::createPrograms()";
-
-    if (!gbufferPipeline_ || !gbufferPipeline_->optixModule || !gbufferPipeline_->optixPipeline ||
-        !pathTracePipeline_ || !pathTracePipeline_->optixModule || !pathTracePipeline_->optixPipeline)
-    {
-        LOG (WARNING) << "Pipelines not ready";
-        return;
-    }
-
-    optixu::Module emptyModule; // For empty programs
-
-    // G-Buffer Pipeline Programs
-    {
-        auto& p = gbufferPipeline_->optixPipeline;
-        auto& m = gbufferPipeline_->optixModule;
-
-        // Create ray generation program for G-buffer setup
-        gbufferPipeline_->entryPoints[GBufferEntryPoint::setupGBuffers] =
-            p.createRayGenProgram (m, RT_RG_NAME_STR ("setupGBuffers"));
-
-        // Create miss program for G-buffer
-        gbufferPipeline_->programs[RT_MS_NAME_STR ("setupGBuffers")] =
-            p.createMissProgram (m, RT_MS_NAME_STR ("setupGBuffers"));
-
-        // Create hit group for G-buffer generation
-        gbufferPipeline_->hitPrograms[RT_CH_NAME_STR("setupGBuffers")] =
-            p.createHitProgramGroupForTriangleIS (
-                m, RT_CH_NAME_STR("setupGBuffers"),
-                emptyModule, nullptr);
-
-        // Set the entry point
-        gbufferPipeline_->setEntryPoint (GBufferEntryPoint::setupGBuffers);
-
-        // Configure miss programs for ray types
-        p.setNumMissRayTypes (ripr_shared::maxNumRayTypes);
-        p.setMissProgram (0, // Primary ray type
-                          gbufferPipeline_->programs.at (RT_MS_NAME_STR ("setupGBuffers")));
-        p.setMissProgram (1, // Shadow ray type (not used in G-buffer but needs to be set)
-                          gbufferPipeline_->programs.at (RT_MS_NAME_STR ("setupGBuffers")));
-
-        LOG (INFO) << "G-buffer pipeline programs created";
-    }
-    
-    // Create default material and set hit groups (following working sample pattern)
-    // This must be done AFTER hit programs are created but BEFORE any geometry is added
-    {
-        optixu::Context optixContext = renderContext_->getOptiXContext();
-        defaultMaterial_ = optixContext.createMaterial();
-        
-        // Create empty hit group for unused ray types (exactly as in sample code)
-        gbufferPipeline_->hitPrograms["emptyHitGroup"] = 
-            gbufferPipeline_->optixPipeline.createEmptyHitProgramGroup();
-        
-        // Set hit group for G-buffer pipeline primary ray type
-        defaultMaterial_.setHitGroup(ripr_shared::GBufferRayType::Primary, 
-                                    gbufferPipeline_->hitPrograms.at(RT_CH_NAME_STR("setupGBuffers")));
-        
-        // Set empty hit groups for all other ray types (exactly as in sample code)
-        for (uint32_t rayType = ripr_shared::GBufferRayType::NumTypes; 
-             rayType < ripr_shared::maxNumRayTypes; ++rayType) {
-            defaultMaterial_.setHitGroup(rayType, gbufferPipeline_->hitPrograms.at("emptyHitGroup"));
-        }
-        
-        // Pass the default material to the scene handler
-        if (sceneHandler_) {
-            sceneHandler_->setDefaultMaterial(defaultMaterial_);
-        }
-        
-        LOG(INFO) << "Created default material with G-buffer hit groups for all ray types";
-    }
-
-    // Path Tracing Pipeline Programs
-    {
-        auto& p = pathTracePipeline_->optixPipeline;
-        auto& m = pathTracePipeline_->optixModule;
-
-        // Create ray generation program for path tracing
-        pathTracePipeline_->entryPoints[PathTracingEntryPoint::pathTrace] =
-            p.createRayGenProgram (m, RT_RG_NAME_STR ("raygen"));
-
-        // Create miss program for path tracing
-        pathTracePipeline_->programs[RT_MS_NAME_STR ("miss")] =
-            p.createMissProgram (m, RT_MS_NAME_STR ("miss"));
-
-        // Create hit group for path tracing (closest hit)
-        pathTracePipeline_->hitPrograms[RT_CH_NAME_STR ("shading")] =
-            p.createHitProgramGroupForTriangleIS (
-                m, RT_CH_NAME_STR ("shading"),
-                emptyModule, nullptr);
-
-        // Create hit group for visibility rays (any hit only)
-        pathTracePipeline_->hitPrograms[RT_AH_NAME_STR ("visibility")] =
-            p.createHitProgramGroupForTriangleIS (
-                emptyModule, nullptr,
-                m, RT_AH_NAME_STR ("visibility"));
-
-        // Create empty miss program for visibility rays
-        pathTracePipeline_->programs["emptyMiss"] = p.createMissProgram (emptyModule, nullptr);
-
-        // Set the entry point
-        pathTracePipeline_->setEntryPoint (PathTracingEntryPoint::pathTrace);
-
-        // Configure miss programs for ray types
-        p.setNumMissRayTypes (ripr_shared::maxNumRayTypes);
-        p.setMissProgram (0, // Closest ray type
-                          pathTracePipeline_->programs.at (RT_MS_NAME_STR ("miss")));
-        p.setMissProgram (1, // Visibility ray type
-                          pathTracePipeline_->programs.at ("emptyMiss"));
-
-        LOG (INFO) << "Path tracing pipeline programs created";
-        
-        // CRITICAL: Set path tracing hit groups on the default material
-        // This was missing and is why the closest hit shader was never called!
-        defaultMaterial_.setHitGroup(ripr_shared::PathTracingRayType::Closest,
-                                    pathTracePipeline_->hitPrograms.at(RT_CH_NAME_STR("shading")));
-        defaultMaterial_.setHitGroup(ripr_shared::PathTracingRayType::Visibility,
-                                    pathTracePipeline_->hitPrograms.at(RT_AH_NAME_STR("visibility")));
-        
-        LOG(INFO) << "Set path tracing hit groups on default material";
-    }
 }
 
 void RiPREngine::initializeLightProbabilityKernels()
@@ -910,7 +628,210 @@ void RiPREngine::initializeLightProbabilityKernels()
     computeProbTex_.computeTriangleProbBuffer = cudau::Kernel (
         computeProbTex_.cudaModule, "computeTriangleProbBuffer", cudau::dim3 (32), 0);
 
-    LOG (INFO) << "Light probability kernels initialized successfully";
+    computeProbTex_.computeGeomInstProbBuffer = cudau::Kernel (
+        computeProbTex_.cudaModule, "computeGeomInstProbBuffer", cudau::dim3 (32), 0);
+
+    computeProbTex_.computeInstProbBuffer = cudau::Kernel (
+        computeProbTex_.cudaModule, "computeInstProbBuffer", cudau::dim3 (32), 0);
+
+    computeProbTex_.finalizeDiscreteDistribution1D = cudau::Kernel (
+        computeProbTex_.cudaModule, "finalizeDiscreteDistribution1D", cudau::dim3 (32), 0);
+
+    computeProbTex_.test = cudau::Kernel (
+        computeProbTex_.cudaModule, "testProbabilityTexture", cudau::dim3 (32), 0);
+
+    LOG (INFO) << "Light probability computation kernels initialized successfully";
+}
+
+void RiPREngine::createModules()
+{
+    LOG (INFO) << "RiPREngine::createModules()";
+
+    if (!ptxManager_ || !pathTracePipeline_ || !pathTracePipeline_->optixPipeline ||
+        !gbufferPipeline_ || !gbufferPipeline_->optixPipeline)
+    {
+        LOG (WARNING) << "PTXManager or Pipelines not ready";
+        return;
+    }
+
+    // Load PTX for RiPR path tracing kernels
+    std::vector<char> riprPtxData = ptxManager_->getPTXData ("optix_ripr_kernels");
+    if (riprPtxData.empty())
+    {
+        LOG (WARNING) << "Failed to load PTX for optix_ripr_kernels";
+        return;
+    }
+
+    // Create module for path tracing pipeline
+    std::string riprPtxString (riprPtxData.begin(), riprPtxData.end());
+    pathTracePipeline_->optixModule = pathTracePipeline_->optixPipeline.createModuleFromPTXString (
+        riprPtxString,
+        OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+        DEBUG_SELECT (OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+        DEBUG_SELECT (OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+
+    LOG (INFO) << "RiPR path tracing module created successfully";
+
+    // Load PTX for GBuffer kernels
+    std::vector<char> gbufferPtxData = ptxManager_->getPTXData ("optix_ripr_gbuffer");
+    if (gbufferPtxData.empty())
+    {
+        LOG (WARNING) << "Failed to load PTX for optix_ripr_gbuffer";
+        return;
+    }
+
+    // Create module for GBuffer pipeline
+    std::string gbufferPtxString (gbufferPtxData.begin(), gbufferPtxData.end());
+    gbufferPipeline_->optixModule = gbufferPipeline_->optixPipeline.createModuleFromPTXString (
+        gbufferPtxString,
+        OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+        DEBUG_SELECT (OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+        DEBUG_SELECT (OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
+
+    LOG (INFO) << "RiPR GBuffer module created successfully";
+}
+
+void RiPREngine::createPrograms()
+{
+    LOG (INFO) << "RiPREngine::createPrograms()";
+
+    // Check both pipelines
+    if (!pathTracePipeline_ || !pathTracePipeline_->optixModule || !pathTracePipeline_->optixPipeline ||
+        !gbufferPipeline_ || !gbufferPipeline_->optixModule || !gbufferPipeline_->optixPipeline)
+    {
+        LOG (WARNING) << "Pipelines not ready";
+        return;
+    }
+
+    optixu::Module emptyModule; // For empty programs
+
+    // Path Tracing Pipeline Programs
+    {
+        auto& p = pathTracePipeline_->optixPipeline;
+        auto& m = pathTracePipeline_->optixModule;
+
+        // Create ray generation program for path tracing
+        pathTracePipeline_->entryPoints[engine_core::PathTracingEntryPoint::PathTrace] =
+            p.createRayGenProgram (m, RT_RG_NAME_STR ("pathTracing"));
+
+        // Create miss program for path tracing
+        pathTracePipeline_->programs[RT_MS_NAME_STR ("miss")] = p.createMissProgram (
+            m, RT_MS_NAME_STR ("miss"));
+
+        // Create hit group for shading
+        pathTracePipeline_->hitPrograms[RT_CH_NAME_STR ("shading")] = p.createHitProgramGroupForTriangleIS (
+            m, RT_CH_NAME_STR ("shading"),
+            emptyModule, nullptr);
+
+        // Create hit group for visibility rays (any hit only)
+        pathTracePipeline_->hitPrograms[RT_AH_NAME_STR ("visibility")] = p.createHitProgramGroupForTriangleIS (
+            emptyModule, nullptr,
+            m, RT_AH_NAME_STR ("visibility"));
+
+        // Create empty miss program for visibility rays
+        pathTracePipeline_->programs["emptyMiss"] = p.createMissProgram (emptyModule, nullptr);
+
+        // Set the entry point
+        pathTracePipeline_->setEntryPoint (engine_core::PathTracingEntryPoint::PathTrace);
+
+        // Configure miss programs for ray types
+        p.setNumMissRayTypes (ripr_shared::NumRayTypes);
+        p.setMissProgram (ripr_shared::RayType_Search,
+                          pathTracePipeline_->programs.at (RT_MS_NAME_STR ("miss")));
+        p.setMissProgram (ripr_shared::RayType_Visibility,
+                          pathTracePipeline_->programs.at ("emptyMiss"));
+
+        LOG (INFO) << "Path tracing pipeline programs created";
+
+        // Setup material hit groups for path tracing pipeline on the default material
+        if (defaultMaterial_)
+        {
+            // Set hit group for search rays (shading)
+            defaultMaterial_.setHitGroup (ripr_shared::RayType_Search,
+                                          pathTracePipeline_->hitPrograms.at (RT_CH_NAME_STR ("shading")));
+
+            // Set hit group for visibility rays
+            defaultMaterial_.setHitGroup (ripr_shared::RayType_Visibility,
+                                          pathTracePipeline_->hitPrograms.at (RT_AH_NAME_STR ("visibility")));
+
+            LOG (INFO) << "Path tracing material hit groups configured on default material";
+        }
+    }
+
+    // GBuffer Pipeline Programs
+    {
+        auto& p = gbufferPipeline_->optixPipeline;
+        auto& m = gbufferPipeline_->optixModule;
+
+        // Create ray generation program for GBuffer setup
+        gbufferPipeline_->entryPoints[GBufferEntryPoint_SetupGBuffers] =
+            p.createRayGenProgram (m, RT_RG_NAME_STR ("setupGBuffers"));
+
+        // Create miss program for GBuffer
+        gbufferPipeline_->programs[RT_MS_NAME_STR ("setupGBuffers")] =
+            p.createMissProgram (m, RT_MS_NAME_STR ("setupGBuffers"));
+
+        // Create hit group for GBuffer generation
+        gbufferPipeline_->hitPrograms[RT_CH_NAME_STR ("setupGBuffers")] =
+            p.createHitProgramGroupForTriangleIS (
+                m, RT_CH_NAME_STR ("setupGBuffers"),
+                emptyModule, nullptr);
+
+        // Create empty hit group for unused ray types
+        gbufferPipeline_->hitPrograms["emptyHitGroup"] = p.createEmptyHitProgramGroup();
+
+        // Set the entry point
+        gbufferPipeline_->setEntryPoint (GBufferEntryPoint_SetupGBuffers);
+
+        // Configure miss programs for GBuffer ray types
+        p.setNumMissRayTypes (ripr_shared::GBufferRayType::NumTypes);
+        p.setMissProgram (ripr_shared::GBufferRayType::Primary,
+                          gbufferPipeline_->programs.at (RT_MS_NAME_STR ("setupGBuffers")));
+
+        LOG (INFO) << "GBuffer pipeline programs created";
+    }
+
+    // Setup material hit groups for GBuffer pipeline on the default material
+    if (defaultMaterial_)
+    {
+        // Set hit group for primary rays
+        defaultMaterial_.setHitGroup (ripr_shared::GBufferRayType::Primary,
+                                      gbufferPipeline_->hitPrograms.at (RT_CH_NAME_STR ("setupGBuffers")));
+
+        // Set empty hit groups for unused ray types
+        for (uint32_t rayType = ripr_shared::GBufferRayType::NumTypes;
+             rayType < ripr_shared::maxNumRayTypes; ++rayType)
+        {
+            defaultMaterial_.setHitGroup (rayType, gbufferPipeline_->hitPrograms.at ("emptyHitGroup"));
+        }
+
+        LOG (INFO) << "GBuffer material hit groups configured on default material";
+    }
+}
+
+void RiPREngine::linkPipelines()
+{
+    LOG (INFO) << "RiPREngine::linkPipelines()";
+
+    // Link path tracing pipeline with depth 2 (for recursive rays)
+    if (pathTracePipeline_ && pathTracePipeline_->optixPipeline)
+    {
+        // Set the scene on the pipeline
+        pathTracePipeline_->optixPipeline.setScene (scene_);
+
+        pathTracePipeline_->optixPipeline.link (2);
+        LOG (INFO) << "Path tracing pipeline linked successfully";
+    }
+
+    // Link GBuffer pipeline with depth 1 (no recursion needed)
+    if (gbufferPipeline_ && gbufferPipeline_->optixPipeline)
+    {
+        // Set the scene on the pipeline
+        gbufferPipeline_->optixPipeline.setScene (scene_);
+
+        gbufferPipeline_->optixPipeline.link (1);
+        LOG (INFO) << "GBuffer pipeline linked successfully";
+    }
 }
 
 void RiPREngine::createSBT()
@@ -929,38 +850,6 @@ void RiPREngine::createSBT()
     size_t hitGroupSbtSize = 0;
     scene_.generateShaderBindingTableLayout (&hitGroupSbtSize);
     LOG (INFO) << "Scene hit group SBT size: " << hitGroupSbtSize << " bytes";
-
-    // Create SBT for G-buffer pipeline
-    if (gbufferPipeline_ && gbufferPipeline_->optixPipeline)
-    {
-        auto& p = gbufferPipeline_->optixPipeline;
-        size_t sbtSize;
-        p.generateShaderBindingTableLayout (&sbtSize);
-
-        LOG (INFO) << "G-buffer pipeline SBT size: " << sbtSize << " bytes";
-
-        if (sbtSize > 0)
-        {
-            gbufferPipeline_->sbt.initialize (
-                cuContext, cudau::BufferType::Device, sbtSize, 1);
-            gbufferPipeline_->sbt.setMappedMemoryPersistent (true);
-            p.setShaderBindingTable (gbufferPipeline_->sbt, gbufferPipeline_->sbt.getMappedPointer());
-        }
-
-        // Set hit group SBT for G-buffer pipeline
-        if (!gbufferPipeline_->hitGroupSbt.isInitialized())
-        {
-            if (hitGroupSbtSize > 0)
-            {
-                gbufferPipeline_->hitGroupSbt.initialize (cuContext, cudau::BufferType::Device, 1, hitGroupSbtSize);
-                gbufferPipeline_->hitGroupSbt.setMappedMemoryPersistent (true);
-            }
-        }
-        gbufferPipeline_->optixPipeline.setHitGroupShaderBindingTable (
-            gbufferPipeline_->hitGroupSbt, gbufferPipeline_->hitGroupSbt.getMappedPointer());
-
-        LOG (INFO) << "G-buffer pipeline SBT created";
-    }
 
     // Create SBT for path tracing pipeline
     if (pathTracePipeline_ && pathTracePipeline_->optixPipeline)
@@ -999,11 +888,140 @@ void RiPREngine::createSBT()
 
         LOG (INFO) << "Path tracing pipeline SBT created";
     }
+
+    // Create SBT for GBuffer pipeline
+    if (gbufferPipeline_ && gbufferPipeline_->optixPipeline)
+    {
+        auto& p = gbufferPipeline_->optixPipeline;
+        size_t sbtSize;
+        p.generateShaderBindingTableLayout (&sbtSize);
+
+        LOG (INFO) << "GBuffer pipeline SBT size: " << sbtSize << " bytes";
+
+        if (sbtSize > 0)
+        {
+            gbufferPipeline_->sbt.initialize (
+                cuContext, cudau::BufferType::Device, sbtSize, 1);
+            gbufferPipeline_->sbt.setMappedMemoryPersistent (true);
+            p.setShaderBindingTable (gbufferPipeline_->sbt, gbufferPipeline_->sbt.getMappedPointer());
+        }
+
+        // Set hit group SBT for GBuffer pipeline
+        if (!gbufferPipeline_->hitGroupSbt.isInitialized())
+        {
+            if (hitGroupSbtSize > 0)
+            {
+                gbufferPipeline_->hitGroupSbt.initialize (cuContext, cudau::BufferType::Device, 1, hitGroupSbtSize);
+                gbufferPipeline_->hitGroupSbt.setMappedMemoryPersistent (true);
+            }
+            else
+            {
+                // Even with no geometry, initialize a minimal buffer
+                gbufferPipeline_->hitGroupSbt.initialize (cuContext, cudau::BufferType::Device, 1, 1);
+                gbufferPipeline_->hitGroupSbt.setMappedMemoryPersistent (true);
+            }
+            gbufferPipeline_->optixPipeline.setHitGroupShaderBindingTable (
+                gbufferPipeline_->hitGroupSbt, gbufferPipeline_->hitGroupSbt.getMappedPointer());
+        }
+
+        LOG (INFO) << "GBuffer pipeline SBT created";
+    }
+}
+
+void RiPREngine::updateMaterialHitGroups (RiPRModelPtr model)
+{
+    // OptiX Hit Groups:
+    // A hit group is a collection of programs that execute when a ray intersects geometry.
+    // Each hit group can contain up to three programs:
+    // 1. Closest Hit (CH) - Executes for the closest intersection along a ray (used for shading)
+    // 2. Any Hit (AH) - Executes for any intersection (used for transparency, shadows)
+    // 3. Intersection (IS) - Custom intersection test (for non-triangle primitives)
+    //
+    // Materials in OptiX store references to hit groups for different ray types.
+    // For example:
+    // - Ray type 0 (primary rays) might use a hit group with complex shading
+    // - Ray type 1 (shadow rays) might use a hit group with only an any-hit for shadows
+    //
+    // This function assigns the appropriate hit groups to each material based on ray type,
+    // connecting the material to the actual GPU programs that will execute on ray hits.
+
+    LOG (DBUG) << "RiPREngine::updateMaterialHitGroups() - updating single model";
+
+    if (!model)
+    {
+        LOG (WARNING) << "No model provided";
+        return;
+    }
+
+    auto* triangleModel = dynamic_cast<RiPRTriangleModel*> (model.get());
+    if (!triangleModel)
+    {
+        // Not a triangle model - nothing to update
+        return;
+    }
+
+    auto* geomInst = triangleModel->getGeometryInstance();
+    if (!geomInst)
+    {
+        LOG (WARNING) << "No geometry instance in model";
+        return;
+    }
+
+    // Update hit groups for all materials in this geometry instance
+    uint32_t numMaterials = geomInst->getNumMaterials();
+    for (uint32_t i = 0; i < numMaterials; ++i)
+    {
+        optixu::Material mat = geomInst->getMaterial (0, i); // Material set 0, index i
+        if (!mat)
+            continue;
+
+        // Set hit groups for path tracing pipeline
+        if (pathTracePipeline_ && pathTracePipeline_->optixPipeline)
+        {
+            // Set shading hit group for primary rays (ray type 0)
+            auto shadingIt = pathTracePipeline_->hitPrograms.find (RT_CH_NAME_STR ("shading"));
+            if (shadingIt != pathTracePipeline_->hitPrograms.end())
+            {
+                mat.setHitGroup (0, shadingIt->second);
+            }
+
+            // Set visibility hit group for shadow rays (ray type 1)
+            auto visibilityIt = pathTracePipeline_->hitPrograms.find (RT_AH_NAME_STR ("visibility"));
+            if (visibilityIt != pathTracePipeline_->hitPrograms.end())
+            {
+                mat.setHitGroup (1, visibilityIt->second);
+            }
+        }
+
+        // Set hit groups for GBuffer pipeline
+        if (gbufferPipeline_ && gbufferPipeline_->optixPipeline)
+        {
+            // Set hit group for primary rays
+            auto gbufferIt = gbufferPipeline_->hitPrograms.find (RT_CH_NAME_STR ("setupGBuffers"));
+            if (gbufferIt != gbufferPipeline_->hitPrograms.end())
+            {
+                mat.setHitGroup (ripr_shared::GBufferRayType::Primary, gbufferIt->second);
+            }
+
+            // Set empty hit groups for unused ray types
+            auto emptyIt = gbufferPipeline_->hitPrograms.find ("emptyHitGroup");
+            if (emptyIt != gbufferPipeline_->hitPrograms.end())
+            {
+                for (uint32_t rayType = ripr_shared::GBufferRayType::NumTypes;
+                     rayType < ripr_shared::maxNumRayTypes; ++rayType)
+                {
+                    mat.setHitGroup (rayType, emptyIt->second);
+                }
+            }
+        }
+    }
+
+    LOG (DBUG) << "Updated hit groups for " << numMaterials << " material(s) in model";
 }
 
 void RiPREngine::updateSBT()
 {
-    LOG (DBUG) << "Updating shader binding tables";
+    LOG (DBUG) << "RiPREngine::updateSBT()";
 
     if (!renderContext_)
     {
@@ -1017,28 +1035,6 @@ void RiPREngine::updateSBT()
     size_t hitGroupSbtSize = 0;
     scene_.generateShaderBindingTableLayout (&hitGroupSbtSize);
     LOG (DBUG) << "Updated scene hit group SBT size: " << hitGroupSbtSize << " bytes";
-
-    // Update hit group SBT for G-buffer pipeline
-    if (gbufferPipeline_ && gbufferPipeline_->optixPipeline && hitGroupSbtSize > 0)
-    {
-        // Resize if needed
-        if (gbufferPipeline_->hitGroupSbt.isInitialized())
-        {
-            size_t currentSize = gbufferPipeline_->hitGroupSbt.sizeInBytes();
-            if (currentSize < hitGroupSbtSize)
-            {
-                LOG (DBUG) << "Resizing G-buffer pipeline hit group SBT from " << currentSize << " to " << hitGroupSbtSize << " bytes";
-                gbufferPipeline_->hitGroupSbt.resize (1, hitGroupSbtSize);
-            }
-        }
-        else
-        {
-            gbufferPipeline_->hitGroupSbt.initialize (cuContext, cudau::BufferType::Device, 1, hitGroupSbtSize);
-            gbufferPipeline_->hitGroupSbt.setMappedMemoryPersistent (true);
-        }
-        gbufferPipeline_->optixPipeline.setHitGroupShaderBindingTable (
-            gbufferPipeline_->hitGroupSbt, gbufferPipeline_->hitGroupSbt.getMappedPointer());
-    }
 
     // Update hit group SBT for path tracing pipeline
     if (pathTracePipeline_ && pathTracePipeline_->optixPipeline && hitGroupSbtSize > 0)
@@ -1061,165 +1057,55 @@ void RiPREngine::updateSBT()
         pathTracePipeline_->optixPipeline.setHitGroupShaderBindingTable (
             pathTracePipeline_->hitGroupSbt, pathTracePipeline_->hitGroupSbt.getMappedPointer());
     }
-    
-    // NOTE: Pipelines do NOT need to be relinked after SBT updates.
-    // The SBT can be updated without relinking as long as we're just resizing buffers.
-    // Relinking is only needed when the pipeline structure changes (programs, modules, etc.)
-}
 
-void RiPREngine::linkPipelines()
-{
-    LOG (INFO) << "RiPREngine::linkPipelines()";
-
-    // Link G-buffer pipeline with depth 1 (no recursive rays)
-    if (gbufferPipeline_ && gbufferPipeline_->optixPipeline)
+    // Update hit group SBT for GBuffer pipeline
+    if (gbufferPipeline_ && gbufferPipeline_->optixPipeline && hitGroupSbtSize > 0)
     {
-        // Set the scene on the pipeline  
-        gbufferPipeline_->optixPipeline.setScene (scene_);
-        
-        gbufferPipeline_->optixPipeline.link (1);
-        LOG (INFO) << "G-buffer pipeline linked successfully";
-    }
-
-    // Link path tracing pipeline with depth 2 (for recursive rays)
-    if (pathTracePipeline_ && pathTracePipeline_->optixPipeline)
-    {
-        // Set the scene on the pipeline
-        pathTracePipeline_->optixPipeline.setScene (scene_);
-        
-        pathTracePipeline_->optixPipeline.link (2);
-        LOG (INFO) << "Path tracing pipeline linked successfully";
-    }
-}
-
-void RiPREngine::updateMaterialHitGroups (RiPRModelPtr model)
-{
-    LOG (DBUG) << "Updating material hit groups";
-
-    if (!model) {
-        // If no specific model, update all models
-        if (!modelHandler_) {
-            return;
-        }
-        
-        // Get all models and update their hit groups
-        auto models = modelHandler_->getAllModels();
-        for (const auto& [id, m] : models) {
-            if (m) {
-                updateMaterialHitGroups(m);
-            }
-        }
-        return;
-    }
-
-    // Get the hit program for G-buffer
-    if (!gbufferPipeline_ || !gbufferPipeline_->optixPipeline) {
-        LOG(WARNING) << "G-buffer pipeline not ready yet";
-        return;
-    }
-    
-    auto it = gbufferPipeline_->hitPrograms.find(RT_CH_NAME_STR("setupGBuffers"));
-    if (it == gbufferPipeline_->hitPrograms.end()) {
-        LOG(WARNING) << "setupGBuffers hit program not found";
-        return;
-    }
-    
-    optixu::HitProgramGroup hitProgram = it->second;
-
-    // Set the hit group on all surfaces' materials
-    for (const auto& surface : model->getSurfaces()) {
-        if (!surface || !surface->optixGeomInst) continue;
-        
-        // Get the material and set the hit group
-        optixu::Material mat = surface->optixGeomInst.getMaterial(0, 0);
-        if (mat) {
-            mat.setHitGroup(0, hitProgram);  // Ray type 0 for primary rays
-            LOG(DBUG) << "Set hit group for surface material";
-        }
-    }
-}
-
-void RiPREngine::updateLaunchParameters (const mace::InputEvent& input)
-{
-    // Update per-frame parameters
-    // Get traversable handle from scene handler
-    if (sceneHandler_) {
-        perFramePlp_.travHandle = sceneHandler_->getTraversableHandle();
-    } else {
-        perFramePlp_.travHandle = 0;
-    }
-    perFramePlp_.numAccumFrames = restartRender_ ? 0 : perFramePlp_.numAccumFrames + 1;
-    perFramePlp_.frameIndex = frameCounter_;
-    perFramePlp_.camera = lastCamera_;
-    perFramePlp_.prevCamera = prevCamera_;
-    perFramePlp_.mousePosition = make_int2 (0, 0); // TODO: get mouse position from input
-    perFramePlp_.maxPathLength = 8;
-    perFramePlp_.bufferIndex = frameCounter_ & 1;
-    perFramePlp_.enableJittering = true;
-    perFramePlp_.enableEnvLight = true;
-    perFramePlp_.enableDenoiser = (denoiserHandler_ != nullptr);
-    perFramePlp_.renderMode = static_cast<uint32_t> (renderMode_);
-
-    // Update static parameters if needed
-    // NOTE: Don't update buffer pointers here as they were set during initialization
-    // Only update things that might change during runtime
-    if (restartRender_ && renderHandler_)
-    {
-        staticPlp_.imageSize = make_int2 (renderHandler_->getWidth(), renderHandler_->getHeight());
-
-        // Only update accumulation buffer references from render handler if they might have changed
-        staticPlp_.beautyAccumBuffer = renderHandler_->getBeautyAccumSurfaceObject();
-        staticPlp_.albedoAccumBuffer = renderHandler_->getAlbedoAccumSurfaceObject();
-        staticPlp_.normalAccumBuffer = renderHandler_->getNormalAccumSurfaceObject();
-        staticPlp_.motionAccumBuffer = renderHandler_->getMotionAccumSurfaceObject();
-
-        // TODO: Update material and instance buffers from handlers when they change
-    }
-
-    // Update environment texture and importance map (following MiloEngine pattern)
-    staticPlp_.envLightTexture = 0;
-    if (renderContext_)
-    {
-        auto& handlers = renderContext_->getHandlers();
-        if (handlers.skyDomeHandler && handlers.skyDomeHandler->hasEnvironmentTexture())
+        // Resize if needed
+        if (gbufferPipeline_->hitGroupSbt.isInitialized())
         {
-            staticPlp_.envLightTexture = handlers.skyDomeHandler->getEnvironmentTexture();
-
-            // Get the environment light importance map
-            handlers.skyDomeHandler->getImportanceMap().getDeviceType (&staticPlp_.envLightImportanceMap);
+            size_t currentSize = gbufferPipeline_->hitGroupSbt.sizeInBytes();
+            if (currentSize < hitGroupSbtSize)
+            {
+                LOG (DBUG) << "Resizing GBuffer pipeline hit group SBT from " << currentSize << " to " << hitGroupSbtSize << " bytes";
+                gbufferPipeline_->hitGroupSbt.resize (1, hitGroupSbtSize);
+            }
         }
         else
         {
-            // Initialize with empty distribution
-            staticPlp_.envLightImportanceMap = shared::RegularConstantContinuousDistribution2D();
+            LOG (DBUG) << "Initializing GBuffer pipeline hit group SBT with size: " << hitGroupSbtSize << " bytes";
+            gbufferPipeline_->hitGroupSbt.initialize (cuContext, cudau::BufferType::Device, 1, hitGroupSbtSize);
+            gbufferPipeline_->hitGroupSbt.setMappedMemoryPersistent (true);
         }
-    }
 
-    // Ensure device pointers are allocated
-    if (!plpOnDevice_ || !staticPlpOnDevice_ || !perFramePlpOnDevice_)
+        // Re-set on pipeline to ensure update is applied
+        gbufferPipeline_->optixPipeline.setHitGroupShaderBindingTable (
+            gbufferPipeline_->hitGroupSbt, gbufferPipeline_->hitGroupSbt.getMappedPointer());
+    }
+}
+
+void RiPREngine::renderGBuffer (CUstream stream)
+{
+    if (!gbufferPipeline_ || !gbufferPipeline_->optixPipeline)
     {
-        LOG (WARNING) << "Launch parameters not allocated, cannot update";
+        LOG (WARNING) << "GBuffer pipeline not ready";
         return;
     }
 
-    // Upload to device (exactly matching sample code pattern)
-    // Upload per-frame parameters
-    CUDADRV_CHECK (cuMemcpyHtoDAsync (perFramePlpOnDevice_, &perFramePlp_, sizeof (perFramePlp_), renderContext_->getCudaStream()));
-
-    // Make sure the pointers in plp_ are set correctly (they get lost during updates)
-    plp_.s = reinterpret_cast<ripr_shared::StaticPipelineLaunchParameters*> (staticPlpOnDevice_);
-    plp_.f = reinterpret_cast<ripr_shared::PerFramePipelineLaunchParameters*> (perFramePlpOnDevice_);
-
-    // Upload the main launch parameters structure
-    CUDADRV_CHECK (cuMemcpyHtoDAsync (plpOnDevice_, &plp_, sizeof (plp_), renderContext_->getCudaStream()));
-
-    // Upload static parameters on first render or when needed
-    static bool firstRender = true;
-    if (firstRender || restartRender_)
+    // Launch the GBuffer generation kernel
+    try
     {
-        CUDADRV_CHECK (cuMemcpyHtoD (staticPlpOnDevice_, &staticPlp_, sizeof (staticPlp_)));
-        firstRender = false;
-        restartRender_ = false;
+        gbufferPipeline_->optixPipeline.launch (
+            stream,
+            plp_on_device_,
+            renderWidth_,
+            renderHeight_,
+            1 // depth
+        );
+    }
+    catch (const std::exception& e)
+    {
+        LOG (WARNING) << "GBuffer OptiX launch failed: " << e.what();
     }
 }
 
@@ -1233,46 +1119,220 @@ void RiPREngine::allocateLaunchParameters()
         return;
     }
 
-    // Initialize per-frame parameters before uploading
-    memset (&perFramePlp_, 0, sizeof (perFramePlp_)); // Zero initialize
-    perFramePlp_.travHandle = 0;                      // Empty scene initially
-    perFramePlp_.numAccumFrames = 0;
-    perFramePlp_.frameIndex = 0;
-    perFramePlp_.camera = lastCamera_;
-    perFramePlp_.prevCamera = lastCamera_;
-    perFramePlp_.envLightPowerCoeff = 1.0f;
-    perFramePlp_.envLightRotation = 0.0f;
-    perFramePlp_.mousePosition = make_int2 (0, 0);
-    perFramePlp_.maxPathLength = 8;
-    perFramePlp_.bufferIndex = 0;
-    perFramePlp_.resetFlowBuffer = 0;
-    perFramePlp_.enableJittering = 1;
-    perFramePlp_.enableEnvLight = 1;
-    perFramePlp_.enableBumpMapping = 1;
-    perFramePlp_.enableDebugPrint = 0;
-    perFramePlp_.enableDenoiser = 0;
-    perFramePlp_.renderMode = 0; // GBuffer mode
-    perFramePlp_.debugSwitches = 0;
+    // Note: Launch parameters are already allocated in initialize()
+    // This function is kept for compatibility but does nothing
+    LOG (INFO) << "Launch parameters already allocated in initialize()";
+}
 
-    // Allocate device memory for static parameters (matching sample code)
-    CUDADRV_CHECK (cuMemAlloc (&staticPlpOnDevice_, sizeof (ripr_shared::StaticPipelineLaunchParameters)));
-    CUDADRV_CHECK (cuMemcpyHtoD (staticPlpOnDevice_, &staticPlp_, sizeof (staticPlp_)));
+void RiPREngine::updateLaunchParameters (const mace::InputEvent& input)
+{
+    if (!renderContext_ || !plp_on_device_)
+    {
+        return;
+    }
 
-    // Allocate device memory for per-frame parameters
-    CUDADRV_CHECK (cuMemAlloc (&perFramePlpOnDevice_, sizeof (ripr_shared::PerFramePipelineLaunchParameters)));
-    CUDADRV_CHECK (cuMemcpyHtoD (perFramePlpOnDevice_, &perFramePlp_, sizeof (perFramePlp_)));
+    // Update STATIC parameters in host buffer
+    static_plp_.travHandle = 0; // Default to 0
+    if (sceneHandler_)
+    {
+        // Get IAS handle from scene handler
+        static_plp_.travHandle = sceneHandler_->getHandle();
+    }
 
-    // Setup pointers in main launch parameter structure
-    plp_.s = reinterpret_cast<ripr_shared::StaticPipelineLaunchParameters*> (staticPlpOnDevice_);
-    plp_.f = reinterpret_cast<ripr_shared::PerFramePipelineLaunchParameters*> (perFramePlpOnDevice_);
+    static_plp_.imageSize = make_int2 (renderWidth_, renderHeight_);
+    static_plp_.numAccumFrames = numAccumFrames_;
+    static_plp_.bufferIndex = frameCounter_ & 1; // TODO: Temporarily commented to debug crash
+    static_plp_.camera = lastCamera_;
+    static_plp_.prevCamera = prevCamera_; // For temporal reprojection
+    static_plp_.useCameraSpaceNormal = 1;
+    static_plp_.bounceLimit = 8; // Maximum path length
 
-    // Allocate device memory for the main launch parameters structure
-    CUDADRV_CHECK (cuMemAlloc (&plpOnDevice_, sizeof (ripr_shared::PipelineLaunchParameters)));
+    static_plp_.geoBuffer0[0] = gbuffers_.gBuffer0[0].getSurfaceObject (0);
+    static_plp_.geoBuffer0[1] = gbuffers_.gBuffer0[1].getSurfaceObject (0);
+    static_plp_.geoBuffer1[0] = gbuffers_.gBuffer1[0].getSurfaceObject (0);
+    static_plp_.geoBuffer1[1] = gbuffers_.gBuffer1[1].getSurfaceObject (0);
 
-    // Upload the main launch parameters structure with the pointers (critical!)
-    CUDADRV_CHECK (cuMemcpyHtoD (plpOnDevice_, &plp_, sizeof (plp_)));
+    // Experimental glass parameters (disabled)
+    static_plp_.makeAllGlass = 0;
+    static_plp_.globalGlassType = 1;
+    static_plp_.globalGlassIOR = 1.52f;
+    static_plp_.globalTransmittanceDist = 1.0f;
 
-    LOG (INFO) << "Launch parameters allocated and uploaded to device";
+    // Firefly reduction parameter
+    static_plp_.maxRadiance = DEFAULT_MAX_RADIANCE; // Default value
+
+    static_plp_.mousePosition = int2 (static_cast<int32_t> (input.getX()), static_cast<int32_t> (input.getY()));
+
+    // Debug: Log mouse position periodically to verify input is working
+    static int debugCounter = 0;
+    if (debugCounter++ % 60 == 0) // Log every 60 frames (about once per second at 60fps)
+    {
+        LOG (DBUG) << "Mouse input: (" << input.getX() << ", " << input.getY() << ")";
+    }
+
+    // Environment light parameters from property system
+    const PropertyService& properties = renderContext_->getPropertyService();
+    if (properties.renderProps)
+    {
+        // Get firefly reduction parameter
+        static_plp_.maxRadiance = properties.renderProps->getValOr<float> (RenderKey::MaxRadiance, DEFAULT_MAX_RADIANCE);
+
+        // Check if environment rendering is enabled
+        static_plp_.enableEnvLight = properties.renderProps->getValOr<bool> (RenderKey::RenderEnviro, DEFAULT_RENDER_ENVIRO) ? 1 : 0;
+
+        // EnviroIntensity is already a coefficient (0-2 range)
+        static_plp_.envLightPowerCoeff = properties.renderProps->getValOr<float> (RenderKey::EnviroIntensity, DEFAULT_ENVIRO_INTENSITY_PERCENT);
+
+        // EnviroRotation is in degrees, convert to radians for the shader
+        float envRotationDegrees = properties.renderProps->getValOr<float> (RenderKey::EnviroRotation, DEFAULT_ENVIRO_ROTATION);
+        static_plp_.envLightRotation = envRotationDegrees * (M_PI / 180.0f);
+
+        // Use solid background when environment rendering is disabled
+        static_plp_.useSolidBackground = properties.renderProps->getValOr<bool> (RenderKey::RenderEnviro, DEFAULT_RENDER_ENVIRO) ? 0 : 1;
+
+        // Background color when not using environment
+        Eigen::Vector3d bgColor = properties.renderProps->getValOr<Eigen::Vector3d> (RenderKey::BackgroundColor, DEFAULT_BACKGROUND_COLOR);
+        static_plp_.backgroundColor = make_float3 (bgColor.x(), bgColor.y(), bgColor.z());
+    }
+    else
+    {
+        // Fallback to defaults if properties not available
+        static_plp_.enableEnvLight = DEFAULT_RENDER_ENVIRO ? 1 : 0;
+        static_plp_.envLightPowerCoeff = DEFAULT_ENVIRO_INTENSITY_PERCENT;
+        static_plp_.envLightRotation = DEFAULT_ENVIRO_ROTATION * (M_PI / 180.0f);
+        static_plp_.useSolidBackground = DEFAULT_RENDER_ENVIRO ? 0 : 1;
+        static_plp_.backgroundColor = make_float3 (DEFAULT_BACKGROUND_COLOR.x(), DEFAULT_BACKGROUND_COLOR.y(), DEFAULT_BACKGROUND_COLOR.z());
+    }
+
+    // Set environment texture if available
+    static_plp_.envLightTexture = 0;
+    if (renderContext_)
+    {
+        auto& handlers = renderContext_->getHandlers();
+        if (handlers.skyDomeHandler && handlers.skyDomeHandler->hasEnvironmentTexture())
+        {
+            static_plp_.envLightTexture = handlers.skyDomeHandler->getEnvironmentTexture();
+
+            // Get the environment light importance map
+            handlers.skyDomeHandler->getImportanceMap().getDeviceType (&static_plp_.envLightImportanceMap);
+        }
+        else
+        {
+            // Initialize with empty distribution
+            static_plp_.envLightImportanceMap = shared::RegularConstantContinuousDistribution2D();
+        }
+    }
+
+    // Set light distribution from scene handler
+    if (sceneHandler_)
+    {
+        // Update emissive instances and build light distribution
+        sceneHandler_->updateEmissiveInstances();
+        sceneHandler_->buildLightInstanceDistribution();
+
+        // Get the device representation of the light distribution
+        sceneHandler_->getLightInstDistribution().getDeviceType (&static_plp_.lightInstDist);
+        static_plp_.numLightInsts = sceneHandler_->getNumEmissiveInstances();
+
+        // Read area light settings from properties
+        if (properties.renderProps)
+        {
+            bool enableAreaLights = properties.renderProps->getValOr<bool> (RenderKey::EnableAreaLights, DEFAULT_ENABLE_AREA_LIGHTS);
+            static_plp_.enableAreaLights = (enableAreaLights && static_plp_.numLightInsts > 0) ? 1 : 0;
+            static_plp_.areaLightPowerCoeff = properties.renderProps->getValOr<float> (RenderKey::AreaLightPower, DEFAULT_AREA_LIGHT_POWER);
+        }
+        else
+        {
+            // Fallback to defaults
+            static_plp_.enableAreaLights = static_plp_.numLightInsts > 0 ? 1 : 0;
+            static_plp_.areaLightPowerCoeff = DEFAULT_AREA_LIGHT_POWER;
+        }
+    }
+    else
+    {
+        // Set to empty distribution if no scene handler
+        static_plp_.lightInstDist = shared::LightDistribution();
+        static_plp_.numLightInsts = 0;
+        static_plp_.enableAreaLights = 0;
+        static_plp_.areaLightPowerCoeff = 1.0f;
+    }
+
+    // Set material data buffer from material handler
+    if (materialHandler_ && materialHandler_->getMaterialDataBuffer())
+    {
+        static_plp_.materialDataBuffer = materialHandler_->getMaterialDataBuffer()->getROBuffer<shared::enableBufferOobCheck>();
+    }
+    else
+    {
+        // Set to empty buffer if no material handler
+        static_plp_.materialDataBuffer = shared::ROBuffer<shared::DisneyData>();
+    }
+
+    // Set geometry instance data buffer from model handler
+    if (modelHandler_ && modelHandler_->getGeometryInstanceDataBuffer())
+    {
+        static_plp_.geometryInstanceDataBuffer = modelHandler_->getGeometryInstanceDataBuffer()->getROBuffer<shared::enableBufferOobCheck>();
+    }
+    else
+    {
+        // Set to empty buffer if no model handler
+        static_plp_.geometryInstanceDataBuffer = shared::ROBuffer<shared::GeometryInstanceData>();
+    }
+
+    // Set buffer pointers from RenderHandler
+    if (renderHandler_)
+    {
+        static_plp_.colorAccumBuffer = renderHandler_->getBeautyAccumSurfaceObject();
+        static_plp_.albedoAccumBuffer = renderHandler_->getAlbedoAccumSurfaceObject();
+        static_plp_.normalAccumBuffer = renderHandler_->getNormalAccumSurfaceObject();
+        static_plp_.flowAccumBuffer = renderHandler_->getFlowAccumSurfaceObject();
+    }
+
+    // Set RNG buffer
+    if (rngBuffer_.isInitialized())
+    {
+        static_plp_.rngBuffer = rngBuffer_.getBlockBuffer2D();
+    }
+
+    // Set pick info buffer pointers
+    if (renderHandler_)
+    {
+        for (int i = 0; i < 2; ++i)
+        {
+            static_plp_.pickInfoBuffer[i] = reinterpret_cast<ripr_shared::PickInfo*> (
+                renderHandler_->getPickInfoPointer (i));
+        }
+    }
+
+    // Set instance data buffer array
+    if (sceneHandler_)
+    {
+        for (int i = 0; i < 2; ++i)
+        {
+            auto* buffer = sceneHandler_->getInstanceDataBuffer (i);
+            if (buffer && buffer->isInitialized())
+            {
+                static_plp_.instanceDataBufferArray[i] = buffer->getROBuffer<shared::enableBufferOobCheck>();
+            }
+        }
+    }
+
+    // Copy static parameters to device
+    CUDADRV_CHECK (cuMemcpyHtoDAsync (
+        static_plp_on_device_,
+        &static_plp_,
+        sizeof (ripr_shared::StaticPipelineLaunchParameters),
+        renderContext_->getCudaStream()));
+
+    // Note: Per-frame parameters are currently empty
+    // per_frame_plp_ is reserved for future use
+
+    // Copy the pointer structure to device
+    CUDADRV_CHECK (cuMemcpyHtoDAsync (
+        plp_on_device_,
+        &plp_,
+        sizeof (ripr_shared::PipelineLaunchParameters),
+        renderContext_->getCudaStream()));
 }
 
 void RiPREngine::updateCameraBody (const mace::InputEvent& input)
@@ -1336,8 +1396,18 @@ void RiPREngine::updateCameraBody (const mace::InputEvent& input)
         // Using the same constructor as production code: Matrix3x3(right, up, forward)
         lastCamera_.orientation = Matrix3x3 (camRight, camUp, camForward);
 
-        // Note: Lens parameters (lensSize, focusDistance) are not in the basic PerspectiveCamera
-        // These would be needed for depth of field effects in a more advanced version
+        // Set lens parameters
+        const PropertyService& properties = renderContext_->getPropertyService();
+        if (properties.renderProps)
+        {
+            lastCamera_.lensSize = properties.renderProps->getValOr<float> (RenderKey::Aperture, 0.0f);
+            lastCamera_.focusDistance = properties.renderProps->getValOr<float> (RenderKey::FocalLength, 5.0f);
+        }
+        else
+        {
+            lastCamera_.lensSize = 0.0f;
+            lastCamera_.focusDistance = 5.0f;
+        }
 
         // Mark camera as not dirty after processing
         camera->setDirty (false);
@@ -1387,54 +1457,46 @@ void RiPREngine::updateCameraSensor()
     }
 }
 
-void RiPREngine::renderGBuffer(CUstream stream)
+void RiPREngine::outputGBufferDebugInfo (CUstream stream)
 {
-    if (!gbufferPipeline_ || !gbufferPipeline_->optixPipeline)
+    if (!renderHandler_)
     {
-        LOG (WARNING) << "G-buffer pipeline not ready";
+        LOG (WARNING) << "RenderHandler not available for debug output";
         return;
     }
 
-    if (!plpOnDevice_ || !staticPlpOnDevice_ || !perFramePlpOnDevice_)
+    // Get the current buffer index
+    uint32_t bufferIndex = frameCounter_ & 1;
+
+    // Read pick info - exactly like Shocker code
+    ripr_shared::PickInfo pickInfoOnHost;
+    renderHandler_->getPickInfo (bufferIndex).read (&pickInfoOnHost, 1, stream);
+
+    // Only output debug information if geometry was hit (not environment/background)
+    if (pickInfoOnHost.hit && pickInfoOnHost.matSlot != 0xFFFFFFFF)
     {
-        LOG (WARNING) << "Launch parameters not allocated for G-buffer pipeline";
-        return;
-    }
-
-    uint32_t width = renderHandler_->getWidth();
-    uint32_t height = renderHandler_->getHeight();
-
-    // Launch the G-buffer pipeline - let exceptions propagate
-    gbufferPipeline_->optixPipeline.launch (stream, plpOnDevice_, width, height, 1);
-}
-
-void RiPREngine::renderPathTracing(CUstream stream)
-{
-    if (!pathTracePipeline_ || !pathTracePipeline_->optixPipeline)
-    {
-        LOG (WARNING) << "Path tracing pipeline not ready";
-        return;
-    }
-
-    //LOG (DBUG) << _FN_;
-    uint32_t width = renderHandler_->getWidth();
-    uint32_t height = renderHandler_->getHeight();
-
-    // Launch path tracing pipeline
-    pathTracePipeline_->setEntryPoint (PathTracingEntryPoint::pathTrace);
-
-    // TODO: Launch when pipeline is fully configured
-    pathTracePipeline_->optixPipeline.launch (stream, plpOnDevice_, width, height, 1);
-
-    // Copy accumulation buffers to linear buffers for display
-    renderHandler_->copyAccumToLinearBuffers (stream);
-
-    // Apply denoising if enabled
-    if (denoiserHandler_ && perFramePlp_.enableDenoiser)
-    {
-        bool isNewSequence = (perFramePlp_.numAccumFrames == 0);
-        // Pass timer to denoise method if available
-        auto timer = getCurrentTimer();
-        renderHandler_->denoise (stream, isNewSequence, denoiserHandler_.get(), timer);
+        LOG (INFO) << "========== GBuffer Pick Info ==========";
+        LOG (INFO) << "Mouse Position: (" << lastInput_.getX() << ", " << lastInput_.getY() << ")";
+        LOG (INFO) << "Instance: " << pickInfoOnHost.instSlot;
+        LOG (INFO) << "Geometry Instance: " << pickInfoOnHost.geomInstSlot;
+        LOG (INFO) << "Primitive Index: " << pickInfoOnHost.primIndex;
+        LOG (INFO) << "Material: " << pickInfoOnHost.matSlot;
+        LOG (INFO) << "Position: "
+                   << pickInfoOnHost.positionInWorld.x << ", "
+                   << pickInfoOnHost.positionInWorld.y << ", "
+                   << pickInfoOnHost.positionInWorld.z;
+        LOG (INFO) << "Normal: "
+                   << pickInfoOnHost.normalInWorld.x << ", "
+                   << pickInfoOnHost.normalInWorld.y << ", "
+                   << pickInfoOnHost.normalInWorld.z;
+        LOG (INFO) << "Albedo: "
+                   << pickInfoOnHost.albedo.r << ", "
+                   << pickInfoOnHost.albedo.g << ", "
+                   << pickInfoOnHost.albedo.b;
+        LOG (INFO) << "Emittance: "
+                   << pickInfoOnHost.emittance.r << ", "
+                   << pickInfoOnHost.emittance.g << ", "
+                   << pickInfoOnHost.emittance.b;
+        LOG (INFO) << "========================================";
     }
 }

@@ -271,16 +271,9 @@ void RenderEngineManager::setRiPRRenderMode(int mode)
     // Check if it's the RiPREngine
     if (currentEngineName_ == "ripr")
     {
-        // Cast to RiPREngine and set render mode
-        if (auto riprEngine = dynamic_cast<RiPREngine*>(activeEngine_.get()))
-        {
-            riprEngine->setRenderMode(static_cast<RiPREngine::RenderMode>(mode));
-            LOG(INFO) << "Set RiPR render mode to: " << mode;
-        }
-        else
-        {
-            LOG(WARNING) << "Failed to cast to RiPREngine";
-        }
+        // TODO: RiPREngine doesn't have setRenderMode yet
+        // This is a placeholder for future implementation
+        LOG(INFO) << "RiPR engine selected but setRenderMode not implemented yet";
     }
     else
     {
