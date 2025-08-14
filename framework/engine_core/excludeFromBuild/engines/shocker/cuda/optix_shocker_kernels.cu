@@ -24,7 +24,9 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
     const uint2 launchIndex = make_uint2 (optixGetLaunchIndex().x, optixGetLaunchIndex().y);
     const uint32_t bufIdx = shocker_plp.f->bufferIndex;
 
+    // Read GBuffer data
     const GBuffer0Elements gb0Elems = shocker_plp.s->GBuffer0[bufIdx].read (launchIndex);
+    const GBuffer1Elements gb1Elems = shocker_plp.s->GBuffer1[bufIdx].read (launchIndex);
     const uint32_t instSlot = gb0Elems.instSlot;
     const float bcB = decodeBarycentric (gb0Elems.qbcB);
     const float bcC = decodeBarycentric (gb0Elems.qbcC);
@@ -35,6 +37,67 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
     RGB contribution (0.001f, 0.001f, 0.001f);
     if (instSlot != 0xFFFFFFFF)
     {
+       
+
+        const uint32_t geomInstSlot = gb0Elems.geomInstSlot;
+        const InstanceData& inst = shocker_plp.s->instanceDataBufferArray[bufIdx][instSlot];
+        const GeometryInstanceData& geomInst = shocker_plp.s->geometryInstanceDataBuffer[geomInstSlot];
+        Point3D positionInWorld;
+        Normal3D geometricNormalInWorld;
+        Normal3D shadingNormalInWorld;
+        Vector3D texCoord0DirInWorld;
+        Point2D texCoord;
+        computeSurfacePoint (
+            inst, geomInst,
+            gb0Elems.primIndex, bcB, bcC,
+            &positionInWorld, &shadingNormalInWorld, &texCoord0DirInWorld,
+            &geometricNormalInWorld, &texCoord);
+
+       
+        RGB alpha (1.0f);
+        const float initImportance = sRGB_calcLuminance (alpha);
+        PCG32RNG rng = shocker_plp.s->rngBuffer.read (launchIndex);
+
+      
+        // EN: Shading on the first hit.
+        Vector3D vIn;
+        float dirPDensity;
+        {
+            // Get material slot from GBuffer1 (stored there from the gbuffer pass)
+            const uint32_t materialSlot = gb1Elems.materialSlot;
+            const shared::DisneyData& mat = shocker_plp.s->materialDataBuffer[materialSlot];
+            
+            // Debug output commented out - materialSlot is now working correctly
+            // if (launchIndex.x == 512 && launchIndex.y == 384)
+            // {
+            //     printf("Center pixel: materialSlot from GBuffer = %u\n", materialSlot);
+            // }
+
+             /* 
+            const Vector3D vOut = normalize (camera.position - positionInWorld);
+            const float frontHit = dot (vOut, geometricNormalInWorld) >= 0.0f ? 1.0f : -1.0f;
+            // Offsetting assumes BRDF.
+            positionInWorld = offsetRayOrigin (positionInWorld, frontHit * geometricNormalInWorld);
+
+            ReferenceFrame shadingFrame (shadingNormalInWorld, texCoord0DirInWorld);
+            if (shocker_plp.f->enableBumpMapping)
+            {
+               // const Normal3D modLocalNormal = mat.readModifiedNormal (mat.normal, mat.normalDimInfo, texCoord, 0.0f);
+               // applyBumpMapping (modLocalNormal, &shadingFrame);
+            }
+            const Vector3D vOutLocal = shadingFrame.toLocal (vOut);
+
+            // EN: Accumulate the contribution from a light source directly seeing.
+            contribution = RGB (0.0f);
+          if (vOutLocal.z > 0 && mat.emissive)
+            {
+                const float4 texValue = tex2DLod<float4> (mat.emissive, texCoord.x, texCoord.y, 0.0f);
+                const RGB emittance (getXYZ (texValue));
+                contribution += alpha * emittance / pi_v<float>;
+            }*/
+
+        }
+       
     }
     else
     {

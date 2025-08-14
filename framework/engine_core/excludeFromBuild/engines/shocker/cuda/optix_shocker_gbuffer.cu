@@ -68,6 +68,8 @@ CUDA_DEVICE_KERNEL void RT_RG_NAME (setupGBuffers)()
     gb0Elems.qbcC = hitPointParams.qbcC;
     GBuffer1Elements gb1Elems = {};
     gb1Elems.motionVector = motionVector;
+    gb1Elems.materialSlot = hitPointParams.materialSlot;  // Store material slot in GBuffer1
+    gb1Elems.padding = 0;  // Initialize padding
 
     shocker_plp.s->GBuffer0[bufIdx].write (launchIndex, gb0Elems);
     shocker_plp.s->GBuffer1[bufIdx].write (launchIndex, gb1Elems);
@@ -127,6 +129,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME (setupGBuffers)()
     hitPointParams->instSlot = optixGetInstanceId();
     hitPointParams->geomInstSlot = sbtr.geomInstSlot;
     hitPointParams->primIndex = hp.primIndex;
+    hitPointParams->materialSlot = sbtr.materialSlot;  // Store material slot from SBT
 
     Point3D positionInWorld;
     Point3D prevPositionInWorld;

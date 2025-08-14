@@ -10,12 +10,12 @@ namespace shocker_shared
 {
     static constexpr float probToSampleEnvLight = 0.25f;
 
-   /* enum RayType
-    {
-        RayType_Search = 0,
-        RayType_Visibility,
-        NumRayTypes
-    };*/
+    /* enum RayType
+     {
+         RayType_Search = 0,
+         RayType_Visibility,
+         NumRayTypes
+     };*/
 
     struct GBufferRayType
     {
@@ -34,7 +34,7 @@ namespace shocker_shared
         }
     };
 
-     struct PathTracingRayType
+    struct PathTracingRayType
     {
         enum Value
         {
@@ -53,8 +53,6 @@ namespace shocker_shared
     };
 
     constexpr uint32_t maxNumRayTypes = 2;
-
-   
 
     // In PerspectiveCamera struct in shared.h
     struct PerspectiveCamera
@@ -109,6 +107,7 @@ namespace shocker_shared
         uint32_t instSlot;
         uint32_t geomInstSlot;
         uint32_t primIndex;
+        uint32_t materialSlot;  // Material slot from SBT
         uint16_t qbcB;
         uint16_t qbcC;
     };
@@ -124,7 +123,9 @@ namespace shocker_shared
 
     struct GBuffer1Elements
     {
-        Vector2D motionVector;
+        Vector2D motionVector;  // 8 bytes
+        uint32_t materialSlot;  // 4 bytes
+        uint32_t padding;       // 4 bytes padding to reach 16 bytes
     };
 
     struct PathTraceWriteOnlyPayload
@@ -271,6 +272,79 @@ RT_PIPELINE_LAUNCH_PARAMETERS shocker_shared::PipelineLaunchParameters shocker_p
 namespace shocker_shared
 {
     using namespace shared;
+
+    CUDA_DEVICE_FUNCTION CUDA_INLINE void computeSurfacePoint (
+        const shared::InstanceData& inst,
+        const shared::GeometryInstanceData& geomInst,
+        uint32_t primIndex, float bcB, float bcC,
+        Point3D* positionInWorld, Normal3D* shadingNormalInWorld, Vector3D* texCoord0DirInWorld,
+        Normal3D* geometricNormalInWorld, Point2D* texCoord)
+    {
+        using namespace shared;
+        const Triangle& tri = geomInst.triangleBuffer[primIndex];
+        const Vertex& vA = geomInst.vertexBuffer[tri.index0];
+        const Vertex& vB = geomInst.vertexBuffer[tri.index1];
+        const Vertex& vC = geomInst.vertexBuffer[tri.index2];
+        const float bcA = 1 - (bcB + bcC);
+
+        // EN: Compute hit point properties in the local coordinates.
+        const Point3D positionInObj = bcA * vA.position + bcB * vB.position + bcC * vC.position;
+        *positionInWorld = inst.transform * positionInObj;
+        *geometricNormalInWorld = normalize (
+            inst.normalMatrix * Normal3D (cross (vB.position - vA.position, vC.position - vA.position)));
+        const Normal3D shadingNormalInObj = bcA * vA.normal + bcB * vB.normal + bcC * vC.normal;
+        const Vector3D texCoord0DirInObj = bcA * vA.texCoord0Dir + bcB * vB.texCoord0Dir + bcC * vC.texCoord0Dir;
+        *texCoord = bcA * vA.texCoord + bcB * vB.texCoord + bcC * vC.texCoord;
+
+        // EN: Convert the local properties to ones in world coordinates.
+        *shadingNormalInWorld = normalize (inst.normalMatrix * shadingNormalInObj);
+        *texCoord0DirInWorld = inst.transform * texCoord0DirInObj;
+        *texCoord0DirInWorld = normalize (
+            *texCoord0DirInWorld - dot (*shadingNormalInWorld, *texCoord0DirInWorld) * *shadingNormalInWorld);
+        if (!shadingNormalInWorld->allFinite())
+        {
+            *geometricNormalInWorld = Normal3D (0, 0, 1);
+            *shadingNormalInWorld = Normal3D (0, 0, 1);
+            *texCoord0DirInWorld = Vector3D (1, 0, 0);
+        }
+        if (!texCoord0DirInWorld->allFinite())
+        {
+            Vector3D bitangent;
+            makeCoordinateSystem (*shadingNormalInWorld, texCoord0DirInWorld, &bitangent);
+        }
+    }
+
+     // This struct is used to fetch geometry instance and material data from
+    // the Shader Binding Table (SBT) in OptiX.
+    struct HitGroupSBTRecordData
+    {
+        uint32_t geomInstSlot; // Geometry instance slot index in the global buffer
+        uint32_t materialSlot; // Material slot index in the material buffer
+
+        // Static member function to retrieve the SBT record data
+        CUDA_DEVICE_FUNCTION CUDA_INLINE static const HitGroupSBTRecordData& get()
+        {
+            // Use optixGetSbtDataPointer() to get the pointer to the SBT data
+            // Cast the pointer to type HitGroupSBTRecordData and dereference it
+            return *reinterpret_cast<HitGroupSBTRecordData*> (optixGetSbtDataPointer());
+        }
+    };
+
+    struct HitPointParameter
+    {
+        float bcB, bcC;
+        int32_t primIndex;
+
+        CUDA_DEVICE_FUNCTION CUDA_INLINE static HitPointParameter get()
+        {
+            HitPointParameter ret;
+            const float2 bc = optixGetTriangleBarycentrics();
+            ret.bcB = bc.x;
+            ret.bcC = bc.y;
+            ret.primIndex = optixGetPrimitiveIndex();
+            return ret;
+        }
+    };
 
 } // namespace shocker_shared
 
