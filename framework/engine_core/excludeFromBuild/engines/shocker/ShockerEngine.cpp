@@ -526,9 +526,8 @@ void ShockerEngine::setupPipelines()
     pathTracePipeline_->optixPipeline = optixContext.createPipeline();
 
     // Calculate max payload size for path tracing
-    uint32_t maxPayloadDwords = std::max (
-        shocker_shared::SearchRayPayloadSignature::numDwords,
-        shocker_shared::VisibilityRayPayloadSignature::numDwords);
+    uint32_t maxPayloadDwords = std::max ({shocker_shared::PathTraceRayPayloadSignature::numDwords,
+                                           shocker_shared::VisibilityRayPayloadSignature::numDwords});
 
     // Configure path tracing pipeline options
     pathTracePipeline_->optixPipeline.setPipelineOptions (
@@ -712,15 +711,15 @@ void ShockerEngine::createPrograms()
 
         // Create ray generation program for path tracing
         pathTracePipeline_->entryPoints[engine_core::PathTracingEntryPoint::PathTrace] =
-            p.createRayGenProgram (m, RT_RG_NAME_STR ("pathTracing"));
+            p.createRayGenProgram (m, RT_RG_NAME_STR ("pathTraceBaseline"));
 
         // Create miss program for path tracing
-        pathTracePipeline_->programs[RT_MS_NAME_STR ("miss")] = p.createMissProgram (
-            m, RT_MS_NAME_STR ("miss"));
+        pathTracePipeline_->programs[RT_MS_NAME_STR ("pathTraceBaseline")] = p.createMissProgram (
+            m, RT_MS_NAME_STR ("pathTraceBaseline"));
 
         // Create hit group for shading
-        pathTracePipeline_->hitPrograms[RT_CH_NAME_STR ("shading")] = p.createHitProgramGroupForTriangleIS (
-            m, RT_CH_NAME_STR ("shading"),
+        pathTracePipeline_->hitPrograms[RT_CH_NAME_STR ("pathTraceBaseline")] = p.createHitProgramGroupForTriangleIS (
+            m, RT_CH_NAME_STR ("pathTraceBaseline"),
             emptyModule, nullptr);
 
         // Create hit group for visibility rays (any hit only)
@@ -737,7 +736,7 @@ void ShockerEngine::createPrograms()
         // Configure miss programs for ray types
         p.setNumMissRayTypes (shocker_shared::NumRayTypes);
         p.setMissProgram (shocker_shared::RayType_Search,
-                          pathTracePipeline_->programs.at (RT_MS_NAME_STR ("miss")));
+                          pathTracePipeline_->programs.at (RT_MS_NAME_STR ("pathTraceBaseline")));
         p.setMissProgram (shocker_shared::RayType_Visibility,
                           pathTracePipeline_->programs.at ("emptyMiss"));
 
@@ -748,7 +747,7 @@ void ShockerEngine::createPrograms()
         {
             // Set hit group for search rays (shading)
             defaultMaterial_.setHitGroup (shocker_shared::RayType_Search,
-                                          pathTracePipeline_->hitPrograms.at (RT_CH_NAME_STR ("shading")));
+                                          pathTracePipeline_->hitPrograms.at (RT_CH_NAME_STR ("pathTraceBaseline")));
 
             // Set hit group for visibility rays
             defaultMaterial_.setHitGroup (shocker_shared::RayType_Visibility,
