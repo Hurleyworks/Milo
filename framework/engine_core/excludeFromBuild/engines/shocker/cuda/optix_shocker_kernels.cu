@@ -19,6 +19,67 @@ static constexpr bool useExplicitLightSampling = true;
 static constexpr bool useMultipleImportanceSampling = useImplicitLightSampling && useExplicitLightSampling;
 static_assert (useImplicitLightSampling || useExplicitLightSampling, "Invalid configuration for light sampling.");
 
+CUDA_DEVICE_FUNCTION CUDA_INLINE RGB performNextEventEstimation (
+    const Point3D& shadingPoint, const Vector3D& vOutLocal, const ReferenceFrame& shadingFrame,
+    const DisneyPrincipled& bsdf, PCG32RNG& rng)
+{
+    RGB ret (0.0f);
+    if constexpr (useExplicitLightSampling)
+    {
+        float uLight = rng.getFloat0cTo1o();
+        bool selectEnvLight = false;
+        float probToSampleCurLightType = 1.0f;
+        if (shocker_plp.s->envLightTexture && shocker_plp.f->enableEnvLight)
+        {
+            if (shocker_plp.s->lightInstDist.integral() > 0.0f)
+            {
+                if (uLight < probToSampleEnvLight)
+                {
+                    probToSampleCurLightType = probToSampleEnvLight;
+                    uLight /= probToSampleCurLightType;
+                    selectEnvLight = true;
+                }
+                else
+                {
+                    probToSampleCurLightType = 1.0f - probToSampleEnvLight;
+                    uLight = (uLight - probToSampleEnvLight) / probToSampleCurLightType;
+                }
+            }
+            else
+            {
+                selectEnvLight = true;
+            }
+        }
+        LightSample lightSample;
+        float areaPDensity;
+      /*  sampleLight<useSolidAngleSampling> (
+            shadingPoint,
+            uLight, selectEnvLight, rng.getFloat0cTo1o(), rng.getFloat0cTo1o(),
+            &lightSample, &areaPDensity);
+        areaPDensity *= probToSampleCurLightType;
+        float misWeight = 1.0f;
+        if constexpr (useMultipleImportanceSampling)
+        {
+            Vector3D shadowRay = lightSample.atInfinity ? Vector3D (lightSample.position) : (lightSample.position - shadingPoint);
+            const float dist2 = shadowRay.sqLength();
+            shadowRay /= std::sqrt (dist2);
+            const Vector3D vInLocal = shadingFrame.toLocal (shadowRay);
+            const float lpCos = std::fabs (dot (shadowRay, lightSample.normal));
+            float bsdfPDensity = bsdf.evaluatePDF (vOutLocal, vInLocal) * lpCos / dist2;
+            if (!stc::isfinite (bsdfPDensity))
+                bsdfPDensity = 0.0f;
+            const float lightPDensity = areaPDensity;
+            misWeight = pow2 (lightPDensity) / (pow2 (bsdfPDensity) + pow2 (lightPDensity));
+        }
+        if (areaPDensity > 0.0f)
+            ret = performDirectLighting<PathTracingRayType, true> (
+                      shadingPoint, vOutLocal, shadingFrame, bsdf, lightSample) *
+                  (misWeight / areaPDensity);*/
+    }
+
+    return ret;
+}
+
 CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
 {
     const uint2 launchIndex = make_uint2 (optixGetLaunchIndex().x, optixGetLaunchIndex().y);
@@ -37,8 +98,6 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
     RGB contribution (0.001f, 0.001f, 0.001f);
     if (instSlot != 0xFFFFFFFF)
     {
-       
-
         const uint32_t geomInstSlot = gb0Elems.geomInstSlot;
         const InstanceData& inst = shocker_plp.s->instanceDataBufferArray[bufIdx][instSlot];
         const GeometryInstanceData& geomInst = shocker_plp.s->geometryInstanceDataBuffer[geomInstSlot];
@@ -53,12 +112,10 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
             &positionInWorld, &shadingNormalInWorld, &texCoord0DirInWorld,
             &geometricNormalInWorld, &texCoord);
 
-       
         RGB alpha (1.0f);
         const float initImportance = sRGB_calcLuminance (alpha);
         PCG32RNG rng = shocker_plp.s->rngBuffer.read (launchIndex);
 
-      
         // EN: Shading on the first hit.
         Vector3D vIn;
         float dirPDensity;
@@ -66,14 +123,13 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
             // Get material slot from GBuffer1 (stored there from the gbuffer pass)
             const uint32_t materialSlot = gb1Elems.materialSlot;
             const shared::DisneyData& mat = shocker_plp.s->materialDataBuffer[materialSlot];
-            
+
             // Debug output commented out - materialSlot is now working correctly
             // if (launchIndex.x == 512 && launchIndex.y == 384)
             // {
             //     printf("Center pixel: materialSlot from GBuffer = %u\n", materialSlot);
             // }
 
-             /* 
             const Vector3D vOut = normalize (camera.position - positionInWorld);
             const float frontHit = dot (vOut, geometricNormalInWorld) >= 0.0f ? 1.0f : -1.0f;
             // Offsetting assumes BRDF.
@@ -82,22 +138,36 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
             ReferenceFrame shadingFrame (shadingNormalInWorld, texCoord0DirInWorld);
             if (shocker_plp.f->enableBumpMapping)
             {
-               // const Normal3D modLocalNormal = mat.readModifiedNormal (mat.normal, mat.normalDimInfo, texCoord, 0.0f);
-               // applyBumpMapping (modLocalNormal, &shadingFrame);
+                // const Normal3D modLocalNormal = mat.readModifiedNormal (mat.normal, mat.normalDimInfo, texCoord, 0.0f);
+                // applyBumpMapping (modLocalNormal, &shadingFrame);
             }
             const Vector3D vOutLocal = shadingFrame.toLocal (vOut);
 
             // EN: Accumulate the contribution from a light source directly seeing.
             contribution = RGB (0.0f);
-          if (vOutLocal.z > 0 && mat.emissive)
+            if (vOutLocal.z > 0 && mat.emissive)
             {
                 const float4 texValue = tex2DLod<float4> (mat.emissive, texCoord.x, texCoord.y, 0.0f);
                 const RGB emittance (getXYZ (texValue));
                 contribution += alpha * emittance / pi_v<float>;
-            }*/
+            }
 
+             // Create DisneyPrincipled instance directly instead of using BSDF
+            DisneyPrincipled bsdf = DisneyPrincipled::create (
+                mat, texCoord, 0.0f, shocker_plp.s->makeAllGlass, shocker_plp.s->globalGlassIOR,
+                shocker_plp.s->globalTransmittanceDist, shocker_plp.s->globalGlassType);
+
+               // Next event estimation (explicit light sampling) on the first hit.
+            contribution += alpha * performNextEventEstimation (
+                                        positionInWorld, vOutLocal, shadingFrame, bsdf, rng);
+
+            // generate a next ray.
+            Vector3D vInLocal;
+            alpha *= bsdf.sampleThroughput (
+                vOutLocal, rng.getFloat0cTo1o(), rng.getFloat0cTo1o(),
+                &vInLocal, &dirPDensity);
+            vIn = shadingFrame.fromLocal (vInLocal);
         }
-       
     }
     else
     {
