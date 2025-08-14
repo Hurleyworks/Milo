@@ -19,6 +19,39 @@ static constexpr bool useExplicitLightSampling = true;
 static constexpr bool useMultipleImportanceSampling = useImplicitLightSampling && useExplicitLightSampling;
 static_assert (useImplicitLightSampling || useExplicitLightSampling, "Invalid configuration for light sampling.");
 
+template <typename RayType, bool withVisibility>
+CUDA_DEVICE_FUNCTION CUDA_INLINE RGB performDirectLighting (
+    const Point3D& shadingPoint, const Vector3D& vOutLocal, const ReferenceFrame& shadingFrame,
+    const DisneyPrincipled& bsdf, const shocker_shared::LightSample& lightSample)
+{
+    return RGB (0.0f, 0.0f, 0.0f);
+}
+
+
+template <typename RayType>
+CUDA_DEVICE_FUNCTION CUDA_INLINE bool evaluateVisibility (
+    const Point3D& shadingPoint, const shocker_shared::LightSample& lightSample)
+{
+    using namespace shared;
+    Vector3D shadowRayDir = lightSample.atInfinity ? Vector3D (lightSample.position) : (lightSample.position - shadingPoint);
+    const float dist2 = shadowRayDir.sqLength();
+    float dist = std::sqrt (dist2);
+    shadowRayDir /= dist;
+    if (lightSample.atInfinity)
+        dist = 1e+10f;
+
+    float visibility = 1.0f;
+    VisibilityRayPayloadSignature::trace (
+        shocker_plp.f->travHandle,
+        shadingPoint.toNative(), shadowRayDir.toNative(), 0.0f, dist * 0.9999f, 0.0f,
+        0xFF, OPTIX_RAY_FLAG_NONE,
+        RayType::Visibility, maxNumRayTypes, RayType::Visibility,
+        visibility);
+
+    return visibility > 0.0f;
+}
+
+
 CUDA_DEVICE_FUNCTION CUDA_INLINE RGB performNextEventEstimation (
     const Point3D& shadingPoint, const Vector3D& vOutLocal, const ReferenceFrame& shadingFrame,
     const DisneyPrincipled& bsdf, PCG32RNG& rng)
@@ -52,7 +85,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE RGB performNextEventEstimation (
         }
         LightSample lightSample;
         float areaPDensity;
-      /*  sampleLight<useSolidAngleSampling> (
+        sampleLight<useSolidAngleSampling> (
             shadingPoint,
             uLight, selectEnvLight, rng.getFloat0cTo1o(), rng.getFloat0cTo1o(),
             &lightSample, &areaPDensity);
@@ -71,10 +104,11 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE RGB performNextEventEstimation (
             const float lightPDensity = areaPDensity;
             misWeight = pow2 (lightPDensity) / (pow2 (bsdfPDensity) + pow2 (lightPDensity));
         }
+
         if (areaPDensity > 0.0f)
             ret = performDirectLighting<PathTracingRayType, true> (
                       shadingPoint, vOutLocal, shadingFrame, bsdf, lightSample) *
-                  (misWeight / areaPDensity);*/
+                  (misWeight / areaPDensity);
     }
 
     return ret;
@@ -152,12 +186,12 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
                 contribution += alpha * emittance / pi_v<float>;
             }
 
-             // Create DisneyPrincipled instance directly instead of using BSDF
+            // Create DisneyPrincipled instance directly instead of using BSDF
             DisneyPrincipled bsdf = DisneyPrincipled::create (
                 mat, texCoord, 0.0f, shocker_plp.s->makeAllGlass, shocker_plp.s->globalGlassIOR,
                 shocker_plp.s->globalTransmittanceDist, shocker_plp.s->globalGlassType);
 
-               // Next event estimation (explicit light sampling) on the first hit.
+            // Next event estimation (explicit light sampling) on the first hit.
             contribution += alpha * performNextEventEstimation (
                                         positionInWorld, vOutLocal, shadingFrame, bsdf, rng);
 

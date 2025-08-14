@@ -273,6 +273,16 @@ namespace shocker_shared
 {
     using namespace shared;
 
+    template <bool useSolidAngleSampling>
+    CUDA_DEVICE_FUNCTION CUDA_INLINE void sampleLight (
+        const Point3D& shadingPoint,
+        float ul, bool sampleEnvLight, float u0, float u1,
+        shocker_shared::LightSample* lightSample, float* areaPDensity)
+    {
+
+    }
+
+
     CUDA_DEVICE_FUNCTION CUDA_INLINE void computeSurfacePoint (
         const shared::InstanceData& inst,
         const shared::GeometryInstanceData& geomInst,
