@@ -218,7 +218,7 @@ void ShockerModelHandler::addCgModel(RenderableWeakRef weakNode)
         }
 
         // Create a Geometry Acceleration Structure (GAS) for ray tracing
-        shockerModel->createGAS(ctx_, scene, shocker_shared::NumRayTypes);
+        shockerModel->createGAS (ctx_, scene, shocker_shared::maxNumRayTypes);
         
         // Populate geometry instance data in the global buffer
         if (geomInstSlot != SlotFinder::InvalidSlotIndex)
@@ -342,7 +342,7 @@ void ShockerModelHandler::addCgModelList(const WeakRenderableList& weakNodeList)
 
             // Create a Geometry Acceleration Structure (GAS) for ray tracing
             optixu::Scene* sceneForGAS = sceneHandler_->getScene();
-            shockerModel->createGAS(ctx_, sceneForGAS, shocker_shared::NumRayTypes);
+            shockerModel->createGAS (ctx_, sceneForGAS, shocker_shared::maxNumRayTypes);
             
             // Populate geometry instance data in the global buffer
             if (geomInstSlot != SlotFinder::InvalidSlotIndex)

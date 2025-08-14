@@ -122,7 +122,7 @@ class Application : public Jahley::App
    // model.loadGLTF (ground);
     // model.loadGLTF (helmet);
   //  model.loadGLTF (testModel);
-       // model.loadGLTF (box);
+        model.loadGLTF (box);
       //  model.loadGLTF (scifi);
        // model.loadGLTF (warrior);
        // model.loadGLTF (helmet);

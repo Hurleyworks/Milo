@@ -10,12 +10,12 @@ namespace shocker_shared
 {
     static constexpr float probToSampleEnvLight = 0.25f;
 
-    enum RayType
+   /* enum RayType
     {
         RayType_Search = 0,
         RayType_Visibility,
         NumRayTypes
-    };
+    };*/
 
     struct GBufferRayType
     {
@@ -34,7 +34,27 @@ namespace shocker_shared
         }
     };
 
+     struct PathTracingRayType
+    {
+        enum Value
+        {
+            Closest,
+            Visibility,
+            NumTypes
+        } value;
+
+        CUDA_DEVICE_FUNCTION constexpr PathTracingRayType (Value v = Closest) :
+            value (v) {}
+
+        CUDA_DEVICE_FUNCTION operator uint32_t() const
+        {
+            return static_cast<uint32_t> (value);
+        }
+    };
+
     constexpr uint32_t maxNumRayTypes = 2;
+
+   
 
     // In PerspectiveCamera struct in shared.h
     struct PerspectiveCamera

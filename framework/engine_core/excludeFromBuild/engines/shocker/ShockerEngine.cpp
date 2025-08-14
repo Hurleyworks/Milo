@@ -66,7 +66,7 @@ void ShockerEngine::initialize (RenderContext* ctx)
     sceneHandler_->setModelHandler (modelHandler_);
 
     // Set number of ray types
-    constexpr uint32_t numRayTypes = shocker_shared::NumRayTypes;
+    constexpr uint32_t numRayTypes = shocker_shared::maxNumRayTypes;
     // Note: Ray types and material sets are set on geometry instances, not the scene
     // scene_.setNumRayTypes(numRayTypes);
     // scene_.setNumMaterialSets(MATERIAL_SETS);
@@ -734,10 +734,10 @@ void ShockerEngine::createPrograms()
         pathTracePipeline_->setEntryPoint (engine_core::PathTracingEntryPoint::PathTrace);
 
         // Configure miss programs for ray types
-        p.setNumMissRayTypes (shocker_shared::NumRayTypes);
-        p.setMissProgram (shocker_shared::RayType_Search,
+        p.setNumMissRayTypes (shocker_shared::PathTracingRayType::NumTypes);
+        p.setMissProgram (shocker_shared::PathTracingRayType::Closest,
                           pathTracePipeline_->programs.at (RT_MS_NAME_STR ("pathTraceBaseline")));
-        p.setMissProgram (shocker_shared::RayType_Visibility,
+        p.setMissProgram (shocker_shared::PathTracingRayType::Visibility,
                           pathTracePipeline_->programs.at ("emptyMiss"));
 
         LOG (INFO) << "Path tracing pipeline programs created";
@@ -746,11 +746,11 @@ void ShockerEngine::createPrograms()
         if (defaultMaterial_)
         {
             // Set hit group for search rays (shading)
-            defaultMaterial_.setHitGroup (shocker_shared::RayType_Search,
+            defaultMaterial_.setHitGroup (shocker_shared::PathTracingRayType::Closest,
                                           pathTracePipeline_->hitPrograms.at (RT_CH_NAME_STR ("pathTraceBaseline")));
 
             // Set hit group for visibility rays
-            defaultMaterial_.setHitGroup (shocker_shared::RayType_Visibility,
+            defaultMaterial_.setHitGroup (shocker_shared::PathTracingRayType::Visibility,
                                           pathTracePipeline_->hitPrograms.at (RT_AH_NAME_STR ("visibility")));
 
             LOG (INFO) << "Path tracing material hit groups configured on default material";
@@ -978,7 +978,7 @@ void ShockerEngine::updateMaterialHitGroups (ShockerModelPtr model)
         if (pathTracePipeline_ && pathTracePipeline_->optixPipeline)
         {
             // Set shading hit group for primary rays (ray type 0)
-            auto shadingIt = pathTracePipeline_->hitPrograms.find (RT_CH_NAME_STR ("shading"));
+            auto shadingIt = pathTracePipeline_->hitPrograms.find (RT_CH_NAME_STR ("pathTraceBaseline"));
             if (shadingIt != pathTracePipeline_->hitPrograms.end())
             {
                 mat.setHitGroup (0, shadingIt->second);
