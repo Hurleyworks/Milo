@@ -72,15 +72,15 @@ class Model : public Observer
         node->getSpaceTime().worldTransform.translation() = Eigen::Vector3f (0.0f, 1.0f, 0.0f);
 
         // Check if model name starts with "static" - if so, skip processCgModel
-        //if (modelName.substr(0, 6) != "static")
-        //{
-        //    // Use the full mesh options including RestOnGround and LoadStrategy
-        //    sabi::MeshOps::processCgModel (node, meshOptions, loadStrategy);
-        //}
-        //else
-        //{
-        //    LOG(INFO) << "Skipping processCgModel for static model: " << modelName;
-        //}
+        if (modelName.substr(0, 6) != "static")
+        {
+            // Use the full mesh options including RestOnGround and LoadStrategy
+            sabi::MeshOps::processCgModel (node, meshOptions, loadStrategy);
+        }
+        else
+        {
+            LOG(INFO) << "Skipping processCgModel for static model: " << modelName;
+        }
 
         // store it so it doesn't self-destruct
         nodes.push_back (node);

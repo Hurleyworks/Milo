@@ -28,4 +28,5 @@ end
 	include "tests/GeometryTest"
 	include "tests/ShockerModelTest"
 	include "tests/AreaLightHandlerTest"
+	include "tests/Eigen2Shocker"
 	

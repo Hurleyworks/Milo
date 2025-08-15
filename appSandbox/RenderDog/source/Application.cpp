@@ -121,11 +121,11 @@ class Application : public Jahley::App
         std::string ground = "E:/common_content/models/static_gound/static_ground.gltf";
  // model.loadGLTF (ground);
    // model.loadGLTF (helmet);
- //  model.loadGLTF (testModel);
+ //model.loadGLTF (testModel);
     model.loadGLTF (box);
     // model.loadGLTF (scifi);
        // model.loadGLTF (warrior);
-       // model.loadGLTF (helmet);
+     //  model.loadGLTF (helmet);
         std::vector<std::string> models;
         // models.push_back (testModel);
         // models.push_back (helmet);
@@ -158,7 +158,7 @@ class Application : public Jahley::App
          groundPlane = sabi::MeshOps::createGroundPlaneNode();
          groundPlane->setClientID (groundPlane->getID());
          sabi::SpaceTime& st = groundPlane->getSpaceTime();
-         st.worldTransform.translation() = Eigen::Vector3f (0.0f, 0.0f, 0.0f);
+         st.worldTransform.translation() = Eigen::Vector3f (0.0f, -0.25f, 0.0f);
          model.addNodeToRenderer (groundPlane);
          }
       /*  CgModelPtr c = sabi::MeshOps::createCube();

@@ -7,6 +7,7 @@
 
 
 
+
 RT_PIPELINE_LAUNCH_PARAMETERS shocker_shared::PipelineLaunchParameters shocker_plp;
 
 CUDA_DEVICE_KERNEL void RT_AH_NAME (visibility)()
@@ -163,14 +164,6 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
     const float bcB = decodeBarycentric (gb0Elems.qbcB);
     const float bcC = decodeBarycentric (gb0Elems.qbcC);
     
-    // Debug GBuffer content for a pixel on the cube
-    if (launchIndex.x == 900 && launchIndex.y == 200) {
-        printf("=== GBuffer Debug (900, 200) ===\n");
-        printf("instSlot: %u (0xFFFFFFFF means no hit)\n", instSlot);
-        printf("geomInstSlot: %u\n", gb0Elems.geomInstSlot);
-        printf("primIndex: %u\n", gb0Elems.primIndex);
-        printf("bufIdx: %u\n", bufIdx);
-    }
 
     const PerspectiveCamera& camera = shocker_plp.f->camera;
 
@@ -182,23 +175,6 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
         const InstanceData& inst = shocker_plp.s->instanceDataBufferArray[bufIdx][instSlot];
         const GeometryInstanceData& geomInst = shocker_plp.s->geometryInstanceDataBuffer[geomInstSlot];
         
-        // Debug: Print transform for a pixel on the cube
-        if (launchIndex.x == 900 && launchIndex.y == 200) {
-            printf("=== Ray Gen Debug ===\n");
-            printf("Instance Slot from GBuffer: %u\n", instSlot);
-            printf("Buffer index: %u\n", bufIdx);
-            printf("Transform from inst data:\n");
-            printf("  Col0: [%.3f, %.3f, %.3f, %.3f]\n",
-                inst.transform.c0.x, inst.transform.c0.y, inst.transform.c0.z, inst.transform.c0.w);
-            printf("  Col1: [%.3f, %.3f, %.3f, %.3f]\n",
-                inst.transform.c1.x, inst.transform.c1.y, inst.transform.c1.z, inst.transform.c1.w);
-            printf("  Col2: [%.3f, %.3f, %.3f, %.3f]\n",
-                inst.transform.c2.x, inst.transform.c2.y, inst.transform.c2.z, inst.transform.c2.w);
-            printf("  Col3: [%.3f, %.3f, %.3f, %.3f]\n",
-                inst.transform.c3.x, inst.transform.c3.y, inst.transform.c3.z, inst.transform.c3.w);
-            printf("  Translation: (%.3f, %.3f, %.3f)\n",
-                inst.transform.c3.x, inst.transform.c3.y, inst.transform.c3.z);
-        }
         
         Point3D positionInWorld;
         Normal3D geometricNormalInWorld;
@@ -363,29 +339,6 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_closestHit_generic()
     const InstanceData& inst = shocker_plp.s->instanceDataBufferArray[bufIdx][instanceId];
     const GeometryInstanceData& geomInst = shocker_plp.s->geometryInstanceDataBuffer[sbtr.geomInstSlot];
 
-    // Debug: Print transform for a pixel on the cube
-    if (optixGetLaunchIndex().x == 900 && optixGetLaunchIndex().y == 200) {
-        printf("=== Closest Hit Debug ===\n");
-        printf("Instance ID: %u\n", instanceId);
-        printf("Buffer index: %u\n", bufIdx);
-        printf("Transform from inst data:\n");
-        printf("  Col0: [%.3f, %.3f, %.3f, %.3f]\n",
-            inst.transform.c0.x, inst.transform.c0.y, inst.transform.c0.z, inst.transform.c0.w);
-        printf("  Col1: [%.3f, %.3f, %.3f, %.3f]\n",
-            inst.transform.c1.x, inst.transform.c1.y, inst.transform.c1.z, inst.transform.c1.w);
-        printf("  Col2: [%.3f, %.3f, %.3f, %.3f]\n",
-            inst.transform.c2.x, inst.transform.c2.y, inst.transform.c2.z, inst.transform.c2.w);
-        printf("  Col3: [%.3f, %.3f, %.3f, %.3f]\n",
-            inst.transform.c3.x, inst.transform.c3.y, inst.transform.c3.z, inst.transform.c3.w);
-        printf("  Translation: (%.3f, %.3f, %.3f)\n",
-            inst.transform.c3.x, inst.transform.c3.y, inst.transform.c3.z);
-        
-        // Test transform with origin point
-        Point3D testPoint(0, 0, 0);
-        Point3D transformed = inst.transform * testPoint;
-        printf("  Test: transform * (0,0,0) = (%.3f, %.3f, %.3f)\n",
-            transformed.x, transformed.y, transformed.z);
-    }
 
     PathTraceWriteOnlyPayload* woPayload;
     PathTraceReadWritePayload* rwPayload;
