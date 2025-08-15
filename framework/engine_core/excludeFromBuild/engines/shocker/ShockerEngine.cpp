@@ -1305,7 +1305,7 @@ void ShockerEngine::updateLaunchParameters (const mace::InputEvent& input)
     per_frame_plp_.mousePosition = int2 (static_cast<int32_t> (input.getX()), static_cast<int32_t> (input.getY()));
     
     // Rendering control flags
-    per_frame_plp_.maxPathLength = 8; // Maximum path length for path tracing
+    per_frame_plp_.maxPathLength = 30; // Maximum path length for path tracing
     per_frame_plp_.bufferIndex = frameCounter_ & 1; // Alternating buffer index
     per_frame_plp_.resetFlowBuffer = (numAccumFrames_ == 0) ? 1 : 0; // Reset flow on first frame
     per_frame_plp_.enableJittering = 1; // Enable anti-aliasing jitter
