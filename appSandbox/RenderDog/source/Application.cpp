@@ -119,7 +119,7 @@ class Application : public Jahley::App
         std::string buggy = "E:/common_content/glTF-Sample-Models/2.0/Buggy/glTF/Buggy.gltf";
         std::string camera = "E:/common_content/glTF-Sample-Models/2.0/AntiqueCamera/glTF/AntiqueCamera.gltf";
         std::string ground = "E:/common_content/models/static_gound/static_ground.gltf";
-  model.loadGLTF (ground);
+ // model.loadGLTF (ground);
    // model.loadGLTF (helmet);
  //  model.loadGLTF (testModel);
     model.loadGLTF (box);
@@ -149,21 +149,27 @@ class Application : public Jahley::App
              10.0f                               // High intensity
         );
 
-         warmLight->setClientID (warmLight->getID());
+       /*  warmLight->setClientID (warmLight->getID());
          sabi::SpaceTime& st = warmLight->getSpaceTime();
-         st.worldTransform.translation() = Eigen::Vector3f (0.0f, 1.0f, -4.0f);
+         st.worldTransform.translation() = Eigen::Vector3f (0.0f, 1.0f, -4.0f);*/
       //  model.addNodeToRenderer (warmLight);
 
-        // groundPlane = sabi::MeshOps::createGroundPlaneNode();
-        // groundPlane->setClientID (groundPlane->getID());
-        ////model.addNodeToRenderer (groundPlane);
+         {
+         groundPlane = sabi::MeshOps::createGroundPlaneNode();
+         groundPlane->setClientID (groundPlane->getID());
+         sabi::SpaceTime& st = groundPlane->getSpaceTime();
+         st.worldTransform.translation() = Eigen::Vector3f (0.0f, 0.0f, 0.0f);
+         model.addNodeToRenderer (groundPlane);
+         }
+      /*  CgModelPtr c = sabi::MeshOps::createCube();
 
-        // CgModelPtr c = sabi::MeshOps::createCube();
-
-        // cube = sabi::WorldItem::create();
-        // cube->setName ("Cube");
-        // cube->setModel (c);
-        // model.addNodeToRenderer (cube);
+         cube = sabi::WorldItem::create();
+        cube->setClientID (cube->getID());
+         cube->setName ("Cube");
+         cube->setModel (c);
+         sabi::SpaceTime& st = cube->getSpaceTime();
+         st.worldTransform.translation() = Eigen::Vector3f (0.0f, 1.0f, 0.0f);
+         model.addNodeToRenderer (cube);*/
     }
 
     void update() override

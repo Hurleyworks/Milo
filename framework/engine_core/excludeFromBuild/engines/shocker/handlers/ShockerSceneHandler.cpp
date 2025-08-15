@@ -505,6 +505,19 @@ void ShockerSceneHandler::createInstance (RenderableWeakRef& weakNode)
     const SpaceTime& st = node->getSpaceTime();
     MatrixRowMajor34f t;
     getWorldTransform (t, st);
+    
+    // Debug: Log the 3x4 transform being set on OptiX instance for Box
+    std::string nodeName = node->getName();
+    if (nodeName.find("Box") != std::string::npos)
+    {
+        LOG(INFO) << "=== OptiX Instance Transform (3x4 row-major) ===";
+        LOG(INFO) << "Node: " << nodeName;
+        LOG(INFO) << "Row 0: [" << t(0,0) << ", " << t(0,1) << ", " << t(0,2) << ", " << t(0,3) << "]";
+        LOG(INFO) << "Row 1: [" << t(1,0) << ", " << t(1,1) << ", " << t(1,2) << ", " << t(1,3) << "]";
+        LOG(INFO) << "Row 2: [" << t(2,0) << ", " << t(2,1) << ", " << t(2,2) << ", " << t(2,3) << "]";
+        LOG(INFO) << "Translation (last column): (" << t(0,3) << ", " << t(1,3) << ", " << t(2,3) << ")";
+    }
+    
     instance.setTransform (t.data());
 
     // Add the instance to the IAS
@@ -514,6 +527,14 @@ void ShockerSceneHandler::createInstance (RenderableWeakRef& weakNode)
 
     uint32_t index = ias.findChildIndex (instance);
     nodeMap[index] = weakNode;
+    
+    // Debug: Log the actual OptiX instance index
+    if (nodeName.find("Box") != std::string::npos)
+    {
+        LOG(INFO) << "=== OptiX Instance Index ===";
+        LOG(INFO) << "Box assigned OptiX instance index: " << index;
+        LOG(INFO) << "Total instances in IAS: " << ias.getNumChildren();
+    }
 
     GAS* gasData = optiXModel->getGAS();
     gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, ctx->getASBuildScratchMem());
@@ -549,23 +570,74 @@ void ShockerSceneHandler::populateInstanceData(uint32_t instanceIndex, const Ren
         // Get world transform from node
         const Eigen::Matrix4f& worldTransform = node->getSpaceTime().worldTransform.matrix();
         
-        // Convert Eigen matrix to shared Matrix4x4 (column-major)
+        // Debug: Check if this is the cube
+        std::string nodeName = node->getName();
+        if (nodeName.find("Box") != std::string::npos || nodeName.find("Box") != std::string::npos)
+        {
+            LOG(INFO) << "=== Cube Transform Debug (Host Side) ===";
+            LOG(INFO) << "Node name: " << nodeName;
+            LOG(INFO) << "Instance index: " << instanceIndex;
+            LOG(INFO) << "Buffer index: " << bufferIdx;
+            LOG(INFO) << "World transform matrix:";
+            for (int row = 0; row < 4; ++row)
+            {
+                LOG(INFO) << "  [" 
+                    << worldTransform(row, 0) << ", " 
+                    << worldTransform(row, 1) << ", " 
+                    << worldTransform(row, 2) << ", " 
+                    << worldTransform(row, 3) << "]";
+            }
+            
+            // Extract translation
+            Eigen::Vector3f translation(worldTransform(0, 3), worldTransform(1, 3), worldTransform(2, 3));
+            LOG(INFO) << "Translation: (" << translation.x() << ", " << translation.y() << ", " << translation.z() << ")";
+            
+            // Check if it's close to expected (0, 1, 0)
+            if (std::abs(translation.x() - 0.0f) < 0.01f && 
+                std::abs(translation.y() - 1.0f) < 0.01f && 
+                std::abs(translation.z() - 0.0f) < 0.01f)
+            {
+                LOG(INFO) << "✓ Translation matches expected (0, 1, 0)";
+            }
+        }
+        
+        // Convert Eigen matrix (row-major) to shared Matrix4x4 (column-major)
+        // Need to transpose: Eigen's rows become Matrix4x4's columns
         Matrix4x4 transform(
-            Vector4D(worldTransform(0, 0), worldTransform(1, 0), worldTransform(2, 0), worldTransform(3, 0)),  // column 0
-            Vector4D(worldTransform(0, 1), worldTransform(1, 1), worldTransform(2, 1), worldTransform(3, 1)),  // column 1
-            Vector4D(worldTransform(0, 2), worldTransform(1, 2), worldTransform(2, 2), worldTransform(3, 2)),  // column 2
-            Vector4D(worldTransform(0, 3), worldTransform(1, 3), worldTransform(2, 3), worldTransform(3, 3))   // column 3
+            Vector4D(worldTransform(0, 0), worldTransform(0, 1), worldTransform(0, 2), worldTransform(0, 3)),  // column 0 = Eigen row 0
+            Vector4D(worldTransform(1, 0), worldTransform(1, 1), worldTransform(1, 2), worldTransform(1, 3)),  // column 1 = Eigen row 1  
+            Vector4D(worldTransform(2, 0), worldTransform(2, 1), worldTransform(2, 2), worldTransform(2, 3)),  // column 2 = Eigen row 2
+            Vector4D(worldTransform(3, 0), worldTransform(3, 1), worldTransform(3, 2), worldTransform(3, 3))   // column 3 = Eigen row 3
         );
+        
+        // Debug: Verify the conversion to Matrix4x4 for Box
+        if (nodeName.find("Box") != std::string::npos)
+        {
+            LOG(INFO) << "=== Matrix4x4 Conversion Debug ===";
+            LOG(INFO) << "Column 0: (" << transform.c0.x << ", " << transform.c0.y << ", " << transform.c0.z << ", " << transform.c0.w << ")";
+            LOG(INFO) << "Column 1: (" << transform.c1.x << ", " << transform.c1.y << ", " << transform.c1.z << ", " << transform.c1.w << ")";
+            LOG(INFO) << "Column 2: (" << transform.c2.x << ", " << transform.c2.y << ", " << transform.c2.z << ", " << transform.c2.w << ")";
+            LOG(INFO) << "Column 3: (" << transform.c3.x << ", " << transform.c3.y << ", " << transform.c3.z << ", " << transform.c3.w << ")";
+            LOG(INFO) << "Translation from Matrix4x4 (column 3): (" << transform.c3.x << ", " << transform.c3.y << ", " << transform.c3.z << ")";
+            
+            // Test multiplication with a point (0,0,0) to verify it translates correctly
+            Point3D testPoint(0, 0, 0);
+            Point3D result = transform * testPoint;
+            LOG(INFO) << "Test: transform * (0,0,0) = (" << result.x << ", " << result.y << ", " << result.z << ")";
+            LOG(INFO) << "Expected: (0, 1, 0)";
+        }
+        
         instData.transform = transform;
         
         // For now, no motion blur - identity transform
         instData.curToPrevTransform = Matrix4x4();
         
         // Compute normal matrix (inverse transpose of upper 3x3)
+        // Convert from Eigen row-major to Matrix3x3 column-major (need to transpose)
         Matrix3x3 upperLeft(
-            Vector3D(worldTransform(0, 0), worldTransform(1, 0), worldTransform(2, 0)),  // column 0
-            Vector3D(worldTransform(0, 1), worldTransform(1, 1), worldTransform(2, 1)),  // column 1
-            Vector3D(worldTransform(0, 2), worldTransform(1, 2), worldTransform(2, 2))   // column 2
+            Vector3D(worldTransform(0, 0), worldTransform(0, 1), worldTransform(0, 2)),  // column 0 = Eigen row 0
+            Vector3D(worldTransform(1, 0), worldTransform(1, 1), worldTransform(1, 2)),  // column 1 = Eigen row 1
+            Vector3D(worldTransform(2, 0), worldTransform(2, 1), worldTransform(2, 2))   // column 2 = Eigen row 2
         );
         instData.normalMatrix = transpose(invert(upperLeft));
         
