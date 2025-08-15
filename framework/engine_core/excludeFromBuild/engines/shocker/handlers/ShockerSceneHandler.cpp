@@ -516,6 +516,20 @@ void ShockerSceneHandler::createInstance (RenderableWeakRef& weakNode)
         LOG(INFO) << "Row 1: [" << t(1,0) << ", " << t(1,1) << ", " << t(1,2) << ", " << t(1,3) << "]";
         LOG(INFO) << "Row 2: [" << t(2,0) << ", " << t(2,1) << ", " << t(2,2) << ", " << t(2,3) << "]";
         LOG(INFO) << "Translation (last column): (" << t(0,3) << ", " << t(1,3) << ", " << t(2,3) << ")";
+        
+        // Also log the raw data array that OptiX will receive
+        LOG(INFO) << "Raw data array for OptiX (row-major order):";
+        const float* data = t.data();
+        for (int i = 0; i < 3; ++i) {
+            LOG(INFO) << "  [" << data[i*4+0] << ", " << data[i*4+1] << ", " << data[i*4+2] << ", " << data[i*4+3] << "]";
+        }
+        
+        // Compare with the original Eigen matrix
+        const Eigen::Matrix4f& m = st.worldTransform.matrix();
+        LOG(INFO) << "Original Eigen Matrix4f (column-major):";
+        for (int row = 0; row < 4; ++row) {
+            LOG(INFO) << "  [" << m(row,0) << ", " << m(row,1) << ", " << m(row,2) << ", " << m(row,3) << "]";
+        }
     }
     
     instance.setTransform (t.data());
@@ -567,8 +581,13 @@ void ShockerSceneHandler::populateInstanceData(uint32_t instanceIndex, const Ren
         
         shared::InstanceData& instData = instDataOnHost[instanceIndex];
         
-        // Get world transform from node
-        const Eigen::Matrix4f& worldTransform = node->getSpaceTime().worldTransform.matrix();
+        // Get world transform from node and apply scale
+        const SpaceTime& st = node->getSpaceTime();
+        // Apply scale to the transform just like getWorldTransform does
+        Eigen::Affine3f scaled = st.worldTransform;
+        for (int j = 0; j < 3; j++)
+            scaled.linear().col(j) *= st.scale[j];
+        const Eigen::Matrix4f worldTransform = scaled.matrix();
         
         // Debug: Check if this is the cube
         std::string nodeName = node->getName();

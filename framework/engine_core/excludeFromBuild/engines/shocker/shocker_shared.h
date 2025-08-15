@@ -329,7 +329,6 @@ namespace shocker_shared
         const Vertex& vC = geomInst.vertexBuffer[tri.index2];
         const float bcA = 1 - (bcB + bcC);
 
-        // EN: Compute hit point properties in the local coordinates.
         const Point3D positionInObj = bcA * vA.position + bcB * vB.position + bcC * vC.position;
         *positionInWorld = inst.transform * positionInObj;
         *geometricNormalInWorld = normalize (
@@ -376,7 +375,6 @@ namespace shocker_shared
         const Point3D pC = transformPointFromObjectToWorldSpace (vC.position);
         const float bcA = 1 - (bcB + bcC);
 
-        
         // EN: Compute hit point properties in the local coordinates.
         *positionInWorld = bcA * pA + bcB * pB + bcC * pC;
         const Normal3D shadingNormalInObj = bcA * vA.normal + bcB * vB.normal + bcC * vC.normal;
@@ -396,7 +394,6 @@ namespace shocker_shared
             (void)area;
         }
 
-       
         // EN: Convert the local properties to ones in world coordinates.
         *shadingNormalInWorld = normalize (transformNormalFromObjectToWorldSpace (shadingNormalInObj));
         *texCoord0DirInWorld = normalize (transformVectorFromObjectToWorldSpace (texCoord0DirInObj));
@@ -413,7 +410,6 @@ namespace shocker_shared
 
         if constexpr (computeHypotheticalAreaPDensity)
         {
-           
             // EN: Compute a hypothetical probability density with which the intersection point
             //     is sampled by explicit light sampling.
             float lightProb = 1.0f;

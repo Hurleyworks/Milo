@@ -69,7 +69,7 @@ class Model : public Observer
             s.vertexCount = cgModel->vertexCount();
         }
         node->setName (modelName);
-        node->getSpaceTime().worldTransform.translation() = Eigen::Vector3f (0.0f, 1.0f, 0.0f);
+       // node->getSpaceTime().worldTransform.translation() = Eigen::Vector3f (0.0f, 1.0f, 0.0f);
 
         // Check if model name starts with "static" - if so, skip processCgModel
         if (modelName.substr(0, 6) != "static")

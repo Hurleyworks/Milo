@@ -5,9 +5,6 @@
 
 #include "principledDisney_shocker.h"
 
-
-
-
 RT_PIPELINE_LAUNCH_PARAMETERS shocker_shared::PipelineLaunchParameters shocker_plp;
 
 CUDA_DEVICE_KERNEL void RT_AH_NAME (visibility)()
@@ -49,7 +46,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE RGB performDirectLighting (
             RayType::Visibility, shocker_shared::maxNumRayTypes, RayType::Visibility,
             visibility);
     }
-    
+
     if (visibility > 0 && lpCos > 0)
     {
         const RGB Le = lightSample.emittance / pi_v<float>; // assume diffuse emitter.
@@ -63,7 +60,6 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE RGB performDirectLighting (
         return RGB (0.0f, 0.0f, 0.0f);
     }
 }
-
 
 template <typename RayType>
 CUDA_DEVICE_FUNCTION CUDA_INLINE bool evaluateVisibility (
@@ -88,7 +84,6 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE bool evaluateVisibility (
     return visibility > 0.0f;
 }
 
-
 CUDA_DEVICE_FUNCTION CUDA_INLINE RGB performNextEventEstimation (
     const Point3D& shadingPoint, const Vector3D& vOutLocal, const ReferenceFrame& shadingFrame,
     const DisneyPrincipled& bsdf, PCG32RNG& rng)
@@ -99,7 +94,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE RGB performNextEventEstimation (
         float uLight = rng.getFloat0cTo1o();
         bool selectEnvLight = false;
         float probToSampleCurLightType = 1.0f;
-        
+
         if (shocker_plp.s->envLightTexture && shocker_plp.f->enableEnvLight)
         {
             if (shocker_plp.s->lightInstDist.integral() > 0.0f)
@@ -156,14 +151,13 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
 {
     const uint2 launchIndex = make_uint2 (optixGetLaunchIndex().x, optixGetLaunchIndex().y);
     const uint32_t bufIdx = shocker_plp.f->bufferIndex;
-    
+
     // Read GBuffer data
     const GBuffer0Elements gb0Elems = shocker_plp.s->GBuffer0[bufIdx].read (launchIndex);
     const GBuffer1Elements gb1Elems = shocker_plp.s->GBuffer1[bufIdx].read (launchIndex);
     const uint32_t instSlot = gb0Elems.instSlot;
     const float bcB = decodeBarycentric (gb0Elems.qbcB);
     const float bcC = decodeBarycentric (gb0Elems.qbcC);
-    
 
     const PerspectiveCamera& camera = shocker_plp.f->camera;
 
@@ -174,13 +168,15 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
         const uint32_t geomInstSlot = gb0Elems.geomInstSlot;
         const InstanceData& inst = shocker_plp.s->instanceDataBufferArray[bufIdx][instSlot];
         const GeometryInstanceData& geomInst = shocker_plp.s->geometryInstanceDataBuffer[geomInstSlot];
-        
-        
+
         Point3D positionInWorld;
         Normal3D geometricNormalInWorld;
         Normal3D shadingNormalInWorld;
         Vector3D texCoord0DirInWorld;
         Point2D texCoord;
+        // Use the OptiX transform version of computeSurfacePoint for consistency with closest hit
+        // This uses transformPointFromObjectToWorldSpace instead of inst.transform
+
         computeSurfacePoint (
             inst, geomInst,
             gb0Elems.primIndex, bcB, bcC,
@@ -220,37 +216,39 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
 
             // EN: Accumulate the contribution from a light source directly seeing.
             contribution = RGB (0.0f);
-          /*  if (vOutLocal.z > 0 && mat.emissive)
+            if (vOutLocal.z > 0 && mat.emissive)
             {
                 const float4 texValue = tex2DLod<float4> (mat.emissive, texCoord.x, texCoord.y, 0.0f);
                 const RGB emittance (getXYZ (texValue));
                 contribution += alpha * emittance / pi_v<float>;
-            }*/
+            }
 
             // Create DisneyPrincipled instance directly instead of using BSDF
             DisneyPrincipled bsdf = DisneyPrincipled::create (
                 mat, texCoord, 0.0f, shocker_plp.s->makeAllGlass, shocker_plp.s->globalGlassIOR,
                 shocker_plp.s->globalTransmittanceDist, shocker_plp.s->globalGlassType);
 
-            // Next event estimation (explicit light sampling) on the first hit.
-            RGB neeContrib = performNextEventEstimation (
+             // Next event estimation (explicit light sampling) on the first hit.
+            contribution += alpha * performNextEventEstimation (
                                         positionInWorld, vOutLocal, shadingFrame, bsdf, rng);
-            contribution += alpha * neeContrib;
 
             // generate a next ray.
             Vector3D vInLocal;
             RGB throughput = bsdf.sampleThroughput (
                 vOutLocal, rng.getFloat0cTo1o(), rng.getFloat0cTo1o(),
                 &vInLocal, &dirPDensity);
-            
+
             // Apply the same calculation as RiPR: multiply by cosine and divide by PDF
-            if (dirPDensity > 0.0f && stc::isfinite(dirPDensity)) {
-                alpha *= throughput * std::fabs(vInLocal.z) / dirPDensity;
-            } else {
-                alpha = RGB(0.0f);
+            if (dirPDensity > 0.0f && stc::isfinite (dirPDensity))
+            {
+                alpha *= throughput * std::fabs (vInLocal.z) / dirPDensity;
+            }
+            else
+            {
+                alpha = RGB (0.0f);
                 dirPDensity = 0.0f;
             }
-            
+
             vIn = shadingFrame.fromLocal (vInLocal);
         }
         // Path extension loop
@@ -276,7 +274,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
             if (rwPayload.pathLength >= shocker_plp.f->maxPathLength)
                 rwPayload.maxLengthTerminate = true;
             rwPayload.terminate = true;
-          
+
             // EN: Nothing to do in the closest-hit program when reaching the path length limit
             //     in the case implicit light sampling is unused.
             if constexpr (!useImplicitLightSampling)
@@ -322,7 +320,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
         prevColorResult = RGB (getXYZ (shocker_plp.s->beautyAccumBuffer.read (launchIndex)));
     const float curWeight = 1.0f / (1 + shocker_plp.f->numAccumFrames);
     const RGB colorResult = (1 - curWeight) * prevColorResult + curWeight * contribution;
-    
+
     shocker_plp.s->beautyAccumBuffer.write (launchIndex, make_float4 (colorResult.toNative(), 1.0f));
 }
 
@@ -339,13 +337,12 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_closestHit_generic()
     const InstanceData& inst = shocker_plp.s->instanceDataBufferArray[bufIdx][instanceId];
     const GeometryInstanceData& geomInst = shocker_plp.s->geometryInstanceDataBuffer[sbtr.geomInstSlot];
 
-
     PathTraceWriteOnlyPayload* woPayload;
     PathTraceReadWritePayload* rwPayload;
     PathTraceRayPayloadSignature::get (&woPayload, &rwPayload);
     PCG32RNG& rng = rwPayload->rng;
 
-      const Point3D rayOrigin (optixGetWorldRayOrigin());
+    const Point3D rayOrigin (optixGetWorldRayOrigin());
 
     const auto hp = HitPointParameter::get();
     Point3D positionInWorld;
@@ -362,7 +359,6 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_closestHit_generic()
     if constexpr (!useMultipleImportanceSampling)
         (void)hypAreaPDensity;
 
-
     const shared::DisneyData& mat = shocker_plp.s->materialDataBuffer[sbtr.materialSlot];
 
     const Vector3D vOut = normalize (-Vector3D (optixGetWorldRayDirection()));
@@ -371,8 +367,8 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_closestHit_generic()
     ReferenceFrame shadingFrame (shadingNormalInWorld, texCoord0DirInWorld);
     if (shocker_plp.f->enableBumpMapping)
     {
-      //  const Normal3D modLocalNormal = mat.readModifiedNormal (mat.normal, mat.normalDimInfo, texCoord, 0.0f);
-      //  applyBumpMapping (modLocalNormal, &shadingFrame);
+        //  const Normal3D modLocalNormal = mat.readModifiedNormal (mat.normal, mat.normalDimInfo, texCoord, 0.0f);
+        //  applyBumpMapping (modLocalNormal, &shadingFrame);
     }
     positionInWorld = offsetRayOrigin (positionInWorld, frontHit * geometricNormalInWorld);
     const Vector3D vOutLocal = shadingFrame.toLocal (vOut);
@@ -382,17 +378,17 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_closestHit_generic()
         // Implicit Light Sampling
         if (vOutLocal.z > 0 && mat.emissive)
         {
-           /* const float4 texValue = tex2DLod<float4> (mat.emissive, texCoord.x, texCoord.y, 0.0f);
-            const RGB emittance (getXYZ (texValue));
-            float misWeight = 1.0f;
-            if constexpr (useMultipleImportanceSampling)
-            {
-                const float dist2 = sqDistance (rayOrigin, positionInWorld);
-                const float lightPDensity = hypAreaPDensity * dist2 / vOutLocal.z;
-                const float bsdfPDensity = rwPayload->prevDirPDensity;
-                misWeight = pow2 (bsdfPDensity) / (pow2 (bsdfPDensity) + pow2 (lightPDensity));
-            }
-            rwPayload->contribution += rwPayload->alpha * emittance * (misWeight / pi_v<float>);*/
+             const float4 texValue = tex2DLod<float4> (mat.emissive, texCoord.x, texCoord.y, 0.0f);
+             const RGB emittance (getXYZ (texValue));
+             float misWeight = 1.0f;
+             if constexpr (useMultipleImportanceSampling)
+             {
+                 const float dist2 = sqDistance (rayOrigin, positionInWorld);
+                 const float lightPDensity = hypAreaPDensity * dist2 / vOutLocal.z;
+                 const float bsdfPDensity = rwPayload->prevDirPDensity;
+                 misWeight = pow2 (bsdfPDensity) / (pow2 (bsdfPDensity) + pow2 (lightPDensity));
+             }
+             rwPayload->contribution += rwPayload->alpha * emittance * (misWeight / pi_v<float>);
         }
 
         // Russian roulette
@@ -402,14 +398,14 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_closestHit_generic()
         rwPayload->alpha /= continueProb;
     }
 
-     // Create DisneyPrincipled instance directly instead of using BSDF
+    // Create DisneyPrincipled instance directly instead of using BSDF
     DisneyPrincipled bsdf = DisneyPrincipled::create (
         mat, texCoord, 0.0f, shocker_plp.s->makeAllGlass, shocker_plp.s->globalGlassIOR,
         shocker_plp.s->globalTransmittanceDist, shocker_plp.s->globalGlassType);
 
-    RGB neeContribCH = performNextEventEstimation (
+    // Next Event Estimation (Explicit Light Sampling)
+    rwPayload->contribution += rwPayload->alpha * performNextEventEstimation (
                                                       positionInWorld, vOutLocal, shadingFrame, bsdf, rng);
-    rwPayload->contribution += rwPayload->alpha * neeContribCH;
 
     // generate a next ray.
     Vector3D vInLocal;
@@ -417,15 +413,18 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_closestHit_generic()
     RGB throughput = bsdf.sampleThroughput (
         vOutLocal, rng.getFloat0cTo1o(), rng.getFloat0cTo1o(),
         &vInLocal, &dirPDensity);
-    
+
     // Apply the same calculation as RiPR: multiply by cosine and divide by PDF
-    if (dirPDensity > 0.0f && stc::isfinite(dirPDensity)) {
-        rwPayload->alpha *= throughput * std::fabs(vInLocal.z) / dirPDensity;
-    } else {
-        rwPayload->alpha = RGB(0.0f);
+    if (dirPDensity > 0.0f && stc::isfinite (dirPDensity))
+    {
+        rwPayload->alpha *= throughput * std::fabs (vInLocal.z) / dirPDensity;
+    }
+    else
+    {
+        rwPayload->alpha = RGB (0.0f);
         dirPDensity = 0.0f;
     }
-    
+
     const Vector3D vIn = shadingFrame.fromLocal (vInLocal);
 
     woPayload->nextOrigin = positionInWorld;

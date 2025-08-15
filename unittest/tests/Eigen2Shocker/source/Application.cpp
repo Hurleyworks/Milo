@@ -22,7 +22,6 @@ using nlohmann::json;
 #include "../../../framework/engine_core/excludeFromBuild/common/basic_types.h"
 
 
-
 // Helper function to check if two floats are approximately equal
 bool approxEqual(float a, float b, float epsilon = 1e-6f) {
     return std::abs(a - b) < epsilon;
@@ -679,6 +678,116 @@ TEST_CASE("Eigen::Affine3f to Shocker Matrix4x4 Conversions") {
         CHECK(approxEqual(shockerMat.m31, 0.0f));
         CHECK(approxEqual(shockerMat.m32, 0.0f));
         CHECK(approxEqual(shockerMat.m33, 1.0f));
+    }
+}
+
+TEST_CASE("Eigen Block Extraction to Row-Major Matrix") {
+    
+    SUBCASE("Test 3x4 block extraction from 4x4 matrix") {
+        // Create a test matrix with distinct values to track element positions
+        Eigen::Matrix4f testMat;
+        testMat << 1.0f,  2.0f,  3.0f,  4.0f,
+                   5.0f,  6.0f,  7.0f,  8.0f,
+                   9.0f,  10.0f, 11.0f, 12.0f,
+                   13.0f, 14.0f, 15.0f, 16.0f;
+        
+        // Method 1: Using Eigen block extraction to row-major matrix (like our code)
+        using MatrixRowMajor34f = Eigen::Matrix<float, 3, 4, Eigen::RowMajor>;
+        MatrixRowMajor34f rowMajor34 = testMat.block<3, 4>(0, 0);
+        
+        // Method 2: Manual row-by-row extraction (like working sample)
+        float manualArray[12] = {
+            testMat(0,0), testMat(0,1), testMat(0,2), testMat(0,3),  // row 0
+            testMat(1,0), testMat(1,1), testMat(1,2), testMat(1,3),  // row 1
+            testMat(2,0), testMat(2,1), testMat(2,2), testMat(2,3)   // row 2
+        };
+        
+        // Get the raw data from Eigen's row-major matrix
+        const float* eigenData = rowMajor34.data();
+        
+        // Compare the two methods
+        LOG(INFO) << "=== Eigen Block to Row-Major Test ===";
+        LOG(INFO) << "Original Matrix (column-major):";
+        for (int i = 0; i < 4; ++i) {
+            LOG(INFO) << "  [" << testMat(i,0) << ", " << testMat(i,1) << ", " 
+                      << testMat(i,2) << ", " << testMat(i,3) << "]";
+        }
+        
+        LOG(INFO) << "Eigen Row-Major Data (sequential memory):";
+        for (int i = 0; i < 12; ++i) {
+            LOG(INFO) << "  eigenData[" << i << "] = " << eigenData[i];
+        }
+        
+        LOG(INFO) << "Manual Row-Major Array:";
+        for (int i = 0; i < 12; ++i) {
+            LOG(INFO) << "  manualArray[" << i << "] = " << manualArray[i];
+        }
+        
+        // Check if they match
+        bool arraysMatch = true;
+        for (int i = 0; i < 12; ++i) {
+            if (!approxEqual(eigenData[i], manualArray[i])) {
+                LOG(WARNING) << "Mismatch at index " << i << ": eigen=" << eigenData[i] 
+                           << " manual=" << manualArray[i];
+                arraysMatch = false;
+            }
+            CHECK(approxEqual(eigenData[i], manualArray[i]));
+        }
+        
+        if (arraysMatch) {
+            LOG(INFO) << "Arrays match - Eigen block extraction to row-major works correctly";
+        } else {
+            LOG (WARNING) << "Arrays don 't match - there' s a conversion problem ";
+        }
+    }
+    
+    SUBCASE("Test with translation matrix") {
+        // Create a translation matrix (identity with translation in last column)
+        Eigen::Matrix4f transMat = Eigen::Matrix4f::Identity();
+        transMat(0, 3) = 10.0f;  // x translation
+        transMat(1, 3) = 20.0f;  // y translation
+        transMat(2, 3) = 30.0f;  // z translation
+        
+        using MatrixRowMajor34f = Eigen::Matrix<float, 3, 4, Eigen::RowMajor>;
+        MatrixRowMajor34f rowMajor34 = transMat.block<3, 4>(0, 0);
+        
+        const float* data = rowMajor34.data();
+        
+        LOG(INFO) << "=== Translation Matrix Test ===";
+        LOG(INFO) << "Translation should be in indices 3, 7, 11 for row-major";
+        LOG(INFO) << "data[3] = " << data[3] << " (should be 10)";
+        LOG(INFO) << "data[7] = " << data[7] << " (should be 20)";
+        LOG(INFO) << "data[11] = " << data[11] << " (should be 30)";
+        
+        // In row-major 3x4, translation is at indices 3, 7, 11
+        CHECK(approxEqual(data[3], 10.0f));
+        CHECK(approxEqual(data[7], 20.0f));
+        CHECK(approxEqual(data[11], 30.0f));
+    }
+    
+    SUBCASE("Test column-major to row-major conversion explicitly") {
+        // Create a matrix where we can easily see if it's transposed
+        Eigen::Matrix4f testMat;
+        testMat << 1.0f, 0.0f, 0.0f, 10.0f,   // column 0: basis X + translation X
+                   0.0f, 1.0f, 0.0f, 20.0f,   // column 1: basis Y + translation Y  
+                   0.0f, 0.0f, 1.0f, 30.0f,   // column 2: basis Z + translation Z
+                   0.0f, 0.0f, 0.0f, 1.0f;    // column 3: homogeneous
+        
+        using MatrixRowMajor34f = Eigen::Matrix<float, 3, 4, Eigen::RowMajor>;
+        MatrixRowMajor34f rowMajor34 = testMat.block<3, 4>(0, 0);
+        
+        // Also test the transpose
+        Eigen::Matrix<float, 4, 3> transposed = testMat.block<3, 4>(0, 0).transpose();
+        
+        LOG(INFO) << "=== Column-Major to Row-Major Detailed Test ===";
+        LOG(INFO) << "Original matrix element (0,3) [translation X]: " << testMat(0, 3);
+        LOG(INFO) << "Row-major element (0,3): " << rowMajor34(0, 3);
+        LOG(INFO) << "These should be equal if no transposition happened";
+        
+        // The (0,3) element should still be 10.0 if no transpose
+        CHECK(approxEqual(rowMajor34(0, 3), 10.0f));
+        CHECK(approxEqual(rowMajor34(1, 3), 20.0f));
+        CHECK(approxEqual(rowMajor34(2, 3), 30.0f));
     }
 }
 
