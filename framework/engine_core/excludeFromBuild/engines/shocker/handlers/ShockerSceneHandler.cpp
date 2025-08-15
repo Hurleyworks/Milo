@@ -601,13 +601,14 @@ void ShockerSceneHandler::populateInstanceData(uint32_t instanceIndex, const Ren
             }
         }
         
-        // Convert Eigen matrix (row-major) to shared Matrix4x4 (column-major)
-        // Need to transpose: Eigen's rows become Matrix4x4's columns
+        // Convert Eigen matrix (column-major) to shared Matrix4x4 (column-major)
+        // Both Eigen and Matrix4x4 use column-major storage
+        // Eigen stores columns contiguously, Matrix4x4 expects columns as Vector4D
         Matrix4x4 transform(
-            Vector4D(worldTransform(0, 0), worldTransform(0, 1), worldTransform(0, 2), worldTransform(0, 3)),  // column 0 = Eigen row 0
-            Vector4D(worldTransform(1, 0), worldTransform(1, 1), worldTransform(1, 2), worldTransform(1, 3)),  // column 1 = Eigen row 1  
-            Vector4D(worldTransform(2, 0), worldTransform(2, 1), worldTransform(2, 2), worldTransform(2, 3)),  // column 2 = Eigen row 2
-            Vector4D(worldTransform(3, 0), worldTransform(3, 1), worldTransform(3, 2), worldTransform(3, 3))   // column 3 = Eigen row 3
+            Vector4D(worldTransform(0, 0), worldTransform(1, 0), worldTransform(2, 0), worldTransform(3, 0)),  // column 0
+            Vector4D(worldTransform(0, 1), worldTransform(1, 1), worldTransform(2, 1), worldTransform(3, 1)),  // column 1  
+            Vector4D(worldTransform(0, 2), worldTransform(1, 2), worldTransform(2, 2), worldTransform(3, 2)),  // column 2
+            Vector4D(worldTransform(0, 3), worldTransform(1, 3), worldTransform(2, 3), worldTransform(3, 3))   // column 3
         );
         
         // Debug: Verify the conversion to Matrix4x4 for Box
@@ -633,16 +634,15 @@ void ShockerSceneHandler::populateInstanceData(uint32_t instanceIndex, const Ren
         instData.curToPrevTransform = Matrix4x4();
         
         // Compute normal matrix (inverse transpose of upper 3x3)
-        // Convert from Eigen row-major to Matrix3x3 column-major (need to transpose)
-        // Since we're already transposing during conversion, and the normal matrix
-        // is the inverse transpose, we just need to invert (not transpose(invert()))
+        // Convert from Eigen column-major to Matrix3x3 column-major
+        // Both use column-major storage, so direct conversion
         Matrix3x3 upperLeft(
-            Vector3D(worldTransform(0, 0), worldTransform(0, 1), worldTransform(0, 2)),  // column 0 = Eigen row 0
-            Vector3D(worldTransform(1, 0), worldTransform(1, 1), worldTransform(1, 2)),  // column 1 = Eigen row 1
-            Vector3D(worldTransform(2, 0), worldTransform(2, 1), worldTransform(2, 2))   // column 2 = Eigen row 2
+            Vector3D(worldTransform(0, 0), worldTransform(1, 0), worldTransform(2, 0)),  // column 0
+            Vector3D(worldTransform(0, 1), worldTransform(1, 1), worldTransform(2, 1)),  // column 1
+            Vector3D(worldTransform(0, 2), worldTransform(1, 2), worldTransform(2, 2))   // column 2
         );
-        // We already transposed when converting from Eigen, so just invert
-        instData.normalMatrix = invert(upperLeft);
+        // Normal matrix is inverse transpose of upper 3x3
+        instData.normalMatrix = transpose(invert(upperLeft));
         
         // Set uniform scale (for now, assume 1.0)
         instData.uniformScale = 1.0f;
