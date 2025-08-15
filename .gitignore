@@ -23,3 +23,5 @@
 /resources/RenderDog/ptx/Release/sm_86/optix_ripr_copybuffers.ptx
 /resources/RenderDog/ptx/Release/sm_86/optix_ripr_gbuffer.ptx
 /resources/RenderDog/ptx/Release/sm_86/optix_ripr_kernels.ptx
+/RiPR_render.jpg
+/Shocker_render.jpg
