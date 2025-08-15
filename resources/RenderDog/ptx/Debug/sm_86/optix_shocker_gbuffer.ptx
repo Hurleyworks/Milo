@@ -27,7 +27,7 @@
 )
 ;
 .const .align 1 .b8 __nv_static_46__12649d28_24_optix_shocker_gbuffer_cu_8ccd4bd7__ZN55_INTERNAL_12649d28_24_optix_shocker_gbuffer_cu_8ccd4bd76shared16PermutationTableE[76] = {0, 10, 2, 7, 3, 5, 6, 4, 8, 1, 9, 5, 11, 6, 8, 1, 10, 12, 9, 3, 7, 0, 4, 2, 13, 10, 11, 5, 6, 9, 4, 3, 8, 7, 14, 2, 0, 1, 15, 12, 1, 13, 5, 14, 12, 3, 6, 16, 0, 8, 9, 2, 11, 4, 15, 7, 10, 10, 6, 5, 8, 15, 0, 17, 7, 14, 18, 13, 16, 2, 9, 12, 1, 11, 4, 3};
-.weak .global .align 4 .b8 _Z18mx_fresnel_schlickfRK5RGB_TIfE$121[12] = {0, 0, 128, 63, 0, 0, 128, 63, 0, 0, 128, 63};
+.weak .global .align 4 .b8 _Z18mx_fresnel_schlickfRK5RGB_TIfE$130[12] = {0, 0, 128, 63, 0, 0, 128, 63, 0, 0, 128, 63};
 .extern .const .align 8 .b8 shocker_plp[16];
 .global .align 1 .b8 $str[13] = {37, 115, 32, 64, 37, 115, 58, 32, 37, 117, 58, 10};
 .weak .global .align 4 .b8 _ZNK16DisneyPrincipled29evaluateDHReflectanceEstimateERK10Vector3D_TIfLb0EE$448[12] = {10, 215, 163, 61, 10, 215, 163, 61, 10, 215, 163, 61};
@@ -418,8 +418,8 @@ $L__BB0_6:
 	add.u64 	%rd61, %SP, 20;
 	add.u64 	%rd62, %SPL, 20;
 	.loc	1 34 5
-	.loc	7 100 12, function_name $L__info_string17, inlined_at 1 34 5
-	.loc	6 2116 26, function_name $L__info_string18, inlined_at 7 100 12
+	.loc	7 93 12, function_name $L__info_string17, inlined_at 1 34 5
+	.loc	6 2116 26, function_name $L__info_string18, inlined_at 7 93 12
 	add.s64 	%rd9, %rd62, 48;
 	mov.f32 	%f21, 0f00000000;
 	st.local.u32 	[%rd62+48], %r100;
@@ -725,8 +725,8 @@ $L__BB0_12:
 	call (%r24), _optix_get_launch_index_y, ();
 	// end inline asm
 	.loc	1 116 5
-	.loc	7 329 13, function_name $L__info_string40, inlined_at 1 116 5
-	.loc	2 2575 5, function_name $L__info_string41, inlined_at 7 329 13
+	.loc	7 478 13, function_name $L__info_string40, inlined_at 1 116 5
+	.loc	2 2575 5, function_name $L__info_string41, inlined_at 7 478 13
 	// begin inline asm
 	call (%rd40), _optix_get_sbt_data_ptr_64, ();
 	// end inline asm
@@ -960,13 +960,13 @@ $L__BB1_6:
 	.loc	8 651 13, function_name $L__info_string58, inlined_at 8 653 17
 	mov.b64 	%rd9, {%r45, %r47};
 	.loc	1 128 5
-	.loc	7 341 13, function_name $L__info_string61, inlined_at 1 128 5
-	.loc	2 2543 5, function_name $L__info_string62, inlined_at 7 341 13
+	.loc	7 490 13, function_name $L__info_string61, inlined_at 1 128 5
+	.loc	2 2543 5, function_name $L__info_string62, inlined_at 7 490 13
 	// begin inline asm
 	call (%f355, %f356), _optix_get_triangle_barycentrics, ();
 	// end inline asm
-	.loc	7 344 13, function_name $L__info_string61, inlined_at 1 128 5
-	.loc	2 2401 5, function_name $L__info_string63, inlined_at 7 344 13
+	.loc	7 493 13, function_name $L__info_string61, inlined_at 1 128 5
+	.loc	2 2401 5, function_name $L__info_string63, inlined_at 7 493 13
 	// begin inline asm
 	call (%r49), _optix_read_primitive_idx, ();
 	// end inline asm
@@ -4111,17 +4111,17 @@ $L__BB1_76:
 	mul.ftz.f32 	%f888, %f887, %f887;
 	mul.ftz.f32 	%f889, %f886, %f888;
 	.loc	17 118 5, function_name $L__info_string142, inlined_at 15 499 9
-	ld.global.f32 	%f890, [_Z18mx_fresnel_schlickfRK5RGB_TIfE$121];
+	ld.global.f32 	%f890, [_Z18mx_fresnel_schlickfRK5RGB_TIfE$130];
 	.loc	17 118 5, function_name $L__info_string142, inlined_at 15 499 9
 	.loc	6 5251 5, function_name $L__info_string145, inlined_at 17 118 5
 	.loc	6 5153 9, function_name $L__info_string146, inlined_at 6 5251 5
 	sub.ftz.f32 	%f891, %f890, %f1045;
 	.loc	17 118 5, function_name $L__info_string142, inlined_at 15 499 9
-	ld.global.f32 	%f892, [_Z18mx_fresnel_schlickfRK5RGB_TIfE$121+4];
+	ld.global.f32 	%f892, [_Z18mx_fresnel_schlickfRK5RGB_TIfE$130+4];
 	.loc	6 5154 9, function_name $L__info_string146, inlined_at 6 5251 5
 	sub.ftz.f32 	%f893, %f892, %f1046;
 	.loc	17 118 5, function_name $L__info_string142, inlined_at 15 499 9
-	ld.global.f32 	%f894, [_Z18mx_fresnel_schlickfRK5RGB_TIfE$121+8];
+	ld.global.f32 	%f894, [_Z18mx_fresnel_schlickfRK5RGB_TIfE$130+8];
 	.loc	6 5155 9, function_name $L__info_string146, inlined_at 6 5251 5
 	sub.ftz.f32 	%f895, %f894, %f1047;
 	.loc	17 118 5, function_name $L__info_string142, inlined_at 15 499 9
