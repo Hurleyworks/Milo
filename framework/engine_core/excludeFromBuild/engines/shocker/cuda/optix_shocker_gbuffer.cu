@@ -119,14 +119,24 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME (setupGBuffers)()
 
     // Get instance data using buffer index from launch parameters
     const uint32_t bufIdx = shocker_plp.f->bufferIndex;
-    const shared::InstanceData& inst = shocker_plp.s->instanceDataBufferArray[bufIdx][optixGetInstanceId()];
+    const uint32_t instanceId = optixGetInstanceId();
+    const shared::InstanceData& inst = shocker_plp.s->instanceDataBufferArray[bufIdx][instanceId];
 
     HitPointParams* hitPointParams;
     PickInfo* pickInfo;
     PrimaryRayPayloadSignature::get (&hitPointParams, &pickInfo);
 
     const auto hp = HitPointParameter::get();
-    hitPointParams->instSlot = optixGetInstanceId();
+    
+    // Debug output to check what OptiX is returning for instance ID
+    const float3 rayOrigin = optixGetWorldRayOrigin();
+    if ((rayOrigin.x > 0.0f && abs(rayOrigin.y) < 0.1f) ||  // Ray hitting right side
+        (rayOrigin.x < 0.0f && abs(rayOrigin.y) < 0.1f)) {   // Ray hitting left side
+        printf("GBuffer CH: Ray origin x=%f, OptiX instanceId = %u, geomInstSlot = %u\n", 
+               rayOrigin.x, instanceId, sbtr.geomInstSlot);
+    }
+    
+    hitPointParams->instSlot = instanceId;
     hitPointParams->geomInstSlot = sbtr.geomInstSlot;
     hitPointParams->primIndex = hp.primIndex;
     hitPointParams->materialSlot = sbtr.materialSlot;  // Store material slot from SBT

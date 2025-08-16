@@ -158,6 +158,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
     const uint32_t instSlot = gb0Elems.instSlot;
     const float bcB = decodeBarycentric (gb0Elems.qbcB);
     const float bcC = decodeBarycentric (gb0Elems.qbcC);
+    
 
     const PerspectiveCamera& camera = shocker_plp.f->camera;
 
@@ -168,6 +169,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
         const uint32_t geomInstSlot = gb0Elems.geomInstSlot;
         const InstanceData& inst = shocker_plp.s->instanceDataBufferArray[bufIdx][instSlot];
         const GeometryInstanceData& geomInst = shocker_plp.s->geometryInstanceDataBuffer[geomInstSlot];
+
 
         Point3D positionInWorld;
         Normal3D geometricNormalInWorld;
@@ -462,7 +464,10 @@ CUDA_DEVICE_KERNEL void RT_MS_NAME (pathTraceBaseline)()
         float misWeight = 1.0f;
         if constexpr (useMultipleImportanceSampling)
         {
-            const float uvPDF = shocker_plp.s->envLightImportanceMap.evaluatePDF (texCoord.x, texCoord.y);
+            // Clamp texture coordinates to avoid floating-point precision issues in evaluatePDF
+            float u = fmin(texCoord.x, 0.999999f);
+            float v = fmin(texCoord.y, 0.999999f);
+            const float uvPDF = shocker_plp.s->envLightImportanceMap.evaluatePDF (u, v);
             const float hypAreaPDensity = uvPDF / (2 * pi_v<float> * pi_v<float> * std::sin (theta));
             const float lightPDensity =
                 (shocker_plp.s->lightInstDist.integral() > 0.0f ? probToSampleEnvLight : 1.0f) *

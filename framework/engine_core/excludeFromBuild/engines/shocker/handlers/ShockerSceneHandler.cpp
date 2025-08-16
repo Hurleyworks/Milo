@@ -494,6 +494,8 @@ void ShockerSceneHandler::createInstance (RenderableWeakRef& weakNode)
     // Create a new OptiX instance
     optixu::Instance instance = scene_->createInstance();
 
+    LOG (DBUG) << node->getClientID();
+
     // Instances don't have a LWITEMID converted to a ClientID
     // ShockerModelPtr optiXModel = modelHandler_->getShockerModel (node->getID());
     ShockerModelPtr optiXModel = modelHandler_->getShockerModel (node->getClientID());
@@ -508,6 +510,7 @@ void ShockerSceneHandler::createInstance (RenderableWeakRef& weakNode)
     
     // Debug: Log the 3x4 transform being set on OptiX instance for Box
     std::string nodeName = node->getName();
+    #if 0
     if (nodeName.find("Box") != std::string::npos)
     {
         LOG(INFO) << "=== OptiX Instance Transform (3x4 row-major) ===";
@@ -531,6 +534,7 @@ void ShockerSceneHandler::createInstance (RenderableWeakRef& weakNode)
             LOG(INFO) << "  [" << m(row,0) << ", " << m(row,1) << ", " << m(row,2) << ", " << m(row,3) << "]";
         }
     }
+    #endif 
     
     instance.setTransform (t.data());
 
@@ -543,12 +547,12 @@ void ShockerSceneHandler::createInstance (RenderableWeakRef& weakNode)
     nodeMap[index] = weakNode;
     
     // Debug: Log the actual OptiX instance index
-    if (nodeName.find("Box") != std::string::npos)
-    {
+  //  if (nodeName.find("Box") != std::string::npos)
+ //   {
         LOG(INFO) << "=== OptiX Instance Index ===";
         LOG(INFO) << "Box assigned OptiX instance index: " << index;
         LOG(INFO) << "Total instances in IAS: " << ias.getNumChildren();
-    }
+  //  }
 
     GAS* gasData = optiXModel->getGAS();
     gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, ctx->getASBuildScratchMem());
@@ -590,6 +594,7 @@ void ShockerSceneHandler::populateInstanceData(uint32_t instanceIndex, const Ren
         const Eigen::Matrix4f worldTransform = scaled.matrix();
         
         // Debug: Check if this is the cube
+        #if 0
         std::string nodeName = node->getName();
         if (nodeName.find("Box") != std::string::npos || nodeName.find("Box") != std::string::npos)
         {
@@ -619,7 +624,7 @@ void ShockerSceneHandler::populateInstanceData(uint32_t instanceIndex, const Ren
                 LOG(INFO) << "✓ Translation matches expected (0, 1, 0)";
             }
         }
-        
+        #endif
         // Convert Eigen matrix (column-major) to shared Matrix4x4 (column-major)
         // Both Eigen and Matrix4x4 use column-major storage
         // Eigen stores columns contiguously, Matrix4x4 expects columns as Vector4D
@@ -630,6 +635,7 @@ void ShockerSceneHandler::populateInstanceData(uint32_t instanceIndex, const Ren
             Vector4D(worldTransform(0, 3), worldTransform(1, 3), worldTransform(2, 3), worldTransform(3, 3))   // column 3
         );
         
+        #if 0
         // Debug: Verify the conversion to Matrix4x4 for Box
         if (nodeName.find("Box") != std::string::npos)
         {
@@ -646,7 +652,7 @@ void ShockerSceneHandler::populateInstanceData(uint32_t instanceIndex, const Ren
             LOG(INFO) << "Test: transform * (0,0,0) = (" << result.x << ", " << result.y << ", " << result.z << ")";
             LOG(INFO) << "Expected: (0, 1, 0)";
         }
-        
+        #endif
         instData.transform = transform;
         
         // For now, no motion blur - identity transform
@@ -1056,6 +1062,28 @@ void ShockerSceneHandler::deselectAll()
 // Rebuild the IAS after any updates to the instances
 void ShockerSceneHandler::rebuildIAS()
 {
+    // Manually populate the instance buffer with correct instance IDs
+    // The optixu library doesn't set these properly, so we need to do it ourselves
+    if (instanceBuffer.isInitialized() && ias.getNumChildren() > 0)
+    {
+        OptixInstance* instances = instanceBuffer.map();
+        if (instances)
+        {
+            // The optixu library populates most of the OptixInstance fields but not instanceId
+            // We need to set the instanceId field for each instance
+            for (uint32_t i = 0; i < ias.getNumChildren(); ++i)
+            {
+                // Get the instance data that optixu has already populated
+                optixu::Instance inst = ias.getChild(i);
+                
+                // The instance buffer is already populated by optixu with transform, traversableHandle, etc.
+                // We just need to set the instanceId field which optixu doesn't set
+                instances[i].instanceId = i;
+            }
+            instanceBuffer.unmap();
+        }
+    }
+    
     // Perform the IAS rebuild
     travHandle = ias.rebuild (ctx->getCudaStream(), instanceBuffer, iasMem, ctx->getASBuildScratchMem());
 
