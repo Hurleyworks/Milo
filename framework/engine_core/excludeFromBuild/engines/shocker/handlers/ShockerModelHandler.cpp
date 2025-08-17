@@ -1,6 +1,7 @@
 #include "ShockerModelHandler.h"
 #include "ShockerMaterialHandler.h"
 #include "ShockerSceneHandler.h"
+#include "../ShockerEngine.h"
 #include "../models/ShockerModel.h"
 
 // Constructor initializes the model handler with the render context
@@ -200,6 +201,7 @@ void ShockerModelHandler::addCgModel(RenderableWeakRef weakNode)
             fs::path contentFolder = ctx_->getPropertyService().renderProps->getVal<std::string>(RenderKey::ContentFolder);
             
             uint32_t materialCount = model->S.size();
+            bool hasEmissive = false;
             if (materialCount > 1)
             {
                 for (int i = 0; i < materialCount; ++i)
@@ -207,6 +209,12 @@ void ShockerModelHandler::addCgModel(RenderableWeakRef weakNode)
                     optixu::Material mat = materialHandler_->createDisneyMaterial(
                         model->S[i].cgMaterial, contentFolder, model);
                     triangleModel->getGeometryInstance()->setMaterial(0, i, mat);
+                    
+                    // Check if material is emissive
+                    if (model->S[i].cgMaterial.emission.luminous > 0.0f)
+                    {
+                        hasEmissive = true;
+                    }
                 }
             }
             else
@@ -214,6 +222,21 @@ void ShockerModelHandler::addCgModel(RenderableWeakRef weakNode)
                 optixu::Material mat = materialHandler_->createDisneyMaterial(
                     model->S[0].cgMaterial, contentFolder, model);
                 triangleModel->getGeometryInstance()->setMaterial(0, 0, mat);
+                
+                // Check if material is emissive
+                if (model->S[0].cgMaterial.emission.luminous > 0.0f)
+                {
+                    hasEmissive = true;
+                }
+            }
+            
+            // Mark the model as having emissive materials
+            triangleModel->setHasEmissiveMaterials(hasEmissive);
+            
+            // If model has emissive materials, compute light probabilities
+            if (hasEmissive)
+            {
+                computeLightProbabilities(triangleModel, geomInstSlot);
             }
         }
 
@@ -382,4 +405,20 @@ void ShockerModelHandler::removeModel(ItemID itemID)
     }
     
     modelMgr.removeModel(itemID);
+}
+
+void ShockerModelHandler::computeLightProbabilities(ShockerTriangleModel* model, uint32_t geomInstSlot)
+{
+    if (!model || !engine_ || geomInstSlot == SlotFinder::InvalidSlotIndex)
+    {
+        LOG(WARNING) << "Cannot compute light probabilities: invalid parameters";
+        return;
+    }
+    
+    // For now, just log that we would compute light probabilities
+    // We'll implement the actual kernel launch in Step 4
+    LOG(INFO) << "Ready to compute light probabilities for emissive geometry at slot " << geomInstSlot;
+    
+    // TODO: Launch compute kernels here
+    // engine_->getComputeProbTex().computeTriangleProbBuffer.launch(...)
 }

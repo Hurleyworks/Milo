@@ -197,6 +197,12 @@ public:
             geomInstData->materialSlot = slot;
         }
     }
+    
+    // Check if this model has emissive materials
+    bool hasEmissiveMaterials() const { return hasEmissive_; }
+    
+    // Mark this model as having emissive materials
+    void setHasEmissiveMaterials(bool emissive) { hasEmissive_ = emissive; }
 
 private:
     GAS gasData;
@@ -206,6 +212,7 @@ private:
     cudau::TypedBuffer<shared::Vertex> originalVertexBuffer;
     cudau::TypedBuffer<shared::Triangle> triangleBuffer;
     LightDistribution emitterPrimDist;
+    bool hasEmissive_ = false;  // Flag for emissive materials
 };
 
 // Flyweight is used for geometry instancing. It has no geometry of its own

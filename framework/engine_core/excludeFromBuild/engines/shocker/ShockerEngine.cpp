@@ -61,6 +61,7 @@ void ShockerEngine::initialize (RenderContext* ctx)
     modelHandler_ = ShockerModelHandler::create (renderContext);
     modelHandler_->initialize();
     modelHandler_->setHandlers (materialHandler_, sceneHandler_);
+    modelHandler_->setEngine (this);
 
     // Also give model handler to scene handler
     sceneHandler_->setModelHandler (modelHandler_);

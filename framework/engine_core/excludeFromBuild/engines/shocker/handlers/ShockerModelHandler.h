@@ -13,6 +13,7 @@ using sabi::WeakRenderableList;
 using ShockerModelHandlerPtr = std::shared_ptr<class ShockerModelHandler>;
 class ShockerMaterialHandler;
 class ShockerSceneHandler;
+class ShockerEngine;
 
 class ShockerModelHandler
 {
@@ -98,6 +99,9 @@ public:
         materialHandler_ = materialHandler;
         sceneHandler_ = sceneHandler;
     }
+    
+    // Set the engine pointer for accessing compute kernels
+    void setEngine(ShockerEngine* engine) { engine_ = engine; }
 
     // Adds a single model from a renderable node to the Shocker scene
     void addCgModel(RenderableWeakRef weakNode);
@@ -157,6 +161,9 @@ public:
             geomInstSlotFinder_.setNotInUse(slot);
         }
     }
+    
+    // Compute light probabilities for emissive geometry
+    void computeLightProbabilities(ShockerTriangleModel* model, uint32_t geomInstSlot);
 
 private:
     RenderContextPtr ctx_ = nullptr;  // Render context for OptiX operations
@@ -165,6 +172,7 @@ private:
     // Handler references (not owned)
     std::shared_ptr<ShockerMaterialHandler> materialHandler_;
     std::shared_ptr<ShockerSceneHandler> sceneHandler_;
+    ShockerEngine* engine_ = nullptr;  // Engine for accessing compute kernels
 
     // Slot management for geometry instances
     SlotFinder geomInstSlotFinder_;
