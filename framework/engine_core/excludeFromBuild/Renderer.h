@@ -60,10 +60,4 @@ class Renderer
 
     // Initialization state
     bool initialized_ = false;
-
-    // Store renderable nodes for pipeline switching
-    std::vector<RenderableWeakRef> renderableNodes_;
-
-    // Store sky dome HDR path for pipeline switching
-    std::filesystem::path currentSkyDomeHDR_;
 };

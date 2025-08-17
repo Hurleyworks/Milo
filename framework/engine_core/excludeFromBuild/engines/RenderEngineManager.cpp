@@ -166,6 +166,38 @@ void RenderEngineManager::switchEngine (const std::string& engineName)
         currentEngineName_ = engineName;
         LOG (INFO) << "Successfully switched to engine: " << engineName;
         
+        // Clear any existing pending geometry queue
+        while (!pendingGeometry_.empty())
+        {
+            pendingGeometry_.pop();
+        }
+        
+        // Queue all stored geometry for deferred loading
+        if (!renderableNodes_.empty())
+        {
+            LOG(INFO) << "Queuing " << renderableNodes_.size() << " geometry nodes for deferred loading";
+            for (auto& weakNode : renderableNodes_)
+            {
+                // Clear the StoredInSceneHandler flag before re-adding to new engine
+                auto node = weakNode.lock();
+                if (node)
+                {
+                    node->getState().state &= ~sabi::PRenderableState::StoredInSceneHandler;
+                }
+                pendingGeometry_.push(weakNode);
+            }
+            isDeferredLoading_ = true;
+        }
+        
+        // Re-add sky dome if one was set
+        // Note: The actual HDR loading needs to be handled by Renderer
+        // since it involves the SkyDomeHandler
+        if (!currentSkyDomeHDR_.empty())
+        {
+            LOG(INFO) << "Sky dome HDR path stored: " << currentSkyDomeHDR_;
+            // The Renderer will need to re-load this through addSkyDomeHDR
+        }
+        
         // Mark camera as dirty to trigger a render update
         auto camera = renderContext_->getCamera();
         if (camera)
@@ -223,6 +255,28 @@ void RenderEngineManager::render (const mace::InputEvent& input, bool updateMoti
         return;
     }
 
+    // Process deferred loading queue - add one geometry per frame
+    if (isDeferredLoading_ && !pendingGeometry_.empty())
+    {
+        auto weakNode = pendingGeometry_.front();
+        pendingGeometry_.pop();
+        
+        auto node = weakNode.lock();
+        if (node)
+        {
+            activeEngine_->addGeometry(node);
+            LOG(INFO) << "Deferred loading: added geometry '" << node->getName() 
+                      << "' (" << pendingGeometry_.size() << " remaining)";
+        }
+        
+        // Check if we're done with deferred loading
+        if (pendingGeometry_.empty())
+        {
+            isDeferredLoading_ = false;
+            LOG(INFO) << "Deferred loading complete";
+        }
+    }
+
     activeEngine_->render (input, updateMotion, frameNumber);
 }
 
@@ -233,6 +287,10 @@ void RenderEngineManager::addGeometry(sabi::RenderableNode node)
         LOG(WARNING) << "No active engine to add geometry to";
         return;
     }
+    
+    // Store the node for engine switching
+    sabi::RenderableWeakRef weakNode = node;
+    renderableNodes_.push_back(weakNode);
     
     activeEngine_->addGeometry(node);
 }
@@ -245,7 +303,20 @@ void RenderEngineManager::clearScene()
         return;
     }
     
+    // Clear stored nodes
+    renderableNodes_.clear();
+    currentSkyDomeHDR_.clear();
+    
     activeEngine_->clearScene();
+}
+
+void RenderEngineManager::setSkyDomeHDR(const std::filesystem::path& hdrPath)
+{
+    // Store the HDR path for engine switching
+    currentSkyDomeHDR_ = hdrPath;
+    
+    // Note: The actual HDR loading is handled by Renderer::addSkyDomeHDR
+    // This just stores the path for re-applying after engine switches
 }
 
 void RenderEngineManager::onEnvironmentChanged()

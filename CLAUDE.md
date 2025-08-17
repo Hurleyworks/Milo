@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Milo is an interactive physics-based content creation framework built primarily in C++ with CUDA/OptiX rendering capabilities. It uses a custom application framework called "Jahley" and includes sophisticated GPU-accelerated path tracing.
+Milo is an interactive physics-based content creation framework built primarily in C++ with CUDA/OptiX rendering capabilities. It uses a custom application framework called "Jahley" and includes sophisticated GPU-accelerated path tracing with multiple rendering engines (Milo, Shocker, RiPR, Claudia).
 
 ## Build Commands
 
@@ -32,14 +32,26 @@ powershell -ExecutionPolicy Bypass -File scripts/claude_build_command.ps1 -Actio
 
 ### Unit Testing
 
-#### Run specific unit test (e.g., ShockerModelTest)
+#### Build all unit tests
+```batch
+cd unittest
+b
+```
+Or:
+```batch
+msbuild unittest\builds\VisualStudio2022\UnitTests.sln /p:Configuration=Debug /p:Platform=x64
+```
+
+#### Run specific unit test
 ```batch
 scripts\test_shocker_model.bat
+scripts\test_area_light_handler.bat
 ```
-Or compile and run manually:
+
+#### Manual test compilation and execution
 ```batch
-"C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" unittest\builds\VisualStudio2022\projects\ShockerModelTest.vcxproj /p:Configuration=Debug /p:Platform=x64
-builds\bin\Debug-windows-x86_64\ShockerModelTest\ShockerModelTest.exe
+"C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe" unittest\builds\VisualStudio2022\projects\[TestName].vcxproj /p:Configuration=Debug /p:Platform=x64
+builds\bin\Debug-windows-x86_64\[TestName]\[TestName].exe
 ```
 
 #### Available tests
@@ -47,6 +59,7 @@ builds\bin\Debug-windows-x86_64\ShockerModelTest\ShockerModelTest.exe
 - GeometryTest  
 - ShockerModelTest
 - AreaLightHandlerTest
+- Eigen2Shocker
 
 ### Code Formatting
 The project uses clang-format. Format files with:
@@ -67,17 +80,18 @@ clang-format -i <filename>
    - Uses precompiled headers (`berserkpch.h`)
 
 2. **framework/** - Core Systems
-   - **engine_core**: CUDA/OptiX rendering engine
-     - Material, model, scene, and texture handlers
+   - **engine_core**: CUDA/OptiX rendering engines (Milo, Shocker, RiPR, Claudia)
+     - Base engine class: `BaseRenderingEngine`
+     - Common handlers: Material, Model, Scene, Render, Denoiser, Texture, SkyDome, AreaLight
      - PTX management for GPU kernels
-     - Denoiser integration
+     - GPU context and timer management
    - **properties_core**: Property system for configuration
    - **qms_core**: QuickSilver Messenger Service for event handling
    - **server_core**: Socket server for remote communication
 
 3. **modules/** - Extended Functionality
-   - **mace_core**: Basic utilities and input handling
-   - **oiio_core**: OpenImageIO integration
+   - **mace_core**: Basic utilities and input handling (includes all STL headers)
+   - **oiio_core**: OpenImageIO integration for image I/O
    - **sabi_core**: Scene graph, animation, I/O (GLTF, LWO3)
    - **wabi_core**: Math utilities and mesh processing
 
@@ -85,20 +99,28 @@ clang-format -i <filename>
 
 1. **Message-Driven Architecture**: Uses QMS (QuickSilver Messenger Service) for decoupled communication between components.
 
-2. **Handler Pattern**: Major subsystems use handlers (e.g., MaterialHandler, ModelHandler, SceneHandler) for managing resources.
+2. **Handler Pattern**: Each rendering engine uses specialized handlers:
+   - `SceneHandler`: Manages scene graph and traversal
+   - `MaterialHandler`: Material creation and management
+   - `ModelHandler`: Geometry and model management
+   - `RenderHandler`: Rendering pipeline and buffer management
+   - `DenoiserHandler`: OptiX AI denoiser integration
 
 3. **PTX Embedding**: CUDA kernels are compiled to PTX and embedded as C arrays for runtime compilation.
 
-4. **excludeFromBuild Pattern**: Work-in-progress or optional code is organized in `excludeFromBuild/` directories.
+4. **excludeFromBuild Pattern**: Implementation files are organized in `excludeFromBuild/` directories and included by the module's main .cpp file via amalgamation.
 
 ### Application Entry Point
 
-Applications inherit from `Jahley::App` and use the `JahleyEntryPoint` macro. Example:
+Applications inherit from `Jahley::App` and define `Jahley::CreateApplication()`. The framework provides the main() function in `EntryPoint.h`. Example:
 ```cpp
 class MyApp : public Jahley::App {
     // Implementation
 };
-JahleyEntryPoint(MyApp);
+
+Jahley::App* Jahley::CreateApplication() {
+    return new MyApp();
+}
 ```
 
 ### Resource Paths
@@ -116,6 +138,7 @@ The framework automatically creates these directories:
 - CUDA 12.9 and OptiX 9.0 are required
 - PTX files are embedded using scripts in `scripts/` directory
 - GPU kernels support multiple architectures (sm_50 through sm_90a)
+- PTX files are located in `resources/RenderDog/ptx/[Debug|Release]/sm_86/`
 
 ### Dependencies
 
@@ -178,8 +201,9 @@ These headers are not part of this codebase and will cause compilation errors.
 ## PTX File Management
 
 - **PTX Generation**: CUDA kernels are compiled to PTX files during a separate build by the user
-- **PTX Locations**: `resources/RenderDog/ptx/[Debug|Release]/sm_86/`
-- **Python Requirement**: Python 3.11+ required for PTX embedding
+- **PTX Embedding Scripts**: `scripts/desktop_dog_embed_ptx_debug.bat` and `scripts/desktop_dog_embed_ptx_release.bat`
+- **Python Requirement**: Python 3.11+ required for PTX embedding (`scripts/embed_ptx.py`)
+- **Embedded PTX Location**: `framework/engine_core/generated/embedded_ptx.h`
 
 ## Development Principles
 
@@ -194,14 +218,41 @@ These headers are not part of this codebase and will cause compilation errors.
 - Tests are located in `unittest/tests/` directory
 - Each test project follows the pattern: `[Component]Test`
 - Use doctest framework for unit testing
+- Tests are built separately from main project using `unittest/generateVS2022.bat`
+- Test solution: `unittest/builds/VisualStudio2022/UnitTests.sln`
 
 ### Logging
 - Use g3log for logging
 - Use DBUG level for debug information (not DEBUG)
 - Use WARNING level for non-fatal issues
 
-## Miscellaneous Notes
+## Rendering Engines
 
-- **Scene Traversable Handle**: Scene traversable handle can be set to 0 in an empty scene. It's a feature
-- **Always Study APIs Thoroughly**
-  - Never make assumptions about an API. Study the API first so you get it right the first time!!!
+The project includes multiple rendering engines in `framework/engine_core/excludeFromBuild/engines/`:
+
+### Engine Architecture
+All engines inherit from `BaseRenderingEngine` and implement:
+- **Milo**: Primary rendering engine
+- **Shocker**: Alternative rendering implementation
+- **RiPR**: Another rendering variant  
+- **Claudia**: Additional rendering engine
+
+### Engine Components
+Each engine has its own:
+- Handler classes (Material, Model, Scene, Render, Denoiser)
+- CUDA kernels (.cu files) and PTX files
+- Shared header for GPU/host communication (`[engine]_shared.h`)
+- Models directory with specialized model implementations
+
+### Common Handler Interfaces
+- `TextureHandler`: Texture loading and management
+- `SkyDomeHandler`: Environment lighting
+- `AreaLightHandler`: Area light management
+- `Handlers`: Central handler registry
+
+## Important Implementation Details
+
+- **Scene Traversable Handle**: Scene traversable handle can be set to 0 in an empty scene. It's a feature, not a bug.
+- **Always Study APIs Thoroughly**: Never make assumptions about an API. Study the API first so you get it right the first time.
+- **Test Agent Integration**: The `.claude/agents/test_runner.json` defines test runner agents for automated testing.
+- **Premake Build System**: The project uses Premake5 for generating Visual Studio solutions

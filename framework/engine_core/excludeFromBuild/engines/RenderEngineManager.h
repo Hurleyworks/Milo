@@ -73,6 +73,12 @@ public:
     // Clear scene in the active engine
     void clearScene();
     
+    // Set sky dome HDR
+    void setSkyDomeHDR(const std::filesystem::path& hdrPath);
+    
+    // Get stored sky dome HDR path
+    const std::filesystem::path& getSkyDomeHDR() const { return currentSkyDomeHDR_; }
+    
     // Notify the active engine that the environment has changed
     void onEnvironmentChanged();
     
@@ -104,4 +110,14 @@ private:
     
     // GPU timer manager (optional)
     GPUTimerManager* gpuTimerManager_;
+    
+    // Store renderable nodes for engine switching
+    std::vector<sabi::RenderableWeakRef> renderableNodes_;
+    
+    // Store sky dome HDR path for engine switching
+    std::filesystem::path currentSkyDomeHDR_;
+    
+    // Deferred loading support for engine switching
+    std::queue<sabi::RenderableWeakRef> pendingGeometry_;
+    bool isDeferredLoading_ = false;
 };

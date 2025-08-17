@@ -323,8 +323,11 @@ void Renderer::addSkyDomeHDR (const std::filesystem::path& hdrPath)
                 handlers.skyDomeHandler->addSkyDomeImage (std::move (image));
                 LOG (INFO) << "Successfully loaded sky dome HDR: " << hdrPath.generic_string();
 
-                // Store the HDR path for pipeline switching
-                currentSkyDomeHDR_ = hdrPath;
+                // Store the HDR path in engine manager for engine switching
+                if (engineManager_)
+                {
+                    engineManager_->setSkyDomeHDR(hdrPath);
+                }
                 
                 // Notify the active render engine that the environment has changed
                 if (engineManager_)
@@ -358,8 +361,8 @@ void Renderer::addRenderableNode (RenderableWeakRef& weakNode)
         return;
     }
 
-    // Store the node for pipeline switching
-    renderableNodes_.push_back (weakNode);
+    // Forward to engine manager which will store the node and add to active engine
+    // Note: engineManager_ is checked for null by caller
 
     // Check if we have a valid render context
     if (!renderContext_)
@@ -425,6 +428,7 @@ bool Renderer::setEngine(const std::string& engineName)
     }
     
     // Switch to the new engine
+    // The engine manager will handle re-adding geometry internally
     engineManager_->switchEngine(engineName);
     
     // Check if switch was successful
@@ -433,27 +437,11 @@ bool Renderer::setEngine(const std::string& engineName)
         return false;
     }
     
-    // Re-add all stored geometry to the new engine
-    if (engineManager_->hasActiveEngine())
+    // Re-apply sky dome if one was stored
+    const auto& storedHDR = engineManager_->getSkyDomeHDR();
+    if (!storedHDR.empty())
     {
-        // Re-add sky dome if one was set
-        if (!currentSkyDomeHDR_.empty())
-        {
-            // Re-add the sky dome HDR to the engine
-            addSkyDomeHDR(currentSkyDomeHDR_);
-        }
-        
-        // Re-add all geometry nodes using the engine manager
-        for (auto& weakNode : renderableNodes_)
-        {
-            auto node = weakNode.lock();
-            if (node)
-            {
-                engineManager_->addGeometry(node);
-            }
-        }
-        
-        LOG(INFO) << "Re-added " << renderableNodes_.size() << " geometry nodes to engine: " << engineName;
+        addSkyDomeHDR(storedHDR);
     }
     
     return true;

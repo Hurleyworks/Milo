@@ -512,12 +512,12 @@ void ShockerSceneHandler::createInstance (RenderableWeakRef& weakNode)
 
     uint32_t index = ias.findChildIndex (instance);
     nodeMap[index] = weakNode;
+    
+    // Set instance ID BEFORE rebuilding - this is critical!
+    instance.setID (index);
 
     GAS* gasData = optiXModel->getGAS();
     gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, ctx->getASBuildScratchMem());
-
-     // missing this cost 2 days of hell
-    instance.setID (index);
 
     prepareForBuild();
 
