@@ -1,37 +1,27 @@
 #include "PipelineHandler.h"
 #include "../RenderContext.h"
-#include <fstream>
-#include <sstream>
 
 namespace dog
 {
 
-// Define callable program entry points for material evaluation
-static const char* g_callableProgramNames[] = {
-    "__direct_callable__setupPrimaryRay",
-    "__direct_callable__sampleDiffuseBSDF",
-    "__direct_callable__evaluateDiffuseBSDF",
-    "__direct_callable__sampleSpecularBSDF",
-    "__direct_callable__evaluateSpecularBSDF",
-    "__direct_callable__sampleCoatBSDF",
-    "__direct_callable__evaluateCoatBSDF",
-    "__direct_callable__setupBSDF",
-    "__direct_callable__sampleBSDF",
-    "__direct_callable__evaluateBSDF",
-    "__direct_callable__evaluateDirectionalPDF",
-    "__direct_callable__sampleEmitter",
-    nullptr
-};
-
-static constexpr int NumCallablePrograms = sizeof(g_callableProgramNames) / sizeof(char*) - 1;
-
 PipelineHandler::PipelineHandler(RenderContextPtr ctx)
     : render_context_(ctx)
 {
-    // Initialize callable program names
-    for (int i = 0; g_callableProgramNames[i] != nullptr; ++i)
+    // Initialize PTXManager
+    ptx_manager_ = std::make_unique<PTXManager>();
+    if (render_context_)
     {
-        callable_program_names_.push_back(g_callableProgramNames[i]);
+        // Initialize with resource path from render context
+        std::filesystem::path resourcePath = render_context_->getResourcePath();
+        if (!resourcePath.empty())
+        {
+            ptx_manager_->initialize(resourcePath / "ptx");
+            LOG(INFO) << "PTXManager initialized with resource path: " << (resourcePath / "ptx").string();
+        }
+        else
+        {
+            LOG(WARNING) << "Resource path not available from RenderContext";
+        }
     }
 }
 
@@ -40,8 +30,8 @@ PipelineHandler::~PipelineHandler()
     finalize();
 }
 
-bool PipelineHandler::initialize(const std::filesystem::path& gbufferPtxPath,
-                                 const std::filesystem::path& pathTracingPtxPath)
+bool PipelineHandler::initialize(const std::string& gbufferKernelName,
+                                 const std::string& pathTracingKernelName)
 {
     if (initialized_)
     {
@@ -55,15 +45,21 @@ bool PipelineHandler::initialize(const std::filesystem::path& gbufferPtxPath,
         return false;
     }
 
+    if (!ptx_manager_)
+    {
+        LOG(WARNING) << "PTXManager not initialized";
+        return false;
+    }
+
     // Initialize G-buffer pipeline
-    if (!initializeGBufferPipeline(gbufferPtxPath))
+    if (!initializeGBufferPipeline(gbufferKernelName))
     {
         LOG(WARNING) << "Failed to initialize G-buffer pipeline";
         return false;
     }
 
     // Initialize path tracing pipeline
-    if (!initializePathTracingPipeline(pathTracingPtxPath))
+    if (!initializePathTracingPipeline(pathTracingKernelName))
     {
         LOG(WARNING) << "Failed to initialize path tracing pipeline";
         gbuffer_pipeline_.finalize();
@@ -87,7 +83,7 @@ void PipelineHandler::finalize()
     LOG(INFO) << "PipelineHandler finalized";
 }
 
-bool PipelineHandler::initializeGBufferPipeline(const std::filesystem::path& ptxPath)
+bool PipelineHandler::initializeGBufferPipeline(const std::string& kernelName)
 {
     CUcontext cuContext = render_context_->getCudaContext();
     optixu::Context optixContext = render_context_->getOptixContext();
@@ -109,13 +105,16 @@ bool PipelineHandler::initializeGBufferPipeline(const std::filesystem::path& ptx
         OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
-    // Load PTX module
-    std::string ptxString = readPtxFile(ptxPath);
-    if (ptxString.empty())
+    // Load PTX using PTXManager
+    std::vector<char> ptxData = getPTXData(kernelName);
+    if (ptxData.empty())
     {
-        LOG(WARNING) << "Failed to read G-buffer PTX file: " << ptxPath.string();
+        LOG(WARNING) << "Failed to load PTX for G-buffer kernel: " << kernelName;
         return false;
     }
+
+    // Convert to string for OptiX
+    std::string ptxString(ptxData.begin(), ptxData.end());
 
     m = p.createModuleFromPTXString(
         ptxString,
@@ -144,26 +143,11 @@ bool PipelineHandler::initializeGBufferPipeline(const std::filesystem::path& ptx
     p.setNumMissRayTypes(DogShared::GBufferRayType::NumTypes);
     p.setMissProgram(DogShared::GBufferRayType::Primary, pipeline.programs.at("miss"));
 
-    // Setup callable programs
-    if (!setupCallablePrograms(p, m, pipeline.callablePrograms))
-    {
-        LOG(WARNING) << "Failed to setup callable programs for G-buffer pipeline";
-        return false;
-    }
-
     // Link pipeline
     p.link(1);
 
     // Calculate stack sizes
     uint32_t maxDcStackSize = 0;
-    for (size_t i = 0; i < pipeline.callablePrograms.size(); ++i)
-    {
-        if (pipeline.callablePrograms[i])
-        {
-            maxDcStackSize = std::max(maxDcStackSize, 
-                                     pipeline.callablePrograms[i].getDCStackSize());
-        }
-    }
 
     uint32_t maxCcStackSize =
         pipeline.entryPoints.at(GBufferEntryPoint::setupGBuffers).getStackSize() +
@@ -183,7 +167,7 @@ bool PipelineHandler::initializeGBufferPipeline(const std::filesystem::path& ptx
     return true;
 }
 
-bool PipelineHandler::initializePathTracingPipeline(const std::filesystem::path& ptxPath)
+bool PipelineHandler::initializePathTracingPipeline(const std::string& kernelName)
 {
     CUcontext cuContext = render_context_->getCudaContext();
     optixu::Context optixContext = render_context_->getOptixContext();
@@ -206,13 +190,16 @@ bool PipelineHandler::initializePathTracingPipeline(const std::filesystem::path&
         OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
         OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
-    // Load PTX module
-    std::string ptxString = readPtxFile(ptxPath);
-    if (ptxString.empty())
+    // Load PTX using PTXManager
+    std::vector<char> ptxData = getPTXData(kernelName);
+    if (ptxData.empty())
     {
-        LOG(WARNING) << "Failed to read path tracing PTX file: " << ptxPath;
+        LOG(WARNING) << "Failed to load PTX for path tracing kernel: " << kernelName;
         return false;
     }
+
+    // Convert to string for OptiX
+    std::string ptxString(ptxData.begin(), ptxData.end());
 
     m = p.createModuleFromPTXString(
         ptxString,
@@ -246,26 +233,11 @@ bool PipelineHandler::initializePathTracingPipeline(const std::filesystem::path&
     p.setMissProgram(DogShared::PathTracingRayType::Visibility, 
                     pipeline.programs.at("emptyMiss"));
 
-    // Setup callable programs
-    if (!setupCallablePrograms(p, m, pipeline.callablePrograms))
-    {
-        LOG(WARNING) << "Failed to setup callable programs for path tracing pipeline";
-        return false;
-    }
-
     // Link pipeline
     p.link(2);
 
     // Calculate stack sizes
     uint32_t maxDcStackSize = 0;
-    for (size_t i = 0; i < pipeline.callablePrograms.size(); ++i)
-    {
-        if (pipeline.callablePrograms[i])
-        {
-            maxDcStackSize = std::max(maxDcStackSize,
-                                     pipeline.callablePrograms[i].getDCStackSize());
-        }
-    }
 
     uint32_t maxCcStackSize =
         pipeline.entryPoints.at(PathTracingEntryPoint::pathTraceBaseline).getStackSize() +
@@ -286,50 +258,24 @@ bool PipelineHandler::initializePathTracingPipeline(const std::filesystem::path&
     return true;
 }
 
-bool PipelineHandler::setupCallablePrograms(optixu::Pipeline& pipeline, optixu::Module& module,
-                                           std::vector<optixu::CallableProgramGroup>& callablePrograms)
+
+std::vector<char> PipelineHandler::getPTXData(const std::string& kernelName, bool useEmbedded)
 {
-    optixu::Module emptyModule;
-
-    pipeline.setNumCallablePrograms(static_cast<uint32_t>(callable_program_names_.size()));
-    callablePrograms.resize(callable_program_names_.size());
-
-    for (size_t i = 0; i < callable_program_names_.size(); ++i)
+    if (!ptx_manager_)
     {
-        if (callable_program_names_[i] != nullptr)
-        {
-            try
-            {
-                optixu::CallableProgramGroup program = pipeline.createCallableProgramGroup(
-                    module, callable_program_names_[i],
-                    emptyModule, nullptr);
-                callablePrograms[i] = program;
-                pipeline.setCallableProgram(static_cast<uint32_t>(i), program);
-            }
-            catch (const std::exception& e)
-            {
-                LOG(WARNING) << "Failed to create callable program " << callable_program_names_[i]
-                           << ": " << e.what();
-                // Continue - some callable programs may be optional
-            }
-        }
+        LOG(WARNING) << "PTXManager not initialized";
+        return {};
     }
-
-    return true;
-}
-
-std::string PipelineHandler::readPtxFile(const std::filesystem::path& path)
-{
-    std::ifstream file(path, std::ios::binary);
-    if (!file)
+    
+    try
     {
-        LOG(WARNING) << "Failed to open PTX file: " << path;
-        return "";
+        return ptx_manager_->getPTXData(kernelName, useEmbedded);
     }
-
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-    return buffer.str();
+    catch (const std::exception& e)
+    {
+        LOG(WARNING) << "Failed to get PTX data for kernel " << kernelName << ": " << e.what();
+        return {};
+    }
 }
 
 // G-buffer pipeline operations

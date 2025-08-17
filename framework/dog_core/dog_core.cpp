@@ -15,8 +15,13 @@
 #include "excludeFromBuild/handlers/ScreenBufferHandler.cpp"
 #include "excludeFromBuild/handlers/PipelineHandler.cpp"
 
+// Tools implementations
+#include "excludeFromBuild/tools/PTXManager.cpp"
+#include "excludeFromBuild/tools/GPUManager.cpp"
+#include "excludeFromBuild/tools/GPUMemoryMonitor.cpp"
+#include "excludeFromBuild/tools/GPUTimerManager.cpp"
+
 // Additional includes will be added here as the framework is built out
 // For example:
 // #include "excludeFromBuild/handlers/Handlers.cpp"
-// #include "excludeFromBuild/tools/PTXManager.cpp"
 // etc.

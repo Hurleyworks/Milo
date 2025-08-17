@@ -40,6 +40,7 @@
 
 #include "../common/common_host.h"
 #include "../DogShared.h"
+#include "../tools/PTXManager.h"
 
 // Forward declarations
 class RenderContext;
@@ -80,10 +81,10 @@ public:
     PipelineHandler(PipelineHandler&&) = default;
     PipelineHandler& operator=(PipelineHandler&&) = default;
 
-    // Initialize pipelines with PTX module paths
+    // Initialize pipelines with kernel names for PTX loading
     // Returns true if successful, false otherwise
-    bool initialize(const std::filesystem::path& gbufferPtxPath,
-                   const std::filesystem::path& pathTracingPtxPath);
+    bool initialize(const std::string& gbufferKernelName = "optix_dog_gbuffer",
+                   const std::string& pathTracingKernelName = "optix_dog_kernels");
 
     // Clean up all pipeline resources
     void finalize();
@@ -109,11 +110,21 @@ public:
     void setPathTracingScene(optixu::Scene scene);
     void setPathTracingEntryPoint(PathTracingEntryPoint entryPoint);
 
-    // Get callable program count for material system
-    size_t getNumCallablePrograms() const { return callable_program_names_.size(); }
 
     // Update default material hit groups
     void updateMaterialHitGroups(optixu::Material& material);
+    
+    // PTX access for other handlers
+    std::vector<char> loadPTXData(const std::string& kernelName, bool useEmbedded = true)
+    {
+        return getPTXData(kernelName, useEmbedded);
+    }
+    
+    // Check if a kernel is available
+    bool isKernelAvailable(const std::string& kernelName) const
+    {
+        return ptx_manager_ ? ptx_manager_->isKernelAvailable(kernelName) : false;
+    }
 
 private:
     // Pipeline template structure for code reuse
@@ -125,7 +136,6 @@ private:
         std::unordered_map<EntryPointType, optixu::Program> entryPoints;
         std::unordered_map<std::string, optixu::Program> programs;
         std::unordered_map<std::string, optixu::HitProgramGroup> hitPrograms;
-        std::vector<optixu::CallableProgramGroup> callablePrograms;
         cudau::Buffer sbt;
         cudau::Buffer hitGroupSbt;
 
@@ -141,21 +151,19 @@ private:
     };
 
     // Internal initialization methods
-    bool initializeGBufferPipeline(const std::filesystem::path& ptxPath);
-    bool initializePathTracingPipeline(const std::filesystem::path& ptxPath);
-    bool setupCallablePrograms(optixu::Pipeline& pipeline, optixu::Module& module,
-                              std::vector<optixu::CallableProgramGroup>& callablePrograms);
-    std::string readPtxFile(const std::filesystem::path& path);
+    bool initializeGBufferPipeline(const std::string& kernelName);
+    bool initializePathTracingPipeline(const std::string& kernelName);
+    
+    // PTX management
+    std::vector<char> getPTXData(const std::string& kernelName, bool useEmbedded = true);
 
     // Member variables
     RenderContextPtr render_context_;
+    std::unique_ptr<PTXManager> ptx_manager_;
     bool initialized_ = false;
 
     Pipeline<GBufferEntryPoint> gbuffer_pipeline_;
     Pipeline<PathTracingEntryPoint> pathtracing_pipeline_;
-
-    // Callable program names for material evaluation
-    std::vector<const char*> callable_program_names_;
 };
 
 // Template implementation
@@ -164,13 +172,6 @@ void PipelineHandler::Pipeline<EntryPointType>::finalize()
 {
     hitGroupSbt.finalize();
     sbt.finalize();
-    
-    for (auto& program : callablePrograms)
-    {
-        if (program)
-            program.destroy();
-    }
-    callablePrograms.clear();
     
     for (auto& [name, program] : programs)
     {

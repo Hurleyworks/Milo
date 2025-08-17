@@ -1,13 +1,6 @@
 #include "Renderer.h"
 #include <g3log/g3log.hpp>
-
-// Stub class definition for PTXManager since we're using unique_ptr
-class PTXManager
-{
-public:
-    PTXManager() {}
-    ~PTXManager() {}
-};
+#include "tools/PTXManager.h"
 
 Renderer::Renderer()
 {

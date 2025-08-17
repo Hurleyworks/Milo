@@ -137,32 +137,36 @@ void RenderContext::cleanupHandlers()
     }
 }
 
-void RenderContext::setCamera(sabi::CameraHandle camera)
+bool RenderContext::updateRenderDimensionsFromCamera()
 {
-    camera_ = camera;
-    
-    if (camera && camera->getSensor())
+    if (!camera_ || !camera_->getSensor())
     {
-        // Extract render dimensions from camera sensor
-        Eigen::Vector2i resolution = camera->getSensor()->getPixelResolution();
-        int newWidth = resolution.x();
-        int newHeight = resolution.y();
-        
-        // Check if dimensions have changed
-        if (newWidth != render_width_ || newHeight != render_height_)
-        {
-            render_width_ = newWidth;
-            render_height_ = newHeight;
-            
-            LOG(INFO) << "Render dimensions updated from camera: " 
-                     << render_width_ << "x" << render_height_;
-            
-            // Resize screen buffers if handlers are initialized
-            if (handlers_ && handlers_->screenBuffer && handlers_->screenBuffer->isInitialized())
-            {
-                handlers_->screenBuffer->resize(render_width_, render_height_);
-                LOG(DBUG) << "Screen buffers resized to match camera resolution";
-            }
-        }
+        return false;
     }
+    
+    // Extract render dimensions from camera sensor
+    Eigen::Vector2i resolution = camera_->getSensor()->getPixelResolution();
+    int newWidth = resolution.x();
+    int newHeight = resolution.y();
+    
+    // Check if dimensions have changed
+    if (newWidth != render_width_ || newHeight != render_height_)
+    {
+        render_width_ = newWidth;
+        render_height_ = newHeight;
+        
+        LOG(INFO) << "Render dimensions updated from camera: " 
+                 << render_width_ << "x" << render_height_;
+        
+        // Resize screen buffers if handlers are initialized
+        if (handlers_ && handlers_->screenBuffer && handlers_->screenBuffer->isInitialized())
+        {
+            handlers_->screenBuffer->resize(render_width_, render_height_);
+            LOG(DBUG) << "Screen buffers resized to match camera resolution";
+        }
+        
+        return true; // Dimensions changed
+    }
+    
+    return false; // No change
 }
