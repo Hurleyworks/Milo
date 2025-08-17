@@ -306,6 +306,143 @@ namespace shocker_shared
         }
         else
         {
+            float lightProb = 1.0f;
+
+            // First, sample an instance
+            float instProb;
+            float uGeomInst;
+            const uint32_t instSlot = shocker_plp.s->lightInstDist.sample (ul, &instProb, &uGeomInst);
+            lightProb *= instProb;
+            const InstanceData& inst = shocker_plp.s->instanceDataBufferArray[shocker_plp.f->bufferIndex][instSlot];
+            if (instProb == 0.0f)
+            {
+                *areaPDensity = 0.0f;
+                return;
+            }
+
+            // Next, sample a geometry instance which belongs to the sampled instance
+            float geomInstProb;
+            float uPrim;
+            const uint32_t geomInstIndexInInst = inst.lightGeomInstDist.sample (uGeomInst, &geomInstProb, &uPrim);
+            const uint32_t geomInstSlot = inst.geomInstSlots[geomInstIndexInInst];
+            lightProb *= geomInstProb;
+            const GeometryInstanceData& geomInst = shocker_plp.s->geometryInstanceDataBuffer[geomInstSlot];
+            if (geomInstProb == 0.0f)
+            {
+                *areaPDensity = 0.0f;
+                return;
+            }
+
+            // Finally, sample a primitive which belongs to the sampled geometry instance
+            float primProb;
+            const uint32_t primIndex = geomInst.emitterPrimDist.sample (uPrim, &primProb);
+            lightProb *= primProb;
+
+            const DisneyData& mat = shocker_plp.s->materialDataBuffer[geomInst.materialSlot];
+
+            const shared::Triangle& tri = geomInst.triangleBuffer[primIndex];
+            const shared::Vertex& vA = geomInst.vertexBuffer[tri.index0];
+            const shared::Vertex& vB = geomInst.vertexBuffer[tri.index1];
+            const shared::Vertex& vC = geomInst.vertexBuffer[tri.index2];
+            const Point3D pA = inst.transform * vA.position;
+            const Point3D pB = inst.transform * vB.position;
+            const Point3D pC = inst.transform * vC.position;
+
+            Normal3D geomNormal (cross (pB - pA, pC - pA));
+
+            float bcA, bcB, bcC;
+            if constexpr (useSolidAngleSampling)
+            {
+                // Uniform sampling in solid angle subtended by the triangle for the shading point
+                float dist;
+                Vector3D dir;
+                float dirPDF;
+                {
+                    const auto project = [] (const Vector3D& vA, const Vector3D& vB)
+                    {
+                        return normalize (vA - dot (vA, vB) * vB);
+                    };
+
+                    const Vector3D A = normalize (pA - shadingPoint);
+                    const Vector3D B = normalize (pB - shadingPoint);
+                    const Vector3D C = normalize (pC - shadingPoint);
+                    const Vector3D cAB = normalize (cross (A, B));
+                    const Vector3D cBC = normalize (cross (B, C));
+                    const Vector3D cCA = normalize (cross (C, A));
+                    const float cos_c = dot (A, B);
+                    const float cosAlpha = -dot (cAB, cCA);
+                    const float cosBeta = -dot (cBC, cAB);
+                    const float cosGamma = -dot (cCA, cBC);
+                    const float alpha = std::acos (cosAlpha);
+                    const float sinAlpha = std::sqrt (1 - pow2 (cosAlpha));
+                    const float sphArea = alpha + std::acos (cosBeta) + std::acos (cosGamma) - pi_v<float>;
+
+                    const float sphAreaHat = sphArea * u0;
+                    const float s = std::sin (sphAreaHat - alpha);
+                    const float t = std::cos (sphAreaHat - alpha);
+                    const float uu = t - cosAlpha;
+                    const float vv = s + sinAlpha * cos_c;
+
+                    const float q = ((vv * t - uu * s) * cosAlpha - vv) / ((vv * s + uu * t) * sinAlpha);
+
+                    const Vector3D cHat = q * A + std::sqrt (1 - pow2 (q)) * project (C, A);
+                    const float z = 1 - u1 * (1 - dot (cHat, B));
+                    const Vector3D P = z * B + std::sqrt (1 - pow2 (z)) * project (cHat, B);
+
+                    const auto restoreBarycentrics = [&geomNormal]
+                        (const Point3D& org, const Vector3D& dir,
+                         const Point3D& pA, const Point3D& pB, const Point3D& pC,
+                         float* dist, float* bcB, float* bcC)
+                    {
+                        const Vector3D eAB = pB - pA;
+                        const Vector3D eAC = pC - pA;
+                        const Vector3D pVec = cross (dir, eAC);
+                        const float recDet = 1.0f / dot (eAB, pVec);
+                        const Vector3D tVec = org - pA;
+                        *bcB = dot (tVec, pVec) * recDet;
+                        const Vector3D qVec = cross (tVec, eAB);
+                        *bcC = dot (dir, qVec) * recDet;
+                        *dist = dot (eAC, qVec) * recDet;
+                    };
+                    dir = P;
+                    restoreBarycentrics (shadingPoint, dir, pA, pB, pC, &dist, &bcB, &bcC);
+                    bcA = 1 - (bcB + bcC);
+                    dirPDF = 1 / sphArea;
+                }
+
+                geomNormal = normalize (geomNormal);
+                const float lpCos = -dot (dir, geomNormal);
+                if (lpCos > 0 && stc::isfinite (dirPDF))
+                    *areaPDensity = lightProb * (dirPDF * lpCos / pow2 (dist));
+                else
+                    *areaPDensity = 0.0f;
+            }
+            else
+            {
+                // Uniform sampling on unit triangle
+                bcA = 0.5f * u0;
+                bcB = 0.5f * u1;
+                const float offset = bcB - bcA;
+                if (offset > 0)
+                    bcB += offset;
+                else
+                    bcA -= offset;
+                bcC = 1 - (bcA + bcB);
+
+                const float recArea = 2.0f / length (geomNormal);
+                *areaPDensity = lightProb * recArea;
+            }
+            lightSample->position = bcA * pA + bcB * pB + bcC * pC;
+            lightSample->atInfinity = false;
+            lightSample->normal = bcA * vA.normal + bcB * vB.normal + bcC * vC.normal;
+            lightSample->normal = normalize (inst.normalMatrix * lightSample->normal);
+
+            if (mat.emissive)
+            {
+                texEmittance = mat.emissive;
+                emittance = RGB (1.0f, 1.0f, 1.0f);
+                texCoord = bcA * vA.texCoord + bcB * vB.texCoord + bcC * vC.texCoord;
+            }
         }
         if (texEmittance)
         {
