@@ -67,6 +67,10 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
     // Scratch memory for acceleration structure building
     cudau::Buffer& getAsBuildScratchMem() { return as_build_scratch_mem_; }
     const cudau::Buffer& getAsBuildScratchMem() const { return as_build_scratch_mem_; }
+    
+    // Camera management (stub for now)
+    void setCamera(sabi::CameraHandle camera) { camera_ = camera; }
+    sabi::CameraHandle getCamera() const { return camera_; }
 
  private:
     bool initialized_ = false;
@@ -89,6 +93,9 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
     
     // Scratch memory for acceleration structure building
     cudau::Buffer as_build_scratch_mem_;
+    
+    // Camera (stub for now)
+    sabi::CameraHandle camera_ = nullptr;
     
     // Helper methods
     bool initializeCore (int deviceIndex);
