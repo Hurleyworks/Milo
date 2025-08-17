@@ -34,11 +34,11 @@ class ShockerSceneHandler
     ~ShockerSceneHandler();
 
     // Set the model handler (must be called before using model operations)
-    void setModelHandler(ShockerModelHandlerPtr modelHandler) { modelHandler_ = modelHandler; }
+    void setModelHandler (ShockerModelHandlerPtr modelHandler) { modelHandler_ = modelHandler; }
 
     // Set the scene (must be called before using scene operations)
-    void setScene(optixu::Scene* scene) { scene_ = scene; }
-    
+    void setScene (optixu::Scene* scene) { scene_ = scene; }
+
     // Get the scene
     optixu::Scene* getScene() { return scene_; }
 
@@ -105,9 +105,9 @@ class ShockerSceneHandler
     void removeNodesByIDs (const std::vector<BodyID>& bodyIDs);
 
     // Get instance data buffer by index (0 or 1)
-    cudau::TypedBuffer<shared::InstanceData>* getInstanceDataBuffer(int index) 
-    { 
-        return (index >= 0 && index < 2) ? &instanceDataBuffer_[index] : nullptr; 
+    cudau::TypedBuffer<shared::InstanceData>* getInstanceDataBuffer (int index)
+    {
+        return (index >= 0 && index < 2) ? &instanceDataBuffer_[index] : nullptr;
     }
 
     uint32_t removeExpiredNodes()
@@ -118,7 +118,7 @@ class ShockerSceneHandler
         {
             if (weakRef.expired())
             {
-                expiredIndices.push_back(index);
+                expiredIndices.push_back (index);
             }
         }
 
@@ -126,26 +126,26 @@ class ShockerSceneHandler
             return 0;
 
         // Step 2: Sort indices in descending order for stable removal
-        std::sort(expiredIndices.rbegin(), expiredIndices.rend());
+        std::sort (expiredIndices.rbegin(), expiredIndices.rend());
 
         // Step 3: Remove from IAS in descending order
         for (uint32_t index : expiredIndices)
         {
             if (index < ias.getNumChildren())
             {
-                ias.removeChildAt(index);
+                ias.removeChildAt (index);
             }
         }
 
         // Step 4: Rebuild nodeMap with correct indices in a single pass
         NodeMap newNodeMap;
         uint32_t newIndex = 0;
-        
+
         // Go through all existing indices in order
         for (const auto& [oldIndex, weakRef] : nodeMap)
         {
             // Skip if this was an expired index
-            if (std::find(expiredIndices.begin(), expiredIndices.end(), oldIndex) == expiredIndices.end())
+            if (std::find (expiredIndices.begin(), expiredIndices.end(), oldIndex) == expiredIndices.end())
             {
                 if (!weakRef.expired())
                 {
@@ -153,8 +153,8 @@ class ShockerSceneHandler
                 }
             }
         }
-        
-        nodeMap = std::move(newNodeMap);
+
+        nodeMap = std::move (newNodeMap);
 
         // Step 5: Rebuild IAS and update SBT
         LOG (DBUG) << "Removed " << expiredIndices.size() << " expired nodes from the OptiX scene";
@@ -168,7 +168,7 @@ class ShockerSceneHandler
     void updateEmissiveInstances();
     void buildLightInstanceDistribution();
     const LightDistribution& getLightInstDistribution() const { return lightInstDistribution_; }
-    uint32_t getNumEmissiveInstances() const { return static_cast<uint32_t>(emissiveInstances_.size()); }
+    uint32_t getNumEmissiveInstances() const { return static_cast<uint32_t> (emissiveInstances_.size()); }
 
  private:
     // Reference to the render context for OptiX operations
@@ -194,7 +194,7 @@ class ShockerSceneHandler
 
     // Instance data buffers (double buffered for async updates)
     cudau::TypedBuffer<shared::InstanceData> instanceDataBuffer_[2];
-    
+
     // Maximum number of instances supported
     static constexpr uint32_t maxNumInstances = 16384;
 
@@ -230,12 +230,12 @@ class ShockerSceneHandler
     void updateDeformedNode (RenderableNode node);
 
     void undeformNode (RenderableNode node);
-    
+
     // Populate instance data for a given instance index
-    void populateInstanceData(uint32_t instanceIndex, const RenderableNode& node);
+    void populateInstanceData (uint32_t instanceIndex, const RenderableNode& node);
 
     // Area light tracking
-    std::vector<uint32_t> emissiveInstances_;      // Track emissive instance indices
-    LightDistribution lightInstDistribution_;       // Distribution for sampling light instances (host side)
-    bool lightDistributionDirty_ = true;            // Flag for rebuild
+    std::vector<uint32_t> emissiveInstances_; // Track emissive instance indices
+    LightDistribution lightInstDistribution_; // Distribution for sampling light instances (host side)
+    bool lightDistributionDirty_ = true;      // Flag for rebuild
 };

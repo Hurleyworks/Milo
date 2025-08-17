@@ -33,7 +33,7 @@ void ShockerSceneHandler::finalize()
         {
             ias.destroy();
         }
-        
+
         // Release IAS memory
         if (iasMem.isInitialized())
         {
@@ -63,7 +63,7 @@ void ShockerSceneHandler::finalize()
 
         // Clear node map to release references
         nodeMap.clear();
-        
+
         // Reset traversable handle
         travHandle = 0;
 
@@ -91,15 +91,13 @@ void ShockerSceneHandler::finalize()
     }
 }
 
-
-
 void ShockerSceneHandler::init()
 {
     LOG (DBUG) << _FN_;
     // Create Instance Acceleration Structure (IAS)
     if (!scene_)
     {
-        LOG(WARNING) << "Scene not set - cannot create IAS";
+        LOG (WARNING) << "Scene not set - cannot create IAS";
         return;
     }
     ias = scene_->createInstanceAccelerationStructure();
@@ -108,12 +106,12 @@ void ShockerSceneHandler::init()
     ias.setConfiguration (
         optixu::ASTradeoff::PreferFastBuild,
         optixu::AllowUpdate::Yes);
-    
+
     // Generate initial scene SBT layout before any IAS operations
     // This prevents the "Shader binding table layout generation has not been done" error
     size_t dummySize;
-    scene_->generateShaderBindingTableLayout(&dummySize);
-    LOG(DBUG) << "Generated initial scene SBT layout";
+    scene_->generateShaderBindingTableLayout (&dummySize);
+    LOG (DBUG) << "Generated initial scene SBT layout";
 
     // Load deformation kernel PTX/OptiXIR using PTXManager
     bool useEmbedded = ctx->getPropertyService().renderProps->getVal<bool> (RenderKey::UseEmbeddedPTX);
@@ -142,9 +140,9 @@ void ShockerSceneHandler::init()
 
         std::filesystem::path ptxPath;
 #ifndef NDEBUG
-        ptxPath = ctx->getPropertyService().renderProps->getVal<fs::path>(RenderKey::ResourceFolder) / "ptx" / "Debug" / "deform.ptx";
+        ptxPath = ctx->getPropertyService().renderProps->getVal<fs::path> (RenderKey::ResourceFolder) / "ptx" / "Debug" / "deform.ptx";
 #else
-        ptxPath = ctx->getPropertyService().renderProps->getVal<fs::path>(RenderKey::ResourceFolder) / "ptx" / "Release" / "deform.ptx";
+        ptxPath = ctx->getPropertyService().renderProps->getVal<fs::path> (RenderKey::ResourceFolder) / "ptx" / "Release" / "deform.ptx";
 #endif
         LOG (DBUG) << "Falling back to loading deform kernel from file: " << ptxPath.string();
         CUDADRV_CHECK (cuModuleLoad (&moduleDeform, ptxPath.generic_string().c_str()));
@@ -155,13 +153,13 @@ void ShockerSceneHandler::init()
     kernelResetDeform.set (moduleDeform, "resetDeform", cudau::dim3 (32), 0);
     kernelAccumulateVertexNormals.set (moduleDeform, "accumulateVertexNormals", cudau::dim3 (32), 0);
     kernelNormalizeVertexNormals.set (moduleDeform, "normalizeVertexNormals", cudau::dim3 (32), 0);
-    
+
     // Initialize instance data buffers (double buffered)
     // These need to be initialized early so they're ready when geometry is added
     const cudau::BufferType bufferType = cudau::BufferType::Device;
-    instanceDataBuffer_[0].initialize(ctx->getCudaContext(), bufferType, maxNumInstances);
-    instanceDataBuffer_[1].initialize(ctx->getCudaContext(), bufferType, maxNumInstances);
-    LOG(DBUG) << "Initialized instance data buffers with capacity: " << maxNumInstances;
+    instanceDataBuffer_[0].initialize (ctx->getCudaContext(), bufferType, maxNumInstances);
+    instanceDataBuffer_[1].initialize (ctx->getCudaContext(), bufferType, maxNumInstances);
+    LOG (DBUG) << "Initialized instance data buffers with capacity: " << maxNumInstances;
 }
 
 // Prepare for building the IAS
@@ -198,13 +196,13 @@ void ShockerSceneHandler::prepareForBuild()
         // Initialize memory buffers based on requirements
         CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
         iasMem.initialize (ctx->getCudaContext(), cudau::BufferType::Device, bufferSizes.outputSizeInBytes, 1);
-        
+
         // Only initialize instance buffer if we have children
         if (ias.getNumChildren() > 0)
         {
             instanceBuffer.initialize (ctx->getCudaContext(), cudau::BufferType::Device, ias.getNumChildren());
         }
-        
+
         // Instance data buffers are now initialized in init() to ensure they're ready
         // when geometry is added to an empty scene
     }
@@ -242,16 +240,16 @@ void ShockerSceneHandler::resizeSceneDependentSBT()
 {
     if (!scene_)
     {
-        LOG(WARNING) << "Scene not set - cannot resize SBT";
+        LOG (WARNING) << "Scene not set - cannot resize SBT";
         return;
     }
 
     // Generate the shader binding table layout
     // This MUST be called before building the IAS
     size_t hitGroupSbtSize;
-    scene_->generateShaderBindingTableLayout(&hitGroupSbtSize);
-    
-    LOG(DBUG) << "Generated scene SBT layout, size: " << hitGroupSbtSize << " bytes";
+    scene_->generateShaderBindingTableLayout (&hitGroupSbtSize);
+
+    LOG (DBUG) << "Generated scene SBT layout, size: " << hitGroupSbtSize << " bytes";
 }
 
 void ShockerSceneHandler::undeformNode (RenderableNode node)
@@ -307,7 +305,7 @@ void ShockerSceneHandler::undeformNode (RenderableNode node)
             gas->gas.rebuild (ctx->getCudaStream(), gas->gasMem, ctx->getASBuildScratchMem());
         }
 
-       // LOG (DBUG) << "Reset deformation and recomputed normals for " << node->getName();
+        // LOG (DBUG) << "Reset deformation and recomputed normals for " << node->getName();
     }
     catch (const std::exception& e)
     {
@@ -415,7 +413,7 @@ void ShockerSceneHandler::removeNodesByIDs (const std::vector<BodyID>& bodyIDs)
 
     // Step 1: Find all nodes to remove and their indices
     std::vector<uint32_t> indicesToRemove;
-    
+
     for (BodyID bodyID : bodyIDs)
     {
         for (const auto& [index, weakRef] : nodeMap)
@@ -425,7 +423,7 @@ void ShockerSceneHandler::removeNodesByIDs (const std::vector<BodyID>& bodyIDs)
                 RenderableNode node = weakRef.lock();
                 if (node && node->getClientID() == bodyID)
                 {
-                    indicesToRemove.push_back(index);
+                    indicesToRemove.push_back (index);
                     node->getState().state &= ~sabi::PRenderableState::StoredInSceneHandler;
                     break;
                 }
@@ -440,30 +438,30 @@ void ShockerSceneHandler::removeNodesByIDs (const std::vector<BodyID>& bodyIDs)
     }
 
     // Step 2: Sort indices in descending order for stable removal
-    std::sort(indicesToRemove.rbegin(), indicesToRemove.rend());
+    std::sort (indicesToRemove.rbegin(), indicesToRemove.rend());
 
     // Step 3: Remove from IAS in descending order (no index shifts affect remaining removals)
     for (uint32_t index : indicesToRemove)
     {
         if (index < ias.getNumChildren())
         {
-            ias.removeChildAt(index);
+            ias.removeChildAt (index);
         }
         else
         {
-            LOG(WARNING) << "Invalid index " << index << " (max: " << ias.getNumChildren() - 1 << ")";
+            LOG (WARNING) << "Invalid index " << index << " (max: " << ias.getNumChildren() - 1 << ")";
         }
     }
 
     // Step 4: Rebuild nodeMap with correct indices in a single pass
     NodeMap newNodeMap;
     uint32_t newIndex = 0;
-    
+
     // Go through all existing indices in order
     for (const auto& [oldIndex, weakRef] : nodeMap)
     {
         // Skip if this index was removed
-        if (std::find(indicesToRemove.begin(), indicesToRemove.end(), oldIndex) == indicesToRemove.end())
+        if (std::find (indicesToRemove.begin(), indicesToRemove.end(), oldIndex) == indicesToRemove.end())
         {
             if (!weakRef.expired())
             {
@@ -471,8 +469,8 @@ void ShockerSceneHandler::removeNodesByIDs (const std::vector<BodyID>& bodyIDs)
             }
         }
     }
-    
-    nodeMap = std::move(newNodeMap);
+
+    nodeMap = std::move (newNodeMap);
 
     // Step 5: Rebuild IAS and update SBT
     LOG (DBUG) << "Rebuilding IAS after removing " << indicesToRemove.size() << " instances";
@@ -494,8 +492,6 @@ void ShockerSceneHandler::createInstance (RenderableWeakRef& weakNode)
     // Create a new OptiX instance
     optixu::Instance instance = scene_->createInstance();
 
-    LOG (DBUG) << node->getClientID();
-
     // Instances don't have a LWITEMID converted to a ClientID
     // ShockerModelPtr optiXModel = modelHandler_->getShockerModel (node->getID());
     ShockerModelPtr optiXModel = modelHandler_->getShockerModel (node->getClientID());
@@ -507,35 +503,6 @@ void ShockerSceneHandler::createInstance (RenderableWeakRef& weakNode)
     const SpaceTime& st = node->getSpaceTime();
     MatrixRowMajor34f t;
     getWorldTransform (t, st);
-    
-    // Debug: Log the 3x4 transform being set on OptiX instance for Box
-    std::string nodeName = node->getName();
-    #if 0
-    if (nodeName.find("Box") != std::string::npos)
-    {
-        LOG(INFO) << "=== OptiX Instance Transform (3x4 row-major) ===";
-        LOG(INFO) << "Node: " << nodeName;
-        LOG(INFO) << "Row 0: [" << t(0,0) << ", " << t(0,1) << ", " << t(0,2) << ", " << t(0,3) << "]";
-        LOG(INFO) << "Row 1: [" << t(1,0) << ", " << t(1,1) << ", " << t(1,2) << ", " << t(1,3) << "]";
-        LOG(INFO) << "Row 2: [" << t(2,0) << ", " << t(2,1) << ", " << t(2,2) << ", " << t(2,3) << "]";
-        LOG(INFO) << "Translation (last column): (" << t(0,3) << ", " << t(1,3) << ", " << t(2,3) << ")";
-        
-        // Also log the raw data array that OptiX will receive
-        LOG(INFO) << "Raw data array for OptiX (row-major order):";
-        const float* data = t.data();
-        for (int i = 0; i < 3; ++i) {
-            LOG(INFO) << "  [" << data[i*4+0] << ", " << data[i*4+1] << ", " << data[i*4+2] << ", " << data[i*4+3] << "]";
-        }
-        
-        // Compare with the original Eigen matrix
-        const Eigen::Matrix4f& m = st.worldTransform.matrix();
-        LOG(INFO) << "Original Eigen Matrix4f (column-major):";
-        for (int row = 0; row < 4; ++row) {
-            LOG(INFO) << "  [" << m(row,0) << ", " << m(row,1) << ", " << m(row,2) << ", " << m(row,3) << "]";
-        }
-    }
-    #endif 
-    
     instance.setTransform (t.data());
 
     // Add the instance to the IAS
@@ -545,137 +512,71 @@ void ShockerSceneHandler::createInstance (RenderableWeakRef& weakNode)
 
     uint32_t index = ias.findChildIndex (instance);
     nodeMap[index] = weakNode;
-    
-    // Debug: Log the actual OptiX instance index
-  //  if (nodeName.find("Box") != std::string::npos)
- //   {
-        LOG(INFO) << "=== OptiX Instance Index ===";
-        LOG(INFO) << "Box assigned OptiX instance index: " << index;
-        LOG(INFO) << "Total instances in IAS: " << ias.getNumChildren();
-  //  }
 
     GAS* gasData = optiXModel->getGAS();
     gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, ctx->getASBuildScratchMem());
 
+     // missing this cost 2 days of hell
+    instance.setID (index);
+
     prepareForBuild();
 
     rebuild();
-    
+
     // Populate instance data for GPU access
-    populateInstanceData(index, node);
+    populateInstanceData (index, node);
 }
 
-void ShockerSceneHandler::populateInstanceData(uint32_t instanceIndex, const RenderableNode& node)
+void ShockerSceneHandler::populateInstanceData (uint32_t instanceIndex, const RenderableNode& node)
 {
     if (instanceIndex >= maxNumInstances)
     {
-        LOG(WARNING) << "Instance index " << instanceIndex << " exceeds max instances " << maxNumInstances;
+        LOG (WARNING) << "Instance index " << instanceIndex << " exceeds max instances " << maxNumInstances;
         return;
     }
-    
+
     // Map both buffers and populate with instance data
     for (int bufferIdx = 0; bufferIdx < 2; ++bufferIdx)
     {
         shared::InstanceData* instDataOnHost = instanceDataBuffer_[bufferIdx].map();
         if (!instDataOnHost)
         {
-            LOG(WARNING) << "Failed to map instance data buffer " << bufferIdx;
+            LOG (WARNING) << "Failed to map instance data buffer " << bufferIdx;
             continue;
         }
-        
+
         shared::InstanceData& instData = instDataOnHost[instanceIndex];
-        
-        // Get world transform from node and apply scale
-        const SpaceTime& st = node->getSpaceTime();
-        // Apply scale to the transform just like getWorldTransform does
-        Eigen::Affine3f scaled = st.worldTransform;
-        for (int j = 0; j < 3; j++)
-            scaled.linear().col(j) *= st.scale[j];
-        const Eigen::Matrix4f worldTransform = scaled.matrix();
-        
-        // Debug: Check if this is the cube
-        #if 0
-        std::string nodeName = node->getName();
-        if (nodeName.find("Box") != std::string::npos || nodeName.find("Box") != std::string::npos)
-        {
-            LOG(INFO) << "=== Cube Transform Debug (Host Side) ===";
-            LOG(INFO) << "Node name: " << nodeName;
-            LOG(INFO) << "Instance index: " << instanceIndex;
-            LOG(INFO) << "Buffer index: " << bufferIdx;
-            LOG(INFO) << "World transform matrix:";
-            for (int row = 0; row < 4; ++row)
-            {
-                LOG(INFO) << "  [" 
-                    << worldTransform(row, 0) << ", " 
-                    << worldTransform(row, 1) << ", " 
-                    << worldTransform(row, 2) << ", " 
-                    << worldTransform(row, 3) << "]";
-            }
-            
-            // Extract translation
-            Eigen::Vector3f translation(worldTransform(0, 3), worldTransform(1, 3), worldTransform(2, 3));
-            LOG(INFO) << "Translation: (" << translation.x() << ", " << translation.y() << ", " << translation.z() << ")";
-            
-            // Check if it's close to expected (0, 1, 0)
-            if (std::abs(translation.x() - 0.0f) < 0.01f && 
-                std::abs(translation.y() - 1.0f) < 0.01f && 
-                std::abs(translation.z() - 0.0f) < 0.01f)
-            {
-                LOG(INFO) << "✓ Translation matches expected (0, 1, 0)";
-            }
-        }
-        #endif
-        // Convert Eigen matrix (column-major) to shared Matrix4x4 (column-major)
-        // Both Eigen and Matrix4x4 use column-major storage
-        // Eigen stores columns contiguously, Matrix4x4 expects columns as Vector4D
-        Matrix4x4 transform(
-            Vector4D(worldTransform(0, 0), worldTransform(1, 0), worldTransform(2, 0), worldTransform(3, 0)),  // column 0
-            Vector4D(worldTransform(0, 1), worldTransform(1, 1), worldTransform(2, 1), worldTransform(3, 1)),  // column 1  
-            Vector4D(worldTransform(0, 2), worldTransform(1, 2), worldTransform(2, 2), worldTransform(3, 2)),  // column 2
-            Vector4D(worldTransform(0, 3), worldTransform(1, 3), worldTransform(2, 3), worldTransform(3, 3))   // column 3
+
+        // Get world transform from node
+        const Eigen::Matrix4f& worldTransform = node->getSpaceTime().worldTransform.matrix();
+
+        // Convert Eigen matrix to shared Matrix4x4 (column-major)
+        Matrix4x4 transform (
+            Vector4D (worldTransform (0, 0), worldTransform (1, 0), worldTransform (2, 0), worldTransform (3, 0)), // column 0
+            Vector4D (worldTransform (0, 1), worldTransform (1, 1), worldTransform (2, 1), worldTransform (3, 1)), // column 1
+            Vector4D (worldTransform (0, 2), worldTransform (1, 2), worldTransform (2, 2), worldTransform (3, 2)), // column 2
+            Vector4D (worldTransform (0, 3), worldTransform (1, 3), worldTransform (2, 3), worldTransform (3, 3))  // column 3
         );
-        
-        #if 0
-        // Debug: Verify the conversion to Matrix4x4 for Box
-        if (nodeName.find("Box") != std::string::npos)
-        {
-            LOG(INFO) << "=== Matrix4x4 Conversion Debug ===";
-            LOG(INFO) << "Column 0: (" << transform.c0.x << ", " << transform.c0.y << ", " << transform.c0.z << ", " << transform.c0.w << ")";
-            LOG(INFO) << "Column 1: (" << transform.c1.x << ", " << transform.c1.y << ", " << transform.c1.z << ", " << transform.c1.w << ")";
-            LOG(INFO) << "Column 2: (" << transform.c2.x << ", " << transform.c2.y << ", " << transform.c2.z << ", " << transform.c2.w << ")";
-            LOG(INFO) << "Column 3: (" << transform.c3.x << ", " << transform.c3.y << ", " << transform.c3.z << ", " << transform.c3.w << ")";
-            LOG(INFO) << "Translation from Matrix4x4 (column 3): (" << transform.c3.x << ", " << transform.c3.y << ", " << transform.c3.z << ")";
-            
-            // Test multiplication with a point (0,0,0) to verify it translates correctly
-            Point3D testPoint(0, 0, 0);
-            Point3D result = transform * testPoint;
-            LOG(INFO) << "Test: transform * (0,0,0) = (" << result.x << ", " << result.y << ", " << result.z << ")";
-            LOG(INFO) << "Expected: (0, 1, 0)";
-        }
-        #endif
         instData.transform = transform;
-        
+
         // For now, no motion blur - identity transform
         instData.curToPrevTransform = Matrix4x4();
-        
+
         // Compute normal matrix (inverse transpose of upper 3x3)
-        // Convert from Eigen column-major to Matrix3x3 column-major
-        // Both use column-major storage, so direct conversion
-        Matrix3x3 upperLeft(
-            Vector3D(worldTransform(0, 0), worldTransform(1, 0), worldTransform(2, 0)),  // column 0
-            Vector3D(worldTransform(0, 1), worldTransform(1, 1), worldTransform(2, 1)),  // column 1
-            Vector3D(worldTransform(0, 2), worldTransform(1, 2), worldTransform(2, 2))   // column 2
+        Matrix3x3 upperLeft (
+            Vector3D (worldTransform (0, 0), worldTransform (1, 0), worldTransform (2, 0)), // column 0
+            Vector3D (worldTransform (0, 1), worldTransform (1, 1), worldTransform (2, 1)), // column 1
+            Vector3D (worldTransform (0, 2), worldTransform (1, 2), worldTransform (2, 2))  // column 2
         );
-        // Normal matrix is inverse transpose of upper 3x3
-        instData.normalMatrix = transpose(invert(upperLeft));
-        
+        instData.normalMatrix = transpose (invert (upperLeft));
+
         // Set uniform scale (for now, assume 1.0)
         instData.uniformScale = 1.0f;
-        
+
         // Empty buffers for now - these would be populated if the instance has geometry slots
         instData.geomInstSlots = shared::ROBuffer<uint32_t>();
         instData.lightGeomInstDist = shared::LightDistribution();
-        
+
         instanceDataBuffer_[bufferIdx].unmap();
     }
 }
@@ -747,9 +648,9 @@ void ShockerSceneHandler::createGeometryInstance (RenderableWeakRef& weakNode)
     prepareForBuild();
 
     rebuild();
-    
+
     // Populate instance data for GPU access
-    populateInstanceData(index, node);
+    populateInstanceData (index, node);
 }
 
 void ShockerSceneHandler::createPhysicsPhantom (RenderableWeakRef& weakNode)
@@ -796,9 +697,9 @@ void ShockerSceneHandler::createPhysicsPhantom (RenderableWeakRef& weakNode)
         prepareForBuild();
 
         rebuild();
-        
+
         // Populate instance data for GPU access
-        populateInstanceData(index, node);
+        populateInstanceData (index, node);
     }
     catch (const std::exception& e)
     {
@@ -846,9 +747,9 @@ void ShockerSceneHandler::createInstanceList (const WeakRenderableList& weakNode
 
             uint32_t index = ias.findChildIndex (instance);
             nodeMap[index] = weakNode;
-            
+
             // Store index for later instance data population
-            populateInstanceData(index, node);
+            populateInstanceData (index, node);
         }
         else
         {
@@ -884,9 +785,9 @@ void ShockerSceneHandler::createInstanceList (const WeakRenderableList& weakNode
 
             GAS* gasData = optiXModel->getGAS();
             gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, ctx->getASBuildScratchMem());
-            
+
             // Populate instance data for GPU access
-            populateInstanceData(index, node);
+            populateInstanceData (index, node);
         }
     }
 
@@ -911,7 +812,7 @@ bool ShockerSceneHandler::updateMotion()
         if (!node) continue;
 
         bool isDeformed = node->getState().isDeformed();
-      
+
         // Check for deformation state changes
         if (node->getState().state & PRenderableState::DeformedStateChanged)
         {
@@ -928,14 +829,12 @@ bool ShockerSceneHandler::updateMotion()
 
             // Clear the state change flag after handling
             node->getState().state &= ~PRenderableState::DeformedStateChanged;
-
         }
         else if (isDeformed)
         {
             updateDeformedNode (node);
         }
-       
-       
+
         optixu::Instance instance = ias.getChild (it.first);
         const SpaceTime& st = node->getSpaceTime();
         MatrixRowMajor34f t;
@@ -949,9 +848,9 @@ bool ShockerSceneHandler::updateMotion()
         instance.setVisibilityMask (visiblityMask);
         if (node->description().sleepState)
             ++bodiesSleeping;
-            
+
         // Update instance data for this instance
-        populateInstanceData(it.first, node);
+        populateInstanceData (it.first, node);
     }
     if (bodiesSleeping < bodyCount)
     {
@@ -1062,28 +961,6 @@ void ShockerSceneHandler::deselectAll()
 // Rebuild the IAS after any updates to the instances
 void ShockerSceneHandler::rebuildIAS()
 {
-    // Manually populate the instance buffer with correct instance IDs
-    // The optixu library doesn't set these properly, so we need to do it ourselves
-    if (instanceBuffer.isInitialized() && ias.getNumChildren() > 0)
-    {
-        OptixInstance* instances = instanceBuffer.map();
-        if (instances)
-        {
-            // The optixu library populates most of the OptixInstance fields but not instanceId
-            // We need to set the instanceId field for each instance
-            for (uint32_t i = 0; i < ias.getNumChildren(); ++i)
-            {
-                // Get the instance data that optixu has already populated
-                optixu::Instance inst = ias.getChild(i);
-                
-                // The instance buffer is already populated by optixu with transform, traversableHandle, etc.
-                // We just need to set the instanceId field which optixu doesn't set
-                instances[i].instanceId = i;
-            }
-            instanceBuffer.unmap();
-        }
-    }
-    
     // Perform the IAS rebuild
     travHandle = ias.rebuild (ctx->getCudaStream(), instanceBuffer, iasMem, ctx->getASBuildScratchMem());
 
@@ -1110,31 +987,31 @@ void ShockerSceneHandler::rebuild()
 void ShockerSceneHandler::updateEmissiveInstances()
 {
     emissiveInstances_.clear();
-    
+
     // Check if we have a valid model handler
     if (!modelHandler_)
     {
-        LOG(WARNING) << "No model handler set for emissive instance update";
+        LOG (WARNING) << "No model handler set for emissive instance update";
         return;
     }
-    
+
     // Iterate through all instances and check if they have emissive materials
     for (const auto& [instanceIndex, weakRef] : nodeMap)
     {
         if (weakRef.expired()) continue;
-        
+
         auto node = weakRef.lock();
         if (!node) continue;
-        
+
         // Get the model from the node
-        auto model = modelHandler_->getModel(node);
+        auto model = modelHandler_->getModel (node);
         if (!model) continue;
-        
+
         // Check if the model has any emissive materials
         bool hasEmissive = false;
-        
+
         // For ShockerTriangleModel, check if emitter distribution has non-zero integral
-        if (auto triModel = std::dynamic_pointer_cast<ShockerTriangleModel>(model))
+        if (auto triModel = std::dynamic_pointer_cast<ShockerTriangleModel> (model))
         {
             const LightDistribution& emitterDist = triModel->getEmitterPrimDistribution();
             if (emitterDist.getIntengral() > 0.0f)
@@ -1142,11 +1019,11 @@ void ShockerSceneHandler::updateEmissiveInstances()
                 hasEmissive = true;
             }
         }
-        
+
         if (hasEmissive)
         {
-            emissiveInstances_.push_back(instanceIndex);
-            
+            emissiveInstances_.push_back (instanceIndex);
+
             // Mark instance as emissive in instance data
             for (int bufferIdx = 0; bufferIdx < 2; ++bufferIdx)
             {
@@ -1154,68 +1031,68 @@ void ShockerSceneHandler::updateEmissiveInstances()
                 if (instDataOnHost && instanceIndex < maxNumInstances)
                 {
                     instDataOnHost[instanceIndex].isEmissive = 1;
-                    instDataOnHost[instanceIndex].emissiveScale = 1.0f;  // Default scale
+                    instDataOnHost[instanceIndex].emissiveScale = 1.0f; // Default scale
                 }
                 instanceDataBuffer_[bufferIdx].unmap();
             }
         }
     }
-    
+
     lightDistributionDirty_ = true;
-   // LOG(DBUG) << "Found " << emissiveInstances_.size() << " emissive instances";
+    // LOG(DBUG) << "Found " << emissiveInstances_.size() << " emissive instances";
 }
 
 void ShockerSceneHandler::buildLightInstanceDistribution()
 {
     if (!lightDistributionDirty_) return;
-    
+
     if (emissiveInstances_.empty())
     {
         // Initialize empty distribution
-        lightInstDistribution_.initialize(ctx->getCudaContext(), cudau::BufferType::Device, nullptr, 0);
+        lightInstDistribution_.initialize (ctx->getCudaContext(), cudau::BufferType::Device, nullptr, 0);
         lightDistributionDirty_ = false;
         return;
     }
-    
+
     // Collect importances for all emissive instances
     std::vector<float> importances;
-    importances.reserve(emissiveInstances_.size());
-    
+    importances.reserve (emissiveInstances_.size());
+
     for (uint32_t instIdx : emissiveInstances_)
     {
         float importance = 0.0f;
-        
+
         // Get node and model
-        auto it = nodeMap.find(instIdx);
+        auto it = nodeMap.find (instIdx);
         if (it != nodeMap.end() && !it->second.expired())
         {
             auto node = it->second.lock();
-            auto model = modelHandler_->getModel(node);
-            
-            if (auto triModel = std::dynamic_pointer_cast<ShockerTriangleModel>(model))
+            auto model = modelHandler_->getModel (node);
+
+            if (auto triModel = std::dynamic_pointer_cast<ShockerTriangleModel> (model))
             {
                 // Get importance from the model's emitter distribution
                 importance = triModel->getEmitterPrimDistribution().getIntengral();
-                
+
                 // Account for instance scaling
                 const auto& spaceTime = node->getSpaceTime();
-                float uniformScale = spaceTime.scale.norm() / std::sqrt(3.0f);  // Approximate uniform scale
-                importance *= uniformScale * uniformScale;  // Area scales by square of scale
+                float uniformScale = spaceTime.scale.norm() / std::sqrt (3.0f); // Approximate uniform scale
+                importance *= uniformScale * uniformScale;                      // Area scales by square of scale
             }
         }
-        
-        importances.push_back(std::max(importance, 1e-6f));  // Avoid zero importance
+
+        importances.push_back (std::max (importance, 1e-6f)); // Avoid zero importance
     }
-    
+
     // Build CDF for sampling
     // Initialize light distribution with CUDA context, buffer type, and importance data
-    lightInstDistribution_.initialize(
-        ctx->getCudaContext(), 
-        cudau::BufferType::Device, 
-        importances.data(), 
-        static_cast<uint32_t>(importances.size()));
+    lightInstDistribution_.initialize (
+        ctx->getCudaContext(),
+        cudau::BufferType::Device,
+        importances.data(),
+        static_cast<uint32_t> (importances.size()));
     lightDistributionDirty_ = false;
-    
-    LOG(DBUG) << "Built light instance distribution with " << importances.size() 
-              << " lights, total importance: " << lightInstDistribution_.getIntengral();
+
+    LOG (DBUG) << "Built light instance distribution with " << importances.size()
+               << " lights, total importance: " << lightInstDistribution_.getIntengral();
 }

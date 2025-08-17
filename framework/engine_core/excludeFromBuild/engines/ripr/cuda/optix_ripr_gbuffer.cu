@@ -124,6 +124,16 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME (setupGBuffers)()
     PrimaryRayPayloadSignature::get (&hitPointParams, &pickInfo);
 
     const auto hp = HitPointParameter::get();
+
+     // Debug output to check what OptiX is returning for instance ID
+    const float3 rayOrigin = optixGetWorldRayOrigin();
+    //if ((rayOrigin.x > 0.0f && abs (rayOrigin.y) < 0.1f) || // Ray hitting right side
+    //    (rayOrigin.x < 0.0f && abs (rayOrigin.y) < 0.1f))
+    //{ // Ray hitting left side
+    //    printf ("GBuffer CH: Ray origin x=%f, OptiX instanceId = %u, geomInstSlot = %u\n",
+    //            rayOrigin.x, optixGetInstanceId(), sbtr.geomInstSlot);
+    //}
+
     hitPointParams->instSlot = optixGetInstanceId();
     hitPointParams->geomInstSlot = sbtr.geomInstSlot;
     hitPointParams->primIndex = hp.primIndex;

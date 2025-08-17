@@ -770,7 +770,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME (shading)()
     Vector3D vOutLocal = shadingFrame.toLocal (vOut);
     
     // Debug for center pixel - same as Shocker
-    bool debugPixel = (optixGetLaunchIndex().x == 512 && optixGetLaunchIndex().y == 384);
+    /*bool debugPixel = (optixGetLaunchIndex().x == 512 && optixGetLaunchIndex().y == 384);
     if (debugPixel && payload->pathLength == 1) {
         printf("[RiPR] Geometry: vOut=(%.3f,%.3f,%.3f), vOutLocal=(%.3f,%.3f,%.3f), normal=(%.3f,%.3f,%.3f)\n",
             vOut.x, vOut.y, vOut.z,
@@ -778,7 +778,7 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME (shading)()
             shadingNormalInWorld.x, shadingNormalInWorld.y, shadingNormalInWorld.z);
         printf("[RiPR] TexCoord0Dir=(%.3f,%.3f,%.3f)\n",
             texCoord0DirInWorld.x, texCoord0DirInWorld.y, texCoord0DirInWorld.z);
-    }
+    }*/
     
     // Calculate previous position for motion vectors (only on first hit)
     if (payload->pathLength == 1)
@@ -883,22 +883,22 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME (shading)()
         vOutLocal, rng.getFloat0cTo1o(), rng.getFloat0cTo1o(),
         &vInLocal, &dirPDensity);
     
-    // Debug for center pixel - same as Shocker
-    if (debugPixel) {
-        printf("[RiPR] sampleThroughput: throughput=(%.3f,%.3f,%.3f), dirPDF=%.6f, pathLen=%d\n",
-            sampledValue.r, sampledValue.g, sampledValue.b, dirPDensity, payload->pathLength);
-    }
+    //// Debug for center pixel - same as Shocker
+    //if (debugPixel) {
+    //    printf("[RiPR] sampleThroughput: throughput=(%.3f,%.3f,%.3f), dirPDF=%.6f, pathLen=%d\n",
+    //        sampledValue.r, sampledValue.g, sampledValue.b, dirPDensity, payload->pathLength);
+    //}
 
     if (dirPDensity > 0.0f)
     {
         // Update payload for next bounce
         payload->alpha = payload->alpha * (sampledValue * std::fabs (vInLocal.z) / dirPDensity);
         
-        if (debugPixel) {
+        /*if (debugPixel) {
             RGB newAlpha = payload->alpha;
             printf("[RiPR] After update: alpha=(%.3f,%.3f,%.3f)\n",
                 newAlpha.r, newAlpha.g, newAlpha.b);
-        }
+        }*/
         
         payload->origin = positionInWorld + shadingNormalInWorld * (vInLocal.z > 0 ? 0.001f : -0.001f);
         payload->direction = shadingFrame.fromLocal (vInLocal);
