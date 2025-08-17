@@ -4,7 +4,6 @@
 // Central management structure that creates and coordinates all Dog rendering system handler components
 
 #include "ScreenBufferHandler.h"
-#include "PipelineHandler.h"
 
 // Forward declarations
 class RenderContext;
@@ -13,6 +12,7 @@ using RenderContextPtr = std::shared_ptr<RenderContext>;
 // #include "MaterialHandler.h"
 // #include "ModelHandler.h"
 // #include "SceneHandler.h"
+// #include "PipelineHandler.h"
 // #include "TextureHandler.h"
 // #include "SkyDomeHandler.h"
 // #include "AreaLightHandler.h"
@@ -26,11 +26,11 @@ struct Handlers
     Handlers(RenderContextPtr ctx)
     {
         screenBuffer = ScreenBufferHandler::create(ctx);
-        pipeline = PipelineHandler::create(ctx);
         // Future handlers will be initialized here:
         // scene = SceneHandler::create(ctx);
         // material = MaterialHandler::create(ctx);
         // model = ModelHandler::create(ctx);
+        // pipeline = PipelineHandler::create(ctx);
         // texture = TextureHandler::create(ctx);
         // skydome = SkyDomeHandler::create(ctx);
         // areaLight = AreaLightHandler::create(ctx);
@@ -41,22 +41,22 @@ struct Handlers
     {
         // Handlers are released in reverse order of potential dependencies
         screenBuffer.reset();
-        pipeline.reset();
         // Future handlers will be reset here in reverse dependency order:
         // areaLight.reset();
         // scene.reset();
         // material.reset();
         // model.reset();
+        // pipeline.reset();
         // texture.reset();
         // skydome.reset();
     }
 
     ScreenBufferHandlerPtr screenBuffer = nullptr;  // Manages screen rendering buffers
-    PipelineHandlerPtr pipeline = nullptr;          // Manages OptiX rendering pipelines
     // Future handlers:
     // SceneHandlerPtr scene = nullptr;            // Manages scene graph and acceleration structures
     // MaterialHandlerPtr material = nullptr;      // Manages material creation and updates
     // ModelHandlerPtr model = nullptr;            // Manages 3D model geometry
+    // PipelineHandlerPtr pipeline = nullptr;      // Manages OptiX rendering pipelines
     // TextureHandlerPtr texture = nullptr;        // Manages texture resources
     // SkyDomeHandlerPtr skydome = nullptr;        // Manages environment lighting
     // AreaLightHandlerPtr areaLight = nullptr;    // Manages mesh-based lighting system

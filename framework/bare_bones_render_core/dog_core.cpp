@@ -13,7 +13,6 @@
 
 // Handler implementations
 #include "excludeFromBuild/handlers/ScreenBufferHandler.cpp"
-#include "excludeFromBuild/handlers/PipelineHandler.cpp"
 
 // Additional includes will be added here as the framework is built out
 // For example:

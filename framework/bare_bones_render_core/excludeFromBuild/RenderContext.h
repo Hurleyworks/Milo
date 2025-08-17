@@ -52,7 +52,8 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
     optixu::Scene getScene() const { return scene_; }
     void setScene (optixu::Scene scene) { scene_ = scene; }
     
-    // Render size management - dimensions are automatically managed by camera
+    // Render size management
+    void setRenderSize (int width, int height) { render_width_ = width; render_height_ = height; }
     int getRenderWidth() const { return render_width_; }
     int getRenderHeight() const { return render_height_; }
     
@@ -62,9 +63,13 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
     // Resource paths
     void setResourcePath (const std::filesystem::path& path) { resource_path_ = path; }
     std::filesystem::path getResourcePath() const { return resource_path_; }
+
+    // Scratch memory for acceleration structure building
+    cudau::Buffer& getAsBuildScratchMem() { return as_build_scratch_mem_; }
+    const cudau::Buffer& getAsBuildScratchMem() const { return as_build_scratch_mem_; }
     
-    // Camera management - automatically extracts render dimensions from camera sensor
-    void setCamera(sabi::CameraHandle camera);
+    // Camera management (stub for now)
+    void setCamera(sabi::CameraHandle camera) { camera_ = camera; }
     sabi::CameraHandle getCamera() const { return camera_; }
 
  private:
@@ -86,8 +91,8 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
     // Handler system
     std::unique_ptr<dog::Handlers> handlers_;
     
-    // Note: Acceleration structure scratch memory will be managed by SceneHandler/ModelHandler
-    // when those components are implemented, not here in RenderContext
+    // Scratch memory for acceleration structure building
+    cudau::Buffer as_build_scratch_mem_;
     
     // Camera (stub for now)
     sabi::CameraHandle camera_ = nullptr;

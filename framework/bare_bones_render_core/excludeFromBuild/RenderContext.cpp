@@ -1,6 +1,5 @@
 #include "RenderContext.h"
 #include <g3log/g3log.hpp>
-#include <sabi_core/sabi_core.h>
 
 RenderContext::~RenderContext()
 {
@@ -28,8 +27,15 @@ bool RenderContext::initialize (int deviceIndex)
     scene_ = gpu_context_.getOptixContext().createScene();
     LOG(DBUG) << "OptiX scene created";
     
-    // Note: Acceleration structure scratch memory will be allocated by SceneHandler/ModelHandler
-    // when those components are implemented
+    // Initialize scratch memory for acceleration structure building
+    // Start with 32MB, can be resized as needed
+    const size_t initial_scratch_size = 32 * 1024 * 1024;
+    as_build_scratch_mem_.initialize (
+        gpu_context_.getCudaContext(),
+        cudau::BufferType::Device,
+        initial_scratch_size,
+        1);
+    LOG(DBUG) << "Allocated " << (initial_scratch_size / (1024 * 1024)) << " MB scratch memory for AS building";
     
     // Initialize handlers
     if (!initializeHandlers())
@@ -61,7 +67,12 @@ void RenderContext::cleanup()
     // Clean up handlers first (when implemented)
     cleanupHandlers();
     
-    // Note: AS scratch memory cleanup will be handled by SceneHandler/ModelHandler
+    // Clean up scratch memory
+    if (as_build_scratch_mem_.isInitialized())
+    {
+        as_build_scratch_mem_.finalize();
+        LOG(DBUG) << "Released AS build scratch memory";
+    }
     
     // Destroy scene
     if (scene_)
@@ -134,35 +145,5 @@ void RenderContext::cleanupHandlers()
     {
         handlers_.reset();
         LOG(DBUG) << "Handlers released";
-    }
-}
-
-void RenderContext::setCamera(sabi::CameraHandle camera)
-{
-    camera_ = camera;
-    
-    if (camera && camera->getSensor())
-    {
-        // Extract render dimensions from camera sensor
-        Eigen::Vector2i resolution = camera->getSensor()->getPixelResolution();
-        int newWidth = resolution.x();
-        int newHeight = resolution.y();
-        
-        // Check if dimensions have changed
-        if (newWidth != render_width_ || newHeight != render_height_)
-        {
-            render_width_ = newWidth;
-            render_height_ = newHeight;
-            
-            LOG(INFO) << "Render dimensions updated from camera: " 
-                     << render_width_ << "x" << render_height_;
-            
-            // Resize screen buffers if handlers are initialized
-            if (handlers_ && handlers_->screenBuffer && handlers_->screenBuffer->isInitialized())
-            {
-                handlers_->screenBuffer->resize(render_width_, render_height_);
-                LOG(DBUG) << "Screen buffers resized to match camera resolution";
-            }
-        }
     }
 }
