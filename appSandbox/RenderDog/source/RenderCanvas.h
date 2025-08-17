@@ -43,7 +43,7 @@ using nanogui::TextBox;
 using nanogui::Canvas;
 using nanogui::Color;
 using nanogui::Shader;
-using nanogui::Texture;
+// using nanogui::Texture; // Removed to avoid conflict with dog_core::Texture
 
 using mace::InputEvent;
 using mace::MouseMode;
@@ -76,14 +76,14 @@ class RenderCanvas : public Canvas
 
             LOG (DBUG) << "New screen size: " << spec.width << " x " << spec.height;
 
-            imageTexture = new Texture (
+            imageTexture = new nanogui::Texture (
                 // Texture::PixelFormat::RGBA,
                 // Texture::ComponentFormat::Float32,
-                spec.nchannels == 3 ? Texture::PixelFormat::RGB : Texture::PixelFormat::RGBA,
-                type == OIIO::TypeDesc::UINT8 ? Texture::ComponentFormat::UInt8 : Texture::ComponentFormat::Float32,
+                spec.nchannels == 3 ? nanogui::Texture::PixelFormat::RGB : nanogui::Texture::PixelFormat::RGBA,
+                type == OIIO::TypeDesc::UINT8 ? nanogui::Texture::ComponentFormat::UInt8 : nanogui::Texture::ComponentFormat::Float32,
                 size,
-                Texture::InterpolationMode::Nearest,
-                Texture::InterpolationMode::Nearest);
+                nanogui::Texture::InterpolationMode::Nearest,
+                nanogui::Texture::InterpolationMode::Nearest);
 
             imageTexture->upload ((uint8_t*)render.localpixels());
             set_image (imageTexture);
@@ -91,7 +91,7 @@ class RenderCanvas : public Canvas
     }
 
     /// Set the currently active image
-    void set_image (Texture* image);
+    void set_image (nanogui::Texture* image);
 
     bool mouse_button_event (const nanogui::Vector2i& p, int button, bool down, int modifiers) override;
     bool keyboard_event (int key, int scancode, int action, int modifiers) override;
@@ -110,7 +110,7 @@ class RenderCanvas : public Canvas
 
  protected:
     nanogui::ref<Shader> imageShader;
-    nanogui::ref<Texture> imageTexture;
+    nanogui::ref<nanogui::Texture> imageTexture;
 
     MouseMode mouseMode = MouseMode::Rotate;
     nanogui::Vector2i mousePressCoords = nanogui::Vector2i (-1, -1);

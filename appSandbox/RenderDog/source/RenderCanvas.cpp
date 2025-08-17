@@ -227,17 +227,17 @@ RenderCanvas::RenderCanvas (Widget* parent, bool postProcess) :
     size.x() = static_cast<int> (DEFAULT_DESKTOP_WINDOW_WIDTH);
     size.y() = static_cast<int> (DEFAULT_DESKTOP_WINDOW_HEIGHT);
 
-    imageTexture = new Texture (
-        Texture::PixelFormat::RGB,
-        Texture::ComponentFormat::UInt8,
+    imageTexture = new nanogui::Texture (
+        nanogui::Texture::PixelFormat::RGB,
+        nanogui::Texture::ComponentFormat::UInt8,
         size,
-        Texture::InterpolationMode::Nearest,
-        Texture::InterpolationMode::Nearest);
+        nanogui::Texture::InterpolationMode::Nearest,
+        nanogui::Texture::InterpolationMode::Nearest);
 }
 
-void RenderCanvas::set_image (Texture* image)
+void RenderCanvas::set_image (nanogui::Texture* image)
 {
-    if (image->mag_interpolation_mode() != Texture::InterpolationMode::Nearest)
+    if (image->mag_interpolation_mode() != nanogui::Texture::InterpolationMode::Nearest)
         throw std::runtime_error (
             "RenderCanvas::set_image(): interpolation mode must be set to 'Nearest'!");
     imageShader->set_texture ("image", image);
