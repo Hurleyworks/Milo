@@ -39,9 +39,9 @@ bool PipelineHandler::initialize(const std::string& gbufferKernelName,
         return true;
     }
 
-    if (!render_context_ || !render_context_->isInitialized())
+    if (!render_context_)
     {
-        LOG(WARNING) << "RenderContext not initialized";
+        LOG(WARNING) << "RenderContext is null";
         return false;
     }
 
@@ -49,6 +49,22 @@ bool PipelineHandler::initialize(const std::string& gbufferKernelName,
     {
         LOG(WARNING) << "PTXManager not initialized";
         return false;
+    }
+
+    // Check if kernels are available
+    bool hasGBufferKernel = ptx_manager_->isKernelAvailable(gbufferKernelName);
+    bool hasPathTracingKernel = ptx_manager_->isKernelAvailable(pathTracingKernelName);
+    
+    if (!hasGBufferKernel || !hasPathTracingKernel)
+    {
+        LOG(WARNING) << "PTX kernels not available yet:";
+        LOG(WARNING) << "  G-buffer kernel (" << gbufferKernelName << "): " 
+                     << (hasGBufferKernel ? "available" : "not found");
+        LOG(WARNING) << "  Path tracing kernel (" << pathTracingKernelName << "): " 
+                     << (hasPathTracingKernel ? "available" : "not found");
+        LOG(INFO) << "PipelineHandler initialized in stub mode (no PTX kernels)";
+        initialized_ = true;  // Still mark as initialized to allow system to run
+        return true;
     }
 
     // Initialize G-buffer pipeline
@@ -80,7 +96,7 @@ void PipelineHandler::finalize()
     gbuffer_pipeline_.finalize();
 
     initialized_ = false;
-    LOG(INFO) << "PipelineHandler finalized";
+    LOG(DBUG) << "PipelineHandler finalized";
 }
 
 bool PipelineHandler::initializeGBufferPipeline(const std::string& kernelName)

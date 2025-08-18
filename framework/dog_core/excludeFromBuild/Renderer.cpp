@@ -46,6 +46,12 @@ void Renderer::initializeEngine(CameraHandle camera, ImageCacheHandlerPtr imageC
     {
         renderContext_->setCamera(camera);
         // ImageCache handling would go here in full implementation
+        initialized_ = true;
+        LOG(INFO) << "Renderer initialized successfully";
+    }
+    else
+    {
+        LOG(WARNING) << "Cannot initialize Renderer - RenderContext is null";
     }
 }
 

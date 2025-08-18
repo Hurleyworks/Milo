@@ -14,6 +14,9 @@
 // Handler implementations
 #include "excludeFromBuild/handlers/ScreenBufferHandler.cpp"
 #include "excludeFromBuild/handlers/PipelineHandler.cpp"
+#include "excludeFromBuild/handlers/PipelineParameterHandler.cpp"
+#include "excludeFromBuild/handlers/DenoiserHandler.cpp"
+#include "excludeFromBuild/handlers/SceneHandler.cpp"
 
 // Tools implementations
 #include "excludeFromBuild/tools/PTXManager.cpp"

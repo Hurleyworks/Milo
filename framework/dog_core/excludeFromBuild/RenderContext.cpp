@@ -87,6 +87,13 @@ bool RenderContext::initializeCore (int deviceIndex)
         return false;
     }
     
+    // Set default resource path if not already set
+    if (resource_path_.empty())
+    {
+        resource_path_ = std::filesystem::current_path() / "resources" / "RenderDog";
+        LOG(INFO) << "Set default resource path: " << resource_path_.string();
+    }
+    
     // Log device capabilities
     LOG(INFO) << "GPU initialized:";
     LOG(INFO) << "  Device Index: " << gpu_context_.getDeviceIndex();
@@ -121,6 +128,50 @@ bool RenderContext::initializeHandlers()
             return false;
         }
         LOG(INFO) << "Screen buffers initialized at " << render_width_ << "x" << render_height_;
+    }
+    
+    // Initialize pipeline handler
+    if (handlers_->pipeline)
+    {
+        if (!handlers_->pipeline->initialize())
+        {
+            LOG(WARNING) << "Failed to initialize pipeline handler";
+            return false;
+        }
+        LOG(INFO) << "Pipeline handler initialized";
+    }
+    
+    // Initialize pipeline parameter handler
+    if (handlers_->pipelineParameter)
+    {
+        if (!handlers_->pipelineParameter->initialize())
+        {
+            LOG(WARNING) << "Failed to initialize pipeline parameter handler";
+            return false;
+        }
+        LOG(INFO) << "Pipeline parameter handler initialized";
+    }
+    
+    // Initialize denoiser handler with temporal denoising by default
+    if (handlers_->denoiser)
+    {
+        if (!handlers_->denoiser->initialize(render_width_, render_height_, true))
+        {
+            LOG(WARNING) << "Failed to initialize denoiser handler";
+            return false;
+        }
+        LOG(INFO) << "Denoiser handler initialized at " << render_width_ << "x" << render_height_;
+    }
+    
+    // Initialize scene handler
+    if (handlers_->scene)
+    {
+        if (!handlers_->scene->initialize())
+        {
+            LOG(WARNING) << "Failed to initialize scene handler";
+            return false;
+        }
+        LOG(INFO) << "Scene handler initialized";
     }
     
     LOG(INFO) << "Handlers initialized";
@@ -163,6 +214,13 @@ bool RenderContext::updateRenderDimensionsFromCamera()
         {
             handlers_->screenBuffer->resize(render_width_, render_height_);
             LOG(DBUG) << "Screen buffers resized to match camera resolution";
+        }
+        
+        // Resize denoiser if initialized
+        if (handlers_ && handlers_->denoiser && handlers_->denoiser->isInitialized())
+        {
+            handlers_->denoiser->resize(render_width_, render_height_);
+            LOG(DBUG) << "Denoiser resized to match camera resolution";
         }
         
         return true; // Dimensions changed
