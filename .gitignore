@@ -26,3 +26,15 @@
 /RiPR_render.jpg
 /Shocker_render.jpg
 /.serena
+/resources/RenderDog/ptx/Debug/sm_86/compute_area_light_probs.ptx
+/resources/RenderDog/ptx/Debug/sm_86/compute_light_probs.ptx
+/resources/RenderDog/ptx/Debug/sm_86/optix_claudia_copybuffers.ptx
+/resources/RenderDog/ptx/Debug/sm_86/optix_claudia_gbuffer.ptx
+/resources/RenderDog/ptx/Debug/sm_86/optix_deform_kernels.ptx
+/resources/RenderDog/ptx/Debug/sm_86/optix_milo_copybuffers.ptx
+/resources/RenderDog/ptx/Debug/sm_86/optix_ripr_copybuffers.ptx
+/resources/RenderDog/ptx/Debug/sm_86/optix_ripr_deform_kernels.ptx
+/resources/RenderDog/ptx/Debug/sm_86/optix_ripr_gbuffer.ptx
+/resources/RenderDog/ptx/Debug/sm_86/optix_ripr_kernels.ptx
+/resources/RenderDog/ptx/Debug/sm_86/optix_shocker_deform_kernels.ptx
+/resources/RenderDog/ptx/Debug/sm_86/optix_shocker_gbuffer.ptx
