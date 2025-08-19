@@ -64,7 +64,7 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
     std::filesystem::path getResourcePath() const { return resource_path_; }
     
     // Camera management
-    void setCamera(sabi::CameraHandle camera) { camera_ = camera; }
+    void setCamera (sabi::CameraHandle camera) { camera_ = camera; }
     sabi::CameraHandle getCamera() const { return camera_; }
     
     // Check and update render dimensions from camera (call per frame or when needed)

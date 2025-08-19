@@ -61,11 +61,20 @@ builds\bin\Debug-windows-x86_64\[TestName]\[TestName].exe
 - AreaLightHandlerTest
 - Eigen2Shocker
 
+#### Creating a new test script
+To create a test runner script for a new test, follow the pattern in `scripts/test_*.bat`
+
 ### Code Formatting
-The project uses clang-format. Format files with:
+The project uses clang-format with custom settings. Format files with:
 ```batch
 clang-format -i <filename>
 ```
+Key formatting rules:
+- 4 spaces indentation (no tabs)
+- Allman brace style (braces on new line)
+- No column limit
+- Pointer alignment to left (`char* ptr` not `char *ptr`)
+- Don't sort includes (maintains specific order)
 
 ## Architecture Overview
 
@@ -87,7 +96,8 @@ clang-format -i <filename>
      - GPU context and timer management
    - **dog_core**: New lightweight rendering framework (under development)
      - Simplified pipeline architecture
-     - ScreenBuffer, Pipeline, and PipelineParameter handlers
+     - ScreenBuffer, Pipeline, PipelineParameter, and Scene handlers
+     - Message-based integration with QMS system
    - **properties_core**: Property system for configuration
    - **qms_core**: QuickSilver Messenger Service for event handling
    - **server_core**: Socket server for remote communication
@@ -200,6 +210,7 @@ These headers are not part of this codebase and will cause compilation errors.
 - **Build automatically after making changes** - by running `b.bat`
 - **Build errors**: Saved to `build_errors.txt` in project root when build fails
 - **Fix errors**: Read the error file and fix issues when requested
+- **Current branch context**: The current branch is often a feature branch - check git status for context
 
 ## PTX File Management
 
@@ -257,5 +268,39 @@ Each engine has its own:
 
 - **Scene Traversable Handle**: Scene traversable handle can be set to 0 in an empty scene. It's a feature, not a bug.
 - **Always Study APIs Thoroughly**: Never make assumptions about an API. Study the API first so you get it right the first time.
-- **Test Agent Integration**: The `.claude/agents/test_runner.json` defines test runner agents for automated testing.
 - **Premake Build System**: The project uses Premake5 for generating Visual Studio solutions
+- **Memory System**: The project may have memory files stored by Serena MCP for context across conversations
+- **Git Workflow**: Avoid making git commits unless explicitly requested - provide commit messages for user to execute
+
+
+## Core Development Philosophy
+
+### KISS (Keep It Simple, Stupid)
+Simplicity should be a key goal in design. Choose straightforward solutions over complex ones whenever possible. Simple solutions are easier to understand, maintain, and debug.
+
+### YAGNI (You Aren't Gonna Need It)
+Avoid building functionality on speculation. Implement features only when they are needed, not when you anticipate they might be useful in the future.
+
+### Design Principles
+- **Dependency Inversion**: High-level modules should not depend on low-level modules. Both should depend on abstractions (interfaces/abstract classes).
+- **Open/Closed Principle**: Software entities should be open for extension but closed for modification.
+- **Single Responsibility**: Each function, class, and translation unit should have one clear purpose.
+- **Fail Fast**: Use assertions, exceptions, and early validation to catch errors immediately when issues occur.
+
+## 🧱 Code Structure & Modularity
+
+### File and Function Limits
+- **Header files should be under 300 lines** and source files **under 500 lines of code**. If approaching these limits, refactor by splitting into multiple translation units.
+- **Functions should be under 50 lines** with a single, clear responsibility.
+- **Classes should be under 150 lines** and represent a single concept or entity.
+- **Organize code into clearly separated header/source pairs**, grouped by feature or responsibility.
+- **Line length should be max 100 characters** - configure clang-format or your formatter accordingly.
+- **Use the project's build system** (CMake/Make/etc.) whenever compiling and testing, including for unit tests.
+
+### C++ Specific Guidelines
+- **Follow RAII principles** - manage resources through constructors/destructors
+- **Prefer stack allocation** over dynamic allocation when possible
+- **Use smart pointers** (`std::unique_ptr`, `std::shared_ptr`) for dynamic memory management
+- **Include guards or `#pragma once`** in all header files
+- **Forward declarations** in headers when possible to reduce compilation dependencies
+- **Const-correctness** - mark methods and parameters const when they don't modify state

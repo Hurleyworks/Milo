@@ -17,6 +17,9 @@ bool RenderContext::initialize (int deviceIndex)
     
     LOG(INFO) << "Initializing RenderContext...";
     
+    // Update render dimensions from camera if available
+    updateRenderDimensionsFromCamera();
+    
     // Initialize core GPU context
     if (!initializeCore (deviceIndex))
     {
@@ -119,7 +122,10 @@ bool RenderContext::initializeHandlers()
     // Initialize handler system
     handlers_ = std::make_unique<dog::Handlers>(getPtr());
     
-    // Initialize screen buffers with default render size
+    // Update render dimensions from camera if available
+    updateRenderDimensionsFromCamera();
+    
+    // Initialize screen buffers with render size
     if (handlers_->screenBuffer)
     {
         if (!handlers_->screenBuffer->initialize(render_width_, render_height_))
@@ -190,8 +196,15 @@ void RenderContext::cleanupHandlers()
 
 bool RenderContext::updateRenderDimensionsFromCamera()
 {
-    if (!camera_ || !camera_->getSensor())
+    if (!camera_)
     {
+        LOG(DBUG) << "No camera set, cannot update render dimensions";
+        return false;
+    }
+    
+    if (!camera_->getSensor())
+    {
+        LOG(DBUG) << "Camera has no sensor, cannot update render dimensions";
         return false;
     }
     

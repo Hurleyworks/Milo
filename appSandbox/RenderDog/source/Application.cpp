@@ -154,7 +154,7 @@ class Application : public Jahley::App
          warmLight->setClientID (warmLight->getID());
          sabi::SpaceTime& st = warmLight->getSpaceTime();
          st.worldTransform.translation() = Eigen::Vector3f (0.0f, 1.0f, -4.0f);
-        model.addNodeToRenderer (warmLight);
+         model.addNodeToRenderer (warmLight);
 
          {
          groundPlane = sabi::MeshOps::createGroundPlaneNode();

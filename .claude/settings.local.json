@@ -52,10 +52,6 @@
       "Bash(then )",
       "Bash(rm:*)",
       "Bash(for file in *.cpp *.h)",
-      "Bash(do sed -i 's/ShockerEngine/RiPREngine/g; s/shocker_shared/ripr_shared/g; s/ShockerSceneHandler/RiPRSceneHandler/g; s/ShockerMaterialHandler/RiPRMaterialHandler/g; s/ShockerModelHandler/RiPRModelHandler/g; s/ShockerRenderHandler/RiPRRenderHandler/g; s/ShockerDenoiserHandler/RiPRDenoiserHandler/g; s/ShockerModel/RiPRModel/g; s/ShockerNodeData/RiPRNodeData/g; s/ShockerSurfaceData/RiPRSurfaceData/g; s/ShockerNode/RiPRNode/g; s/ShockerSurface/RiPRSurface/g; s/shocker::/ripr::/g; s/SHOCKER/RIPR/g; s/Shocker/RiPR/g' \"$file\")",
-      "Bash(do [ -f \"$file\" ])",
-      "Bash(for file in *.cu *.h)",
-      "Bash(do sed -i 's/ShockerEngine/RiPREngine/g; s/shocker_shared/ripr_shared/g; s/ShockerSceneHandler/RiPRSceneHandler/g; s/ShockerMaterialHandler/RiPRMaterialHandler/g; s/ShockerModelHandler/RiPRModelHandler/g; s/ShockerRenderHandler/RiPRRenderHandler/g; s/ShockerDenoiserHandler/RiPRDenoiserHandler/g; s/ShockerModel/RiPRModel/g; s/ShockerNodeData/RiPRNodeData/g; s/ShockerSurfaceData/RiPRSurfaceData/g; s/ShockerNode/RiPRNode/g; s/ShockerSurface/RiPRSurface/g; s/shocker::/ripr::/g; s/SHOCKER/RIPR/g; s/Shocker/RiPR/g; s/mx_core_shocker/mx_core_ripr/g; s/principledDisney_shocker/principledDisney_ripr/g' \"$file\")",
       "mcp__serena__get_symbols_overview",
       "mcp__serena__search_for_pattern",
       "mcp__serena__find_file",
@@ -63,7 +59,8 @@
       "mcp__serena__check_onboarding_performed",
       "mcp__serena__onboarding",
       "mcp__serena__write_memory",
-	  "mcp__serena"
+      "mcp__serena",
+      "Bash(python3:*)"
     ],
     "deny": []
   },
