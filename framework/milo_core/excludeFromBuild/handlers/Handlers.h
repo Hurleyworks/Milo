@@ -23,7 +23,7 @@ struct Handlers
     ~Handlers() = default;
 
     // Initialize all handlers
-    void initialize (RenderContextPtr renderContext, bool skipPipelineInit = false)
+    void initialize (RenderContextPtr renderContext)
     {
         // Initialize SkyDomeHandler
         skyDomeHandler = SkyDomeHandler::create (renderContext);

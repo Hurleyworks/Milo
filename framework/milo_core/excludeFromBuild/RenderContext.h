@@ -30,28 +30,33 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
     }
 
     // Initialize GPU context and handlers
-    bool initialize (bool skipPipelineInit = false)
+    bool initialize ()
     {
         if (!ctx.initialize())
         {
             return false;
         }
 
-          // Create OptiX scene
-        scene_ = ctx.getOptiXContext().createScene();
+        if (!scene_)
+        {
+            scene_ = ctx.getOptiXContext().createScene();
+        }
 
-        defaultMaterial_ = ctx.getOptiXContext().createMaterial();
+        if (!defaultMaterial_)
+        {
+            defaultMaterial_ = ctx.getOptiXContext().createMaterial();
+        }
 
         // Initialize acceleration structure build scratch memory
         // Start with 1MB, it will be resized as needed
         asBuildScratchMem_.initialize (ctx.getCudaContext(), cudau::BufferType::Device, 1024 * 1024, 1);
 
-        handlers.initialize (shared_from_this(), skipPipelineInit);
+        handlers.initialize (shared_from_this());
         return true;
     }
 
     // Initialize with system resources
-    bool initialize (CameraHandle camera, ImageCacheHandlerPtr imageCache, const PropertyService& properties, bool skipPipelineInit = false)
+    bool initialize (CameraHandle camera, ImageCacheHandlerPtr imageCache, const PropertyService& properties)
     {
         if (!ctx.initialize())
         {
@@ -77,7 +82,7 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
         // Start with 1MB, it will be resized as needed
         asBuildScratchMem_.initialize (ctx.getCudaContext(), cudau::BufferType::Device, 1024 * 1024, 1);
 
-        handlers.initialize (shared_from_this(), skipPipelineInit);
+        handlers.initialize (shared_from_this());
         return true;
     }
 

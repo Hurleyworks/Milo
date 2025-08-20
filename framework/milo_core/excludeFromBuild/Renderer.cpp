@@ -202,7 +202,7 @@ void Renderer::initializeEngine (CameraHandle camera, ImageCacheHandlerPtr image
         // Step 1: Initialize Render Context with system resources
         // Skip pipeline initialization - we're using engine system only
         bool skipPipelineInit = true;
-        if (!renderContext_->initialize (camera, imageCache, properties, skipPipelineInit))
+        if (!renderContext_->initialize (camera, imageCache, properties))
         {
             throw std::runtime_error ("Failed to initialize render context");
         }
@@ -449,8 +449,8 @@ bool Renderer::setEngine(const std::string& engineName)
     
     // Reinitialize with fresh GPU context using existing member variables
     LOG(INFO) << "Reinitializing RenderContext with fresh GPU context";
-    bool skipPipelineInit = true;  // We're using engine system
-    if (!renderContext_->initialize(skipPipelineInit))
+    
+    if (!renderContext_->initialize())
     {
         LOG(WARNING) << "Failed to reinitialize RenderContext";
         return false;
@@ -496,14 +496,4 @@ std::vector<std::string> Renderer::getAvailableEngines() const
     return {};
 }
 
-void Renderer::setRiPRRenderMode(int mode)
-{
-    if (!engineManager_)
-    {
-        LOG(WARNING) << "Cannot set RiPR render mode: Engine manager not initialized";
-        return;
-    }
-    
-    // Delegate to the engine manager
-    engineManager_->setRiPRRenderMode(mode);
-}
+

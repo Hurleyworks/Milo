@@ -32,15 +32,12 @@ class Renderer
     void addSkyDomeHDR (const std::filesystem::path& hdrPath);
     void addRenderableNode (RenderableWeakRef& weakNode);
 
-  
-    // Engine management (new system)
-    bool setEngine(const std::string& engineName);
+    // Engine management
+    bool setEngine (const std::string& engineName);
     std::string getCurrentEngineName() const;
     std::vector<std::string> getAvailableEngines() const;
-    void setRiPRRenderMode(int mode);
-    
-    // Resource access
-    CameraHandle getCamera() const { return renderContext_ ? renderContext_->getCamera() : nullptr; }
+
+ 
 
  private:
     MessageService messengers;
@@ -54,7 +51,7 @@ class Renderer
 
     // GPU Timer Manager
     std::unique_ptr<GPUTimerManager> gpuTimerManager_;
-    
+
     // Rendering Engine Manager (new system)
     std::unique_ptr<RenderEngineManager> engineManager_;
 
