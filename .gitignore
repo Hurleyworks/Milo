@@ -38,3 +38,10 @@
 /resources/RenderDog/ptx/Debug/sm_86/optix_ripr_kernels.ptx
 /resources/RenderDog/ptx/Debug/sm_86/optix_shocker_deform_kernels.ptx
 /resources/RenderDog/ptx/Debug/sm_86/optix_shocker_gbuffer.ptx
+/resources/RenderDog/ptx/Release/sm_86/optix_deform_kernels.ptx
+/resources/RenderDog/ptx/Release/sm_86/optix_milo_copybuffers.ptx
+/resources/RenderDog/ptx/Release/sm_86/optix_ripr_deform_kernels.ptx
+/resources/RenderDog/ptx/Release/sm_86/optix_shocker_copybuffers.ptx
+/resources/RenderDog/ptx/Release/sm_86/optix_shocker_deform_kernels.ptx
+/resources/RenderDog/ptx/Release/sm_86/optix_shocker_gbuffer.ptx
+/resources/RenderDog/ptx/Release/sm_86/optix_shocker_kernels.ptx
