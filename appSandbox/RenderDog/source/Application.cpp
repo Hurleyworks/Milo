@@ -33,23 +33,23 @@ class Application : public Jahley::App
         view->onPipelineChange.connect<Model, &Model::setPipeline> (&model);
         view->onEnablePipelineSystem.connect<Model, &Model::enablePipelineSystem> (&model);
         view->onEngineChange.connect<Model, &Model::setEngine> (&model);
-        
+
         // view to controller connections for environment controls
         view->onEnvironmentIntensityChange.connect<Controller, &Controller::onEnvironmentIntensityChange> (&controller);
         view->onEnvironmentRotationChange.connect<Controller, &Controller::onEnvironmentRotationChange> (&controller);
-        
+
         // view to controller connection for animation controls
         view->onAnimationToggle.connect<Controller, &Controller::onAnimationToggle> (&controller);
-        
+
         // view to controller connections for area light controls
         view->onAreaLightIntensityChange.connect<Controller, &Controller::onAreaLightIntensityChange> (&controller);
         view->onAreaLightEnable.connect<Controller, &Controller::onAreaLightEnable> (&controller);
-        
+
         // view to model connection for RiPR render mode changes
         view->onRiPRRenderModeChange.connect<Model, &Model::setRiPRRenderMode> (&model);
-        
+
         // model to view connection for HDR loading
-        model.hdrLoadedEmitter.connect<Application, &Application::onHDRLoaded>(this);
+        model.hdrLoadedEmitter.connect<Application, &Application::onHDRLoaded> (this);
 
         view->getCanvas()->inputEmitter.connect<&App::onInputEvent> (*this);
 
@@ -89,7 +89,7 @@ class Application : public Jahley::App
         controller.initialize (properties, view->getCamera());
 
         // Enable the rendering engine system immediately (not using legacy pipelines)
-        model.enablePipelineSystem(true);
+        model.enablePipelineSystem (true);
 
         // Create the socket server
         socketServer = std::make_unique<ActiveSocketServer>();
@@ -119,15 +119,15 @@ class Application : public Jahley::App
         std::string buggy = "E:/common_content/glTF-Sample-Models/2.0/Buggy/glTF/Buggy.gltf";
         std::string camera = "E:/common_content/glTF-Sample-Models/2.0/AntiqueCamera/glTF/AntiqueCamera.gltf";
         std::string ground = "E:/common_content/models/static_gound/static_ground.gltf";
-//  model.loadGLTF (ground);
-  //  model.loadGLTF (helmet);
-//model.loadGLTF (testModel);
- model.loadGLTF (box);
-    //    model.loadGLTF (box);
- //  model.loadGLTF (box);
-    // model.loadGLTF (scifi);
-       // model.loadGLTF (warrior);
-    // model.loadGLTF (helmet);
+        //  model.loadGLTF (ground);
+        //  model.loadGLTF (helmet);
+        model.loadGLTF (testModel);
+        // model.loadGLTF (box);
+          model.loadGLTF (box);
+        // model.loadGLTF (box);
+         model.loadGLTF (scifi);
+        // model.loadGLTF (warrior);
+        model.loadGLTF (helmet);
         std::vector<std::string> models;
         // models.push_back (testModel);
         // models.push_back (helmet);
@@ -144,34 +144,34 @@ class Application : public Jahley::App
         // model.onDrop (models);
 
         // Create a warm white mesh light with custom size and intensity
-         warmLight = sabi::MeshOps::createLuminousRectangleNode (
-             "WarmMeshLight",
-             4.0f, 2.0f,                         // 4x2 units
-             Eigen::Vector3f (1.0f, 0.9f, 0.8f), // Warm white color
-             10.0f                               // High intensity
+        warmLight = sabi::MeshOps::createLuminousRectangleNode (
+            "WarmMeshLight",
+            4.0f, 2.0f,                         // 4x2 units
+            Eigen::Vector3f (1.0f, 0.9f, 0.8f), // Warm white color
+            10.0f                               // High intensity
         );
 
-         warmLight->setClientID (warmLight->getID());
-         sabi::SpaceTime& st = warmLight->getSpaceTime();
-         st.worldTransform.translation() = Eigen::Vector3f (0.0f, 1.0f, -4.0f);
-         model.addNodeToRenderer (warmLight);
+        warmLight->setClientID (warmLight->getID());
+        sabi::SpaceTime& st = warmLight->getSpaceTime();
+        st.worldTransform.translation() = Eigen::Vector3f (0.0f, 1.0f, -4.0f);
+       model.addNodeToRenderer (warmLight);
 
-         {
-         groundPlane = sabi::MeshOps::createGroundPlaneNode();
-         groundPlane->setClientID (groundPlane->getID());
-         sabi::SpaceTime& st = groundPlane->getSpaceTime();
-         st.worldTransform.translation() = Eigen::Vector3f (0.0f, 0.0f, 0.0f);
-         model.addNodeToRenderer (groundPlane);
-         }
-      /*  CgModelPtr c = sabi::MeshOps::createCube();
+        {
+            groundPlane = sabi::MeshOps::createGroundPlaneNode();
+            groundPlane->setClientID (groundPlane->getID());
+            sabi::SpaceTime& st = groundPlane->getSpaceTime();
+            st.worldTransform.translation() = Eigen::Vector3f (0.0f, 0.0f, 0.0f);
+            model.addNodeToRenderer (groundPlane);
+        }
+        /*  CgModelPtr c = sabi::MeshOps::createCube();
 
-         cube = sabi::WorldItem::create();
-        cube->setClientID (cube->getID());
-         cube->setName ("Cube");
-         cube->setModel (c);
-         sabi::SpaceTime& st = cube->getSpaceTime();
-         st.worldTransform.translation() = Eigen::Vector3f (0.0f, 1.0f, 0.0f);
-         model.addNodeToRenderer (cube);*/
+           cube = sabi::WorldItem::create();
+          cube->setClientID (cube->getID());
+           cube->setName ("Cube");
+           cube->setModel (c);
+           sabi::SpaceTime& st = cube->getSpaceTime();
+           st.worldTransform.translation() = Eigen::Vector3f (0.0f, 1.0f, 0.0f);
+           model.addNodeToRenderer (cube);*/
     }
 
     void update() override
@@ -187,10 +187,10 @@ class Application : public Jahley::App
         // Eigen::Quaternionf rotation (Eigen::AngleAxisf (radians, Eigen::Vector3f::UnitY()));
         // view->getCamera()->rotateAroundTarget (rotation);
         // view->getCamera()->setDirty (true);
-        
+
         // Update animation state in model from controller
-        model.setAnimationEnabled(controller.isAnimationEnabled());
-        
+        model.setAnimationEnabled (controller.isAnimationEnabled());
+
         model.onUpdate (lastInput);
 
         lastInput = InputEvent{};
@@ -233,11 +233,11 @@ class Application : public Jahley::App
         }
     }
 
-    void onHDRLoaded(const std::filesystem::path& hdrPath)
+    void onHDRLoaded (const std::filesystem::path& hdrPath)
     {
-        view->setHDRFilename(hdrPath.string());
+        view->setHDRFilename (hdrPath.string());
     }
-    
+
     void onInputEvent (const mace::InputEvent& e) override
     {
         // no need to process moves is there?
@@ -257,7 +257,7 @@ class Application : public Jahley::App
         // if we're painting then send input to world
         if (e.getMouseMode() == MouseMode::Paint)
         {
-           // model.onInputForPainting (e);
+            // model.onInputForPainting (e);
         }
     }
 
@@ -279,7 +279,6 @@ class Application : public Jahley::App
     MsgReceiver incoming;
     MessageService messengers;
 
-   
     uint32_t lastImageWidth = 0;
     uint32_t lastImageHeight = 0;
     uint32_t lastChannelCount = 0;

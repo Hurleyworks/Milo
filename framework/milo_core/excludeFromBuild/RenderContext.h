@@ -25,7 +25,10 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
     RenderContextPtr getPtr() { return shared_from_this(); }
 
     RenderContext() = default;
-    ~RenderContext() = default;
+    ~RenderContext() 
+    {
+       
+    }
 
     // Initialize GPU context and handlers
     bool initialize(bool skipPipelineInit = false)

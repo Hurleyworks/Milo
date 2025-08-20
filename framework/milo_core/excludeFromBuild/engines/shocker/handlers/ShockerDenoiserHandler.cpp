@@ -144,7 +144,7 @@ void ShockerDenoiserHandler::destroyDenoiser()
     if (stateBuffer_.isInitialized())
         stateBuffer_.finalize();
         
-    // Denoiser destroy is handled by its destructor
+    denoiser_.destroy();
 }
 
 void ShockerDenoiserHandler::prepareDenoiser()

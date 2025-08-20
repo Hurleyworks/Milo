@@ -55,7 +55,9 @@ public:
     
     // Engine Management
     // Switch to a different engine (destroys current engine first)
-    void switchEngine(const std::string& engineName);
+    // @param engineName - name of the engine to switch to
+    // @param resetDevice - if true, performs a full CUDA device reset (default: false)
+    void switchEngine(const std::string& engineName, bool resetDevice = false);
     
     // Get list of all registered engines
     std::vector<std::string> getAvailableEngines() const;
@@ -92,6 +94,10 @@ public:
     // Engine-specific controls
     void setRiPRRenderMode(int mode);
     
+    // Enable/disable device reset on engine switch (for debugging)
+    void setDeviceResetEnabled(bool enabled) { enableDeviceReset_ = enabled; }
+    bool isDeviceResetEnabled() const { return enableDeviceReset_; }
+    
 private:
     // The currently active rendering engine (only one at a time)
     std::unique_ptr<IRenderingEngine> activeEngine_;
@@ -120,4 +126,7 @@ private:
     // Deferred loading support for engine switching
     std::queue<sabi::RenderableWeakRef> pendingGeometry_;
     bool isDeferredLoading_ = false;
+    
+    // Engine switch options
+    bool enableDeviceReset_ = false;  // Can be set to true for debugging
 };

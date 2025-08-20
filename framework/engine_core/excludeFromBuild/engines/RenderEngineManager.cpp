@@ -2,6 +2,8 @@
 #include "base/BaseRenderingEngine.h"
 #include "ripr/RiPREngine.h"
 #include "../RenderContext.h"
+#include <thread>
+#include <chrono>
 
 RenderEngineManager::RenderEngineManager() :
     renderContext_ (nullptr), isInitialized_ (false), gpuTimerManager_(nullptr)
@@ -95,7 +97,7 @@ void RenderEngineManager::registerEngine(const std::string& name, EngineFactory 
     registerEngine(name, name, "No description available", factory);
 }
 
-void RenderEngineManager::switchEngine (const std::string& engineName)
+void RenderEngineManager::switchEngine (const std::string& engineName, bool resetDevice)
 {
     LOG (INFO) << "Switching to engine: " << engineName;
 
@@ -130,10 +132,70 @@ void RenderEngineManager::switchEngine (const std::string& engineName)
     if (activeEngine_)
     {
         LOG (INFO) << "Cleaning up current engine: " << currentEngineName_;
+        
+        // Synchronize GPU before cleanup
+        if (renderContext_ && renderContext_->ctx)
+        {
+            try 
+            {
+                LOG(DBUG) << "Synchronizing GPU before engine cleanup";
+                auto cuStream = renderContext_->getCudaStream();
+                if (cuStream)
+                {
+                    CUDADRV_CHECK(cuStreamSynchronize(cuStream));
+                }
+                CUDADRV_CHECK(cuCtxSynchronize());
+            }
+            catch (const std::exception& e)
+            {
+                LOG(WARNING) << "GPU synchronization failed before cleanup: " << e.what();
+            }
+        }
+        
         activeEngine_->cleanup();
         activeEngine_.reset();
         currentEngineName_.clear();
         
+        // Synchronize GPU after cleanup to ensure all cleanup operations complete
+        if (renderContext_ && renderContext_->ctx)
+        {
+            try 
+            {
+                LOG(DBUG) << "Synchronizing GPU after engine cleanup";
+                CUDADRV_CHECK(cuCtxSynchronize());
+                // Small delay to ensure GPU resources are fully released
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            }
+            catch (const std::exception& e)
+            {
+                LOG(WARNING) << "GPU synchronization failed after cleanup: " << e.what();
+            }
+        }
+    }
+    
+    // Always perform full device reset for complete cleanup
+    if (resetDevice)
+    {
+        LOG(INFO) << "Performing CUDA device reset for complete cleanup";
+        try
+        {
+            // This will destroy ALL CUDA contexts on the device
+            cudaDeviceReset();
+            // Give the device time to reset
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            
+            // Re-initialize the GPU context after reset
+            if (renderContext_ && renderContext_->ctx)
+            {
+                LOG(INFO) << "Re-initializing GPU context after device reset";
+                renderContext_->ctx->cleanup();
+                renderContext_->ctx->initialize();
+            }
+        }
+        catch (const std::exception& e)
+        {
+            LOG(WARNING) << "Device reset failed: " << e.what();
+        }
     }
 
     // Step 2: Create new engine

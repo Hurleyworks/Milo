@@ -427,9 +427,9 @@ bool Renderer::setEngine(const std::string& engineName)
         return false;
     }
     
-    // Switch to the new engine
+    // Switch to the new engine with device reset for complete cleanup
     // The engine manager will handle re-adding geometry internally
-    engineManager_->switchEngine(engineName);
+    engineManager_->switchEngine(engineName, true);  // Always reset device
     
     // Check if switch was successful
     if (engineManager_->getCurrentEngineName() != engineName)

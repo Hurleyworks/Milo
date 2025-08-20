@@ -132,7 +132,6 @@ void RenderEngineManager::switchEngine (const std::string& engineName)
         activeEngine_->cleanup();
         activeEngine_.reset();
         currentEngineName_.clear();
-        
     }
 
     // Step 2: Create new engine

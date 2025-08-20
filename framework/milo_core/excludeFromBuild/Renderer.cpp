@@ -427,21 +427,52 @@ bool Renderer::setEngine(const std::string& engineName)
         return false;
     }
     
-    // Switch to the new engine
-    // The engine manager will handle re-adding geometry internally
-    engineManager_->switchEngine(engineName);
+    auto storedHDRpath = engineManager_->getSkyDomeHDR();  // Store HDR path before switch
+    auto currentEngineName = engineManager_->getCurrentEngineName();  // Store current engine name
     
-    // Check if switch was successful
-    if (engineManager_->getCurrentEngineName() != engineName)
+    // Clean up the current engine before destroying context
+    if (engineManager_->hasActiveEngine())
     {
-        return false;
+        engineManager_->cleanup();  // This properly cleans up the old engine
+    }
+
+    // Finalize GPU timer manager BEFORE destroying context
+    if (gpuTimerManager_)
+    {
+        gpuTimerManager_->finalize();
     }
     
-    // Re-apply sky dome if one was stored
-    const auto& storedHDR = engineManager_->getSkyDomeHDR();
-    if (!storedHDR.empty())
+    // Now clean up and reinitialize RenderContext to get fresh GPU context
+    // This cleans up handlers (releasing GPU textures) and destroys CUDA/OptiX contexts
+    LOG(INFO) << "Cleaning up RenderContext after engine cleanup";
+    renderContext_->cleanup();
+    
+    // Reinitialize with fresh GPU context using existing member variables
+    LOG(INFO) << "Reinitializing RenderContext with fresh GPU context";
+    bool skipPipelineInit = true;  // We're using engine system
+    if (!renderContext_->initialize(skipPipelineInit))
     {
-        addSkyDomeHDR(storedHDR);
+        LOG(WARNING) << "Failed to reinitialize RenderContext";
+        return false;
+    }
+
+    // Reinitialize GPU timer manager with fresh context
+    if (gpuTimerManager_)
+    {
+        gpuTimerManager_->initialize (renderContext_);
+    }
+
+    // Reinitialize engine manager with fresh context
+    engineManager_->initialize(renderContext_.get());
+    
+    // Now switch to the desired engine with the fresh context
+    // This creates a new engine instance with all GPU resources using the new context
+    engineManager_->switchEngine(engineName);
+    
+    // Re-apply sky dome if one was stored
+    if (!storedHDRpath.empty())
+    {
+        addSkyDomeHDR(storedHDRpath);
     }
     
     return true;

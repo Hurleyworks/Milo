@@ -1288,10 +1288,10 @@ void ShockerEngine::updateLaunchParameters (const mace::InputEvent& input)
     if (properties.renderProps)
     {
         // EnviroIntensity is already a coefficient (0-2 range)
-        per_frame_plp_.envLightPowerCoeff = properties.renderProps->getValOr<float> (RenderKey::EnviroIntensity, DEFAULT_ENVIRO_INTENSITY_PERCENT);
+        per_frame_plp_.envLightPowerCoeff = static_cast<float>(properties.renderProps->getValOr<double> (RenderKey::EnviroIntensity, DEFAULT_ENVIRO_INTENSITY_PERCENT));
         
         // EnviroRotation is in degrees, convert to radians for the shader
-        float envRotationDegrees = properties.renderProps->getValOr<float> (RenderKey::EnviroRotation, DEFAULT_ENVIRO_ROTATION);
+        float envRotationDegrees = static_cast<float>(properties.renderProps->getValOr<double> (RenderKey::EnviroRotation, DEFAULT_ENVIRO_ROTATION));
         per_frame_plp_.envLightRotation = envRotationDegrees * (M_PI / 180.0f);
         
         // Check if environment rendering is enabled
@@ -1408,8 +1408,8 @@ void ShockerEngine::updateCameraBody (const mace::InputEvent& input)
         const PropertyService& properties = renderContext_->getPropertyService();
         if (properties.renderProps)
         {
-            lastCamera_.lensSize = properties.renderProps->getValOr<float> (RenderKey::Aperture, 0.0f);
-            lastCamera_.focusDistance = properties.renderProps->getValOr<float> (RenderKey::FocalLength, 5.0f);
+            lastCamera_.lensSize = static_cast<float>(properties.renderProps->getValOr<double> (RenderKey::Aperture, 0.0));
+            lastCamera_.focusDistance = static_cast<float>(properties.renderProps->getValOr<double> (RenderKey::FocalLength, 5.0));
         }
         else
         {
