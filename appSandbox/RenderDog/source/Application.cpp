@@ -121,13 +121,13 @@ class Application : public Jahley::App
         std::string ground = "E:/common_content/models/static_gound/static_ground.gltf";
         //  model.loadGLTF (ground);
         //  model.loadGLTF (helmet);
-        model.loadGLTF (testModel);
+       // model.loadGLTF (testModel);
         // model.loadGLTF (box);
           model.loadGLTF (box);
         // model.loadGLTF (box);
-         model.loadGLTF (scifi);
+      //   model.loadGLTF (scifi);
         // model.loadGLTF (warrior);
-        model.loadGLTF (helmet);
+     //   model.loadGLTF (helmet);
         std::vector<std::string> models;
         // models.push_back (testModel);
         // models.push_back (helmet);
