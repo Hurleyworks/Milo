@@ -100,7 +100,7 @@ void RiPRSceneHandler::init()
         LOG (WARNING) << "Scene not set - cannot create IAS";
         return;
     }
-    ias = scene_->createInstanceAccelerationStructure();
+    ias = scene_.createInstanceAccelerationStructure();
 
     // Set the trade-off for the IAS to prefer fast trace
     ias.setConfiguration (
@@ -110,7 +110,7 @@ void RiPRSceneHandler::init()
     // Generate initial scene SBT layout before any IAS operations
     // This prevents the "Shader binding table layout generation has not been done" error
     size_t dummySize;
-    scene_->generateShaderBindingTableLayout (&dummySize);
+    scene_.generateShaderBindingTableLayout (&dummySize);
     LOG (DBUG) << "Generated initial scene SBT layout";
 
     // Load deformation kernel PTX/OptiXIR using PTXManager
@@ -247,7 +247,7 @@ void RiPRSceneHandler::resizeSceneDependentSBT()
     // Generate the shader binding table layout
     // This MUST be called before building the IAS
     size_t hitGroupSbtSize;
-    scene_->generateShaderBindingTableLayout (&hitGroupSbtSize);
+    scene_.generateShaderBindingTableLayout (&hitGroupSbtSize);
 
     LOG (DBUG) << "Generated scene SBT layout, size: " << hitGroupSbtSize << " bytes";
 }
@@ -490,7 +490,7 @@ void RiPRSceneHandler::createInstance (RenderableWeakRef& weakNode)
         init();
 
     // Create a new OptiX instance
-    optixu::Instance instance = scene_->createInstance();
+    optixu::Instance instance = scene_.createInstance();
 
     // Instances don't have a LWITEMID converted to a ClientID
     // RiPRModelPtr optiXModel = modelHandler_->getRiPRModel (node->getID());
@@ -624,7 +624,7 @@ void RiPRSceneHandler::createGeometryInstance (RenderableWeakRef& weakNode)
     }
 
     // Create a new OptiX instance
-    optixu::Instance instance = scene_->createInstance();
+    optixu::Instance instance = scene_.createInstance();
 
     optiXModel->setOptiXInstance (instance);
 
@@ -663,7 +663,7 @@ void RiPRSceneHandler::createPhysicsPhantom (RenderableWeakRef& weakNode)
             throw std::runtime_error ("Can't make a phantom from an instance!");
 
         // Create a new OptiX instance
-        optixu::Instance instance = scene_->createInstance();
+        optixu::Instance instance = scene_.createInstance();
 
         RiPRModelPtr optiXModel = modelHandler_->getRiPRModel (node->getID());
         if (!optiXModel) throw std::runtime_error ("could not find optix model bound to " + node->getName());
@@ -720,7 +720,7 @@ void RiPRSceneHandler::createInstanceList (const WeakRenderableList& weakNodeLis
         if (node->isInstance())
         {
             // Create a new OptiX instance
-            optixu::Instance instance = scene_->createInstance();
+            optixu::Instance instance = scene_.createInstance();
 
             RiPRModelPtr optiXModel = modelHandler_->getRiPRModel (node->getID());
             optiXModel->setOptiXInstance (instance);
@@ -763,7 +763,7 @@ void RiPRSceneHandler::createInstanceList (const WeakRenderableList& weakNodeLis
             LOG (DBUG) << "Processing " << node->getName();
 
             // Create a new OptiX instance
-            optixu::Instance instance = scene_->createInstance();
+            optixu::Instance instance = scene_.createInstance();
             optiXModel->setOptiXInstance (instance);
 
             // Set the Geometry Acceleration Structure (GAS)

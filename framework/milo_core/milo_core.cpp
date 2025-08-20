@@ -38,6 +38,7 @@
 #include "excludeFromBuild/engines/ripr/handlers/RiPRSceneHandler.cpp"
 #include "excludeFromBuild/engines/ripr/handlers/RiPRRenderHandler.cpp"
 #include "excludeFromBuild/engines/ripr/handlers/RiPRDenoiserHandler.cpp"
+#include "excludeFromBuild/engines/ripr/handlers/ModelHandler.cpp"
 
 // engines
 #include "excludeFromBuild/engines/base/BaseRenderingEngine.cpp"

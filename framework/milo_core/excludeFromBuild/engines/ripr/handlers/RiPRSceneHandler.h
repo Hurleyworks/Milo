@@ -37,10 +37,10 @@ class RiPRSceneHandler
     void setModelHandler (RiPRModelHandlerPtr modelHandler) { modelHandler_ = modelHandler; }
 
     // Set the scene (must be called before using scene operations)
-    void setScene (optixu::Scene* scene) { scene_ = scene; }
+    void setScene (optixu::Scene scene) { scene_ = scene; }
 
     // Get the scene
-    optixu::Scene* getScene() { return scene_; }
+    optixu::Scene getScene() { return scene_; }
 
     // Creates an instance from a renderable node in the OptiX scene
     void createInstance (RenderableWeakRef& weakNode);
@@ -178,7 +178,7 @@ class RiPRSceneHandler
     RiPRModelHandlerPtr modelHandler_;
 
     // Scene reference (not owned)
-    optixu::Scene* scene_ = nullptr;
+    optixu::Scene scene_;
 
     // Maps instance indices to renderable nodes
     NodeMap nodeMap;

@@ -55,7 +55,7 @@ void ShockerEngine::initialize (RenderContext* ctx)
 
     // Create scene handler and give it the scene
     sceneHandler_ = ShockerSceneHandler::create (renderContext);
-    sceneHandler_->setScene (&scene_);
+    sceneHandler_->setScene (renderContext->getScene());
 
     // Create model handler and connect it to other handlers
     modelHandler_ = ShockerModelHandler::create (renderContext);
@@ -255,11 +255,7 @@ void ShockerEngine::cleanup()
         materialHandler_.reset();
     }
 
-    // Clean up scene
-    if (scene_)
-    {
-        scene_.destroy();
-    }
+   
 
     // Clean up RNG buffer
     if (rngBuffer_.isInitialized())
@@ -517,9 +513,14 @@ void ShockerEngine::setupPipelines()
     }
 
     optixu::Context optixContext = renderContext_->getOptiXContext();
+    optixu::Scene scene = renderContext_->getScene();
+    if (!scene)
+    {
+        int i = 3;
+    }
 
     // Create default material for the scene (using inherited member from BaseRenderingEngine)
-    defaultMaterial_ = optixContext.createMaterial();
+  
     // Note: optixu::Scene doesn't have setMaterialDefault, materials are set per geometry instance
 
     // Create path tracing pipeline
@@ -578,7 +579,7 @@ void ShockerEngine::setupPipelines()
     // Generate SBT layout for the scene first
     // This is required before we can build the pipeline SBTs
     size_t dummySize;
-    scene_.generateShaderBindingTableLayout (&dummySize);
+    scene.generateShaderBindingTableLayout (&dummySize);
     LOG (INFO) << "Generated scene SBT layout, size: " << dummySize << " bytes";
 
     // Create shader binding tables
@@ -704,6 +705,7 @@ void ShockerEngine::createPrograms()
     }
 
     optixu::Module emptyModule; // For empty programs
+    optixu::Material defaultMaterial = renderContext_->getDefaultMaterial();
 
     // Path Tracing Pipeline Programs
     {
@@ -743,15 +745,17 @@ void ShockerEngine::createPrograms()
 
         LOG (INFO) << "Path tracing pipeline programs created";
 
+       
+
         // Setup material hit groups for path tracing pipeline on the default material
-        if (defaultMaterial_)
+        if (defaultMaterial)
         {
             // Set hit group for search rays (shading)
-            defaultMaterial_.setHitGroup (shocker_shared::PathTracingRayType::Closest,
+            defaultMaterial.setHitGroup (shocker_shared::PathTracingRayType::Closest,
                                           pathTracePipeline_->hitPrograms.at (RT_CH_NAME_STR ("pathTraceBaseline")));
 
             // Set hit group for visibility rays
-            defaultMaterial_.setHitGroup (shocker_shared::PathTracingRayType::Visibility,
+            defaultMaterial.setHitGroup (shocker_shared::PathTracingRayType::Visibility,
                                           pathTracePipeline_->hitPrograms.at (RT_AH_NAME_STR ("visibility")));
 
             LOG (INFO) << "Path tracing material hit groups configured on default material";
@@ -792,17 +796,17 @@ void ShockerEngine::createPrograms()
     }
 
     // Setup material hit groups for GBuffer pipeline on the default material
-    if (defaultMaterial_)
+    if (defaultMaterial)
     {
         // Set hit group for primary rays
-        defaultMaterial_.setHitGroup (shocker_shared::GBufferRayType::Primary,
+        defaultMaterial.setHitGroup (shocker_shared::GBufferRayType::Primary,
                                       gbufferPipeline_->hitPrograms.at (RT_CH_NAME_STR ("setupGBuffers")));
 
         // Set empty hit groups for unused ray types
         for (uint32_t rayType = shocker_shared::GBufferRayType::NumTypes;
              rayType < shocker_shared::maxNumRayTypes; ++rayType)
         {
-            defaultMaterial_.setHitGroup (rayType, gbufferPipeline_->hitPrograms.at ("emptyHitGroup"));
+            defaultMaterial.setHitGroup (rayType, gbufferPipeline_->hitPrograms.at ("emptyHitGroup"));
         }
 
         LOG (INFO) << "GBuffer material hit groups configured on default material";
@@ -811,13 +815,15 @@ void ShockerEngine::createPrograms()
 
 void ShockerEngine::linkPipelines()
 {
+    optixu::Scene scene = renderContext_->getScene();
+
     LOG (INFO) << "ShockerEngine::linkPipelines()";
 
     // Link path tracing pipeline with depth 2 (for recursive rays)
     if (pathTracePipeline_ && pathTracePipeline_->optixPipeline)
     {
         // Set the scene on the pipeline
-        pathTracePipeline_->optixPipeline.setScene (scene_);
+        pathTracePipeline_->optixPipeline.setScene (scene);
 
         pathTracePipeline_->optixPipeline.link (2);
         LOG (INFO) << "Path tracing pipeline linked successfully";
@@ -827,7 +833,7 @@ void ShockerEngine::linkPipelines()
     if (gbufferPipeline_ && gbufferPipeline_->optixPipeline)
     {
         // Set the scene on the pipeline
-        gbufferPipeline_->optixPipeline.setScene (scene_);
+        gbufferPipeline_->optixPipeline.setScene (scene);
 
         gbufferPipeline_->optixPipeline.link (1);
         LOG (INFO) << "GBuffer pipeline linked successfully";
@@ -844,11 +850,13 @@ void ShockerEngine::createSBT()
         return;
     }
 
+    optixu::Scene scene = renderContext_->getScene();
+
     auto cuContext = renderContext_->getCudaContext();
 
     // Get hit group SBT size from scene
     size_t hitGroupSbtSize = 0;
-    scene_.generateShaderBindingTableLayout (&hitGroupSbtSize);
+    scene.generateShaderBindingTableLayout (&hitGroupSbtSize);
     LOG (INFO) << "Scene hit group SBT size: " << hitGroupSbtSize << " bytes";
 
     // Create SBT for path tracing pipeline
@@ -1028,12 +1036,13 @@ void ShockerEngine::updateSBT()
         LOG (WARNING) << "No render context for SBT update";
         return;
     }
+    optixu::Scene scene = renderContext_->getScene();
 
     auto cuContext = renderContext_->getCudaContext();
 
     // Get updated hit group SBT size from scene
     size_t hitGroupSbtSize = 0;
-    scene_.generateShaderBindingTableLayout (&hitGroupSbtSize);
+    scene.generateShaderBindingTableLayout (&hitGroupSbtSize);
     LOG (DBUG) << "Updated scene hit group SBT size: " << hitGroupSbtSize << " bytes";
 
     // Update hit group SBT for path tracing pipeline

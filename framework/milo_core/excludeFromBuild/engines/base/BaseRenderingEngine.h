@@ -170,10 +170,7 @@ protected:
     // Stream management for better GPU/CPU overlap
     static constexpr uint32_t NUM_STREAM_BUFFERS = 2;  // Double buffering
     std::unique_ptr<StreamChain<NUM_STREAM_BUFFERS>> streamChain_;
-    
-    // Common scene components
-    optixu::Scene scene_;
-    optixu::Material defaultMaterial_;
+  
     
     // Common handlers
     std::shared_ptr<SkyDomeHandler> skyDomeHandler_;

@@ -9,7 +9,7 @@ using sabi::CgModelPtr;
 using sabi::CgModelSurface;
 
 // Implementation for ShockerTriangleModel
-void ShockerTriangleModel::createGeometry(RenderContextPtr ctx, RenderableNode& node, optixu::Scene* scene)
+void ShockerTriangleModel::createGeometry(RenderContextPtr ctx, RenderableNode& node, optixu::Scene scene)
 {
     CgModelPtr model = node->getModel();
     if (!model)
@@ -26,7 +26,7 @@ void ShockerTriangleModel::createGeometry(RenderContextPtr ctx, RenderableNode& 
     if (!scene)
         throw std::runtime_error("Scene not provided for geometry creation");
     
-    geomInst = scene->createGeometryInstance();
+    geomInst = scene.createGeometryInstance();
 
     // Create OptiX triangles
     std::vector<shared::Triangle> triangles;
@@ -103,12 +103,12 @@ void ShockerTriangleModel::createGeometry(RenderContextPtr ctx, RenderableNode& 
     geomInst.setUserData(geomInstSlot_);
 }
 
-void ShockerTriangleModel::createGAS(RenderContextPtr ctx, optixu::Scene* scene, uint32_t numRayTypes)
+void ShockerTriangleModel::createGAS(RenderContextPtr ctx, optixu::Scene  scene, uint32_t numRayTypes)
 {
     if (!scene)
         throw std::runtime_error("Scene not provided for GAS creation");
         
-    gasData.gas = scene->createGeometryAccelerationStructure();
+    gasData.gas = scene.createGeometryAccelerationStructure();
     gasData.gas.setConfiguration(
         optixu::ASTradeoff::PreferFastBuild, // Changed from PreferFastTrace for deformable meshes
         optixu::AllowUpdate::Yes,            // Changed from No to Yes to allow updates

@@ -25,23 +25,27 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
     RenderContextPtr getPtr() { return shared_from_this(); }
 
     RenderContext() = default;
-    ~RenderContext() 
+    ~RenderContext()
     {
-       
     }
 
     // Initialize GPU context and handlers
-    bool initialize(bool skipPipelineInit = false)
+    bool initialize (bool skipPipelineInit = false)
     {
         if (!ctx.initialize())
         {
             return false;
         }
-        
+
+          // Create OptiX scene
+        scene_ = ctx.getOptiXContext().createScene();
+
+        defaultMaterial_ = ctx.getOptiXContext().createMaterial();
+
         // Initialize acceleration structure build scratch memory
         // Start with 1MB, it will be resized as needed
-        asBuildScratchMem_.initialize(ctx.getCudaContext(), cudau::BufferType::Device, 1024 * 1024, 1);
-        
+        asBuildScratchMem_.initialize (ctx.getCudaContext(), cudau::BufferType::Device, 1024 * 1024, 1);
+
         handlers.initialize (shared_from_this(), skipPipelineInit);
         return true;
     }
@@ -54,14 +58,24 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
             return false;
         }
 
+        if (!scene_)
+        {
+            scene_ = ctx.getOptiXContext().createScene();
+        }
+
+        if (!defaultMaterial_)
+        {
+            defaultMaterial_ = ctx.getOptiXContext().createMaterial();
+        }
+
         // Store system resources
         camera_ = camera;
         imageCache_ = imageCache;
         properties_ = properties;
-        
+
         // Initialize acceleration structure build scratch memory
         // Start with 1MB, it will be resized as needed
-        asBuildScratchMem_.initialize(ctx.getCudaContext(), cudau::BufferType::Device, 1024 * 1024, 1);
+        asBuildScratchMem_.initialize (ctx.getCudaContext(), cudau::BufferType::Device, 1024 * 1024, 1);
 
         handlers.initialize (shared_from_this(), skipPipelineInit);
         return true;
@@ -70,12 +84,16 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
     void cleanup()
     {
         handlers.cleanup();
-        
+
         // Clean up acceleration structure scratch memory
-        if (asBuildScratchMem_.isInitialized()) {
+        if (asBuildScratchMem_.isInitialized())
+        {
             asBuildScratchMem_.finalize();
         }
-        
+
+        scene_.destroy();
+        defaultMaterial_.destroy();
+
         ctx.cleanup();
     }
 
@@ -85,7 +103,7 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
     CUcontext getCudaContext() const { return ctx.getCudaContext(); }
     CUstream getCudaStream() const { return ctx.getCudaStream(); }
     optixu::Context getOptiXContext() const { return ctx.getOptiXContext(); }
-    
+
     // Get pointer to OptiX context (for pipeline initialization)
     optixu::Context* getOptiXContextPtr() { return ctx.getOptiXContextPtr(); }
 
@@ -105,6 +123,12 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
     // Acceleration structure scratch memory access
     cudau::Buffer& getASBuildScratchMem() { return asBuildScratchMem_; }
 
+    // Scene management
+    optixu::Scene getScene() const { return scene_; }
+
+    // Default Material management
+    optixu::Material getDefaultMaterial() const { return defaultMaterial_; }
+
  private:
     GPUContext ctx;
     Handlers handlers;
@@ -113,7 +137,11 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
     CameraHandle camera_;
     ImageCacheHandlerPtr imageCache_;
     PropertyService properties_;
-    
+
+    // Common scene components
+    optixu::Scene scene_;
+    optixu::Material defaultMaterial_;
+
     // Acceleration structure scratch memory
     cudau::Buffer asBuildScratchMem_;
 };

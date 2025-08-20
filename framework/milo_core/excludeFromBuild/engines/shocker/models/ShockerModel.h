@@ -27,13 +27,13 @@ public:
         instance.destroy();
     }
 
-    virtual void createGeometry(RenderContextPtr ctx, RenderableNode& node, optixu::Scene* scene) {}
+    virtual void createGeometry(RenderContextPtr ctx, RenderableNode& node, optixu::Scene scene) {}
 
     virtual void extractVertexPositions(MatrixXf& V) {}
     virtual void extractTriangleIndices(MatrixXu& F) {}
 
     // Create a Geometry Acceleration Structure, not all derived classes have geometry
-    virtual void createGAS(RenderContextPtr ctx, optixu::Scene* scene, uint32_t numRayTypes) {}
+    virtual void createGAS(RenderContextPtr ctx, optixu::Scene scene, uint32_t numRayTypes) {}
     virtual GAS* getGAS() = 0;
     virtual optixu::GeometryInstance* getGeometryInstance() = 0;
 
@@ -90,10 +90,10 @@ public:
     }
 
     // Creates and sets up geometry from provided node data
-    void createGeometry(RenderContextPtr ctx, RenderableNode& node, optixu::Scene* scene) override;
+    void createGeometry(RenderContextPtr ctx, RenderableNode& node, optixu::Scene scene) override;
 
     // Creates acceleration structure for this geometry
-    void createGAS(RenderContextPtr ctx, optixu::Scene* scene, uint32_t numRayTypes) override;
+    void createGAS(RenderContextPtr ctx, optixu::Scene scene, uint32_t numRayTypes) override;
 
     // Extracts vertex positions into an Eigen matrix
     void extractVertexPositions(MatrixXf& V) override;

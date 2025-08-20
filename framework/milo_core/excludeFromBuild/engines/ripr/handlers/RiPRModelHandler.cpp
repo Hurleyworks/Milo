@@ -185,7 +185,7 @@ void RiPRModelHandler::addCgModel(RenderableWeakRef weakNode)
         ItemID key = modelMgr.storeModel(shockerModel, node->getClientID());
 
         // Build the geometry
-        optixu::Scene* scene = sceneHandler_->getScene();
+        optixu::Scene scene = sceneHandler_->getScene();
         if (!scene)
         {
             LOG(WARNING) << "Scene not available from scene handler";
@@ -330,7 +330,7 @@ void RiPRModelHandler::addCgModelList(const WeakRenderableList& weakNodeList)
             ItemID key = modelMgr.storeModel(shockerModel, node->getClientID());
             
             // Build the geometry
-            optixu::Scene* scene = sceneHandler_->getScene();
+            optixu::Scene scene = sceneHandler_->getScene();
             if (!scene)
             {
                 LOG(WARNING) << "Scene not available from scene handler";
@@ -364,7 +364,7 @@ void RiPRModelHandler::addCgModelList(const WeakRenderableList& weakNodeList)
             }
 
             // Create a Geometry Acceleration Structure (GAS) for ray tracing
-            optixu::Scene* sceneForGAS = sceneHandler_->getScene();
+            optixu::Scene sceneForGAS = sceneHandler_->getScene();
             shockerModel->createGAS (ctx_, sceneForGAS, ripr_shared::maxNumRayTypes);
             
             // Populate geometry instance data in the global buffer

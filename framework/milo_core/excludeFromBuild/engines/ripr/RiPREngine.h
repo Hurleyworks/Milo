@@ -130,7 +130,8 @@ private:
     uint32_t frameCounter_ = 0;
     
     // RNG buffer
-    optixu::HostBlockBuffer2D<shared::PCG32RNG, 1> rngBuffer_;
+    //optixu::HostBlockBuffer2D<shared::PCG32RNG, 1> rngBuffer_;
+    cudau::Array rng_buffer_; // Random number generator states
     
     // Environment light state
     bool environmentDirty_ = true;

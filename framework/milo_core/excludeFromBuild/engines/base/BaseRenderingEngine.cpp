@@ -22,8 +22,6 @@ BaseRenderingEngine::BaseRenderingEngine() :
     cameraChanged_(false),
     environmentDirty_(false),
     pipelinePtr_(nullptr),
-    scene_(),
-    defaultMaterial_(),
     skyDomeHandler_(nullptr)
 {
 }
@@ -65,9 +63,7 @@ void BaseRenderingEngine::initialize(RenderContext* ctx)
     // Initialize render dimensions from camera
     initializeRenderDimensions();
     
-    // Create OptiX scene
-    scene_ = context_->createScene();
-    LOG(INFO) << engineName_ << " OptiX scene created";
+   
     
     // Reset frame counters and state
     frameCounter_ = 0;
@@ -119,12 +115,7 @@ void BaseRenderingEngine::cleanup()
         LOG(INFO) << "StreamChain finalized";
     }
     
-    // Clean up OptiX scene
-    if (scene_)
-    {
-        scene_.destroy();
-        LOG(INFO) << engineName_ << " OptiX scene destroyed";
-    }
+    
     
     // Reset state
     renderContext_ = nullptr;

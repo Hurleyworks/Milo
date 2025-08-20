@@ -55,7 +55,7 @@ void RiPREngine::initialize (RenderContext* ctx)
 
     // Create scene handler and give it the scene
     sceneHandler_ = RiPRSceneHandler::create (renderContext);
-    sceneHandler_->setScene (&scene_);
+    sceneHandler_->setScene (ctx->getScene());
 
     // Create model handler and connect it to other handlers
     modelHandler_ = RiPRModelHandler::create (renderContext);
@@ -103,20 +103,38 @@ void RiPREngine::initialize (RenderContext* ctx)
     // Initialize RNG buffer with dimensions already set from camera
     if (renderWidth_ > 0 && renderHeight_ > 0)
     {
-        rngBuffer_.initialize (renderContext_->getCudaContext(), cudau::BufferType::Device,
-                               renderWidth_, renderHeight_);
-
-        // Initialize RNG states
-        std::mt19937_64 rng (591842031321323413);
-        rngBuffer_.map();
-        for (int y = 0; y < renderHeight_; ++y)
+        // rngBuffer_.initialize (renderContext_->getCudaContext(), cudau::BufferType::Device,
+        //   renderWidth_, renderHeight_);
+        //
+        rng_buffer_.initialize2D (
+            renderContext_->getCudaContext(), cudau::ArrayElementType::UInt32, (sizeof (shared::PCG32RNG) + 3) / 4,
+            cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+            renderWidth_, renderHeight_, 1);
         {
-            for (int x = 0; x < renderWidth_; ++x)
+            auto rngs = rng_buffer_.map<shared::PCG32RNG>();
+            std::mt19937_64 rngSeed (591842031321323413);
+            for (int y = 0; y < renderHeight_; ++y)
             {
-                rngBuffer_ (x, y).setState (rng());
+                for (int x = 0; x < renderWidth_; ++x)
+                {
+                    shared::PCG32RNG& rng = rngs[y * renderWidth_ + x];
+                    rng.setState (rngSeed());
+                }
             }
+            rng_buffer_.unmap();
         }
-        rngBuffer_.unmap();
+
+        //// Initialize RNG states
+        // std::mt19937_64 rng (591842031321323413);
+        // rngBuffer_.map();
+        // for (int y = 0; y < renderHeight_; ++y)
+        //{
+        //     for (int x = 0; x < renderWidth_; ++x)
+        //     {
+        //         rngBuffer_ (x, y).setState (rng());
+        //     }
+        // }
+        // rngBuffer_.unmap();
 
         LOG (INFO) << "RNG buffer initialized for " << renderWidth_ << "x" << renderHeight_;
     }
@@ -255,16 +273,11 @@ void RiPREngine::cleanup()
         materialHandler_.reset();
     }
 
-    // Clean up scene
-    if (scene_)
-    {
-        scene_.destroy();
-    }
-
+   
     // Clean up RNG buffer
-    if (rngBuffer_.isInitialized())
+    if (rng_buffer_.isInitialized())
     {
-        rngBuffer_.finalize();
+        rng_buffer_.finalize();
     }
 
     // Clean up RiPR-specific denoiser handler
@@ -517,9 +530,9 @@ void RiPREngine::setupPipelines()
     }
 
     optixu::Context optixContext = renderContext_->getOptiXContext();
-
-    // Create default material for the scene (using inherited member from BaseRenderingEngine)
-    defaultMaterial_ = optixContext.createMaterial();
+    optixu::Material defaultMaterial = renderContext_->getDefaultMaterial();
+    optixu::Scene scene = renderContext_->getScene();
+   
     // Note: optixu::Scene doesn't have setMaterialDefault, materials are set per geometry instance
 
     // Create path tracing pipeline
@@ -534,7 +547,7 @@ void RiPREngine::setupPipelines()
     pathTracePipeline_->optixPipeline.setPipelineOptions (
         maxPayloadDwords,
         optixu::calcSumDwords<float2>(), // Attribute dwords for barycentrics
-        "ripr_plp",                   // Pipeline launch parameters name - matches CUDA code
+        "ripr_plp",                      // Pipeline launch parameters name - matches CUDA code
         sizeof (ripr_shared::PipelineLaunchParameters),
         OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
         OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
@@ -553,7 +566,7 @@ void RiPREngine::setupPipelines()
     gbufferPipeline_->optixPipeline.setPipelineOptions (
         gbufferPayloadDwords,
         optixu::calcSumDwords<float2>(), // Attribute dwords for barycentrics
-        "ripr_plp",                   // Same pipeline launch parameters name
+        "ripr_plp",                      // Same pipeline launch parameters name
         sizeof (ripr_shared::PipelineLaunchParameters),
         OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
         OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
@@ -578,7 +591,7 @@ void RiPREngine::setupPipelines()
     // Generate SBT layout for the scene first
     // This is required before we can build the pipeline SBTs
     size_t dummySize;
-    scene_.generateShaderBindingTableLayout (&dummySize);
+    scene.generateShaderBindingTableLayout (&dummySize);
     LOG (INFO) << "Generated scene SBT layout, size: " << dummySize << " bytes";
 
     // Create shader binding tables
@@ -704,6 +717,7 @@ void RiPREngine::createPrograms()
     }
 
     optixu::Module emptyModule; // For empty programs
+    optixu::Material defaultMaterial = renderContext_->getDefaultMaterial();
 
     // Path Tracing Pipeline Programs
     {
@@ -744,14 +758,14 @@ void RiPREngine::createPrograms()
         LOG (INFO) << "Path tracing pipeline programs created";
 
         // Setup material hit groups for path tracing pipeline on the default material
-        if (defaultMaterial_)
+        if (defaultMaterial)
         {
             // Set hit group for search rays (shading)
-            defaultMaterial_.setHitGroup (ripr_shared::PathTracingRayType::Closest,
+            defaultMaterial.setHitGroup (ripr_shared::PathTracingRayType::Closest,
                                           pathTracePipeline_->hitPrograms.at (RT_CH_NAME_STR ("pathTraceBaseline")));
 
             // Set hit group for visibility rays
-            defaultMaterial_.setHitGroup (ripr_shared::PathTracingRayType::Visibility,
+            defaultMaterial.setHitGroup (ripr_shared::PathTracingRayType::Visibility,
                                           pathTracePipeline_->hitPrograms.at (RT_AH_NAME_STR ("visibility")));
 
             LOG (INFO) << "Path tracing material hit groups configured on default material";
@@ -792,17 +806,17 @@ void RiPREngine::createPrograms()
     }
 
     // Setup material hit groups for GBuffer pipeline on the default material
-    if (defaultMaterial_)
+    if (defaultMaterial)
     {
         // Set hit group for primary rays
-        defaultMaterial_.setHitGroup (ripr_shared::GBufferRayType::Primary,
+        defaultMaterial.setHitGroup (ripr_shared::GBufferRayType::Primary,
                                       gbufferPipeline_->hitPrograms.at (RT_CH_NAME_STR ("setupGBuffers")));
 
         // Set empty hit groups for unused ray types
         for (uint32_t rayType = ripr_shared::GBufferRayType::NumTypes;
              rayType < ripr_shared::maxNumRayTypes; ++rayType)
         {
-            defaultMaterial_.setHitGroup (rayType, gbufferPipeline_->hitPrograms.at ("emptyHitGroup"));
+            defaultMaterial.setHitGroup (rayType, gbufferPipeline_->hitPrograms.at ("emptyHitGroup"));
         }
 
         LOG (INFO) << "GBuffer material hit groups configured on default material";
@@ -813,11 +827,13 @@ void RiPREngine::linkPipelines()
 {
     LOG (INFO) << "RiPREngine::linkPipelines()";
 
+    optixu::Scene scene = renderContext_->getScene();
+
     // Link path tracing pipeline with depth 2 (for recursive rays)
     if (pathTracePipeline_ && pathTracePipeline_->optixPipeline)
     {
         // Set the scene on the pipeline
-        pathTracePipeline_->optixPipeline.setScene (scene_);
+        pathTracePipeline_->optixPipeline.setScene (scene);
 
         pathTracePipeline_->optixPipeline.link (2);
         LOG (INFO) << "Path tracing pipeline linked successfully";
@@ -827,7 +843,7 @@ void RiPREngine::linkPipelines()
     if (gbufferPipeline_ && gbufferPipeline_->optixPipeline)
     {
         // Set the scene on the pipeline
-        gbufferPipeline_->optixPipeline.setScene (scene_);
+        gbufferPipeline_->optixPipeline.setScene (scene);
 
         gbufferPipeline_->optixPipeline.link (1);
         LOG (INFO) << "GBuffer pipeline linked successfully";
@@ -845,10 +861,11 @@ void RiPREngine::createSBT()
     }
 
     auto cuContext = renderContext_->getCudaContext();
+    auto scene = renderContext_->getScene();
 
     // Get hit group SBT size from scene
     size_t hitGroupSbtSize = 0;
-    scene_.generateShaderBindingTableLayout (&hitGroupSbtSize);
+    scene.generateShaderBindingTableLayout (&hitGroupSbtSize);
     LOG (INFO) << "Scene hit group SBT size: " << hitGroupSbtSize << " bytes";
 
     // Create SBT for path tracing pipeline
@@ -1030,10 +1047,11 @@ void RiPREngine::updateSBT()
     }
 
     auto cuContext = renderContext_->getCudaContext();
+    auto scene = renderContext_->getScene();
 
     // Get updated hit group SBT size from scene
     size_t hitGroupSbtSize = 0;
-    scene_.generateShaderBindingTableLayout (&hitGroupSbtSize);
+    scene.generateShaderBindingTableLayout (&hitGroupSbtSize);
     LOG (DBUG) << "Updated scene hit group SBT size: " << hitGroupSbtSize << " bytes";
 
     // Update hit group SBT for path tracing pipeline
@@ -1131,24 +1149,24 @@ void RiPREngine::updateLaunchParameters (const mace::InputEvent& input)
         return;
     }
 
-    // ===== UPDATE STATIC PARAMETERS =====
+  
     // These parameters rarely change during rendering
-    
+
     // Set image size
     static_plp_.imageSize = make_int2 (renderWidth_, renderHeight_);
-    
+
     // Set RNG buffer
-    if (rngBuffer_.isInitialized())
+    if (rng_buffer_.isInitialized())
     {
-        static_plp_.rngBuffer = rngBuffer_.getBlockBuffer2D();
+        static_plp_.rngBuffer = rng_buffer_.getSurfaceObject (0);
     }
-    
+
     // Set GBuffers
     static_plp_.GBuffer0[0] = gbuffers_.gBuffer0[0].getSurfaceObject (0);
     static_plp_.GBuffer0[1] = gbuffers_.gBuffer0[1].getSurfaceObject (0);
     static_plp_.GBuffer1[0] = gbuffers_.gBuffer1[0].getSurfaceObject (0);
     static_plp_.GBuffer1[1] = gbuffers_.gBuffer1[1].getSurfaceObject (0);
-    
+
     // Set material data buffer from material handler
     if (materialHandler_ && materialHandler_->getMaterialDataBuffer())
     {
@@ -1158,7 +1176,7 @@ void RiPREngine::updateLaunchParameters (const mace::InputEvent& input)
     {
         static_plp_.materialDataBuffer = shared::ROBuffer<shared::DisneyData>();
     }
-    
+
     // Set instance data buffer array
     if (sceneHandler_)
     {
@@ -1171,7 +1189,7 @@ void RiPREngine::updateLaunchParameters (const mace::InputEvent& input)
             }
         }
     }
-    
+
     // Set geometry instance data buffer from model handler
     if (modelHandler_ && modelHandler_->getGeometryInstanceDataBuffer())
     {
@@ -1181,14 +1199,14 @@ void RiPREngine::updateLaunchParameters (const mace::InputEvent& input)
     {
         static_plp_.geometryInstanceDataBuffer = shared::ROBuffer<shared::GeometryInstanceData>();
     }
-    
+
     // Set light distribution from scene handler
     if (sceneHandler_)
     {
         // Update emissive instances and build light distribution
         sceneHandler_->updateEmissiveInstances();
         sceneHandler_->buildLightInstanceDistribution();
-        
+
         // Get the device representation of the light distribution
         sceneHandler_->getLightInstDistribution().getDeviceType (&static_plp_.lightInstDist);
     }
@@ -1196,7 +1214,7 @@ void RiPREngine::updateLaunchParameters (const mace::InputEvent& input)
     {
         static_plp_.lightInstDist = shared::LightDistribution();
     }
-    
+
     // Set environment light importance map and texture
     if (renderContext_)
     {
@@ -1212,7 +1230,7 @@ void RiPREngine::updateLaunchParameters (const mace::InputEvent& input)
             static_plp_.envLightImportanceMap = shared::RegularConstantContinuousDistribution2D();
         }
     }
-    
+
     // Set accumulation buffer pointers from RenderHandler
     if (renderHandler_)
     {
@@ -1220,7 +1238,7 @@ void RiPREngine::updateLaunchParameters (const mace::InputEvent& input)
         static_plp_.albedoAccumBuffer = renderHandler_->getAlbedoAccumSurfaceObject();
         static_plp_.normalAccumBuffer = renderHandler_->getNormalAccumSurfaceObject();
     }
-    
+
     // Set pick info buffer pointers
     if (renderHandler_)
     {
@@ -1230,70 +1248,70 @@ void RiPREngine::updateLaunchParameters (const mace::InputEvent& input)
                 renderHandler_->getPickInfoPointer (i));
         }
     }
-    
+
     // Set flow accumulation buffer
-    if (renderHandler_)
+    /*if (renderHandler_)
     {
         static_plp_.flowAccumBuffer = renderHandler_->getFlowAccumSurfaceObject();
-    }
-    
+    }*/
+
     // Set experimental glass parameters (default values)
-    static_plp_.makeAllGlass = 0;
-    static_plp_.globalGlassType = 0;
-    static_plp_.globalGlassIOR = 1.5f;
-    static_plp_.globalTransmittanceDist = 10.0f;
-    
-    // Set background parameters
-    static_plp_.useSolidBackground = 0;
-    static_plp_.backgroundColor = make_float3(0.05f, 0.05f, 0.05f);
-    
-    // Set area light parameters
-    if (sceneHandler_)
-    {
-        static_plp_.numLightInsts = sceneHandler_->getNumEmissiveInstances();
-        static_plp_.enableAreaLights = static_plp_.numLightInsts > 0 ? 1 : 0;
-    }
-    else
-    {
-        static_plp_.numLightInsts = 0;
-        static_plp_.enableAreaLights = 0;
-    }
-    static_plp_.areaLightPowerCoeff = 1.0f;
-    
-    // Set firefly reduction parameter
-    static_plp_.maxRadiance = 10.0f;
+    // static_plp_.makeAllGlass = 0;
+    // static_plp_.globalGlassType = 0;
+    // static_plp_.globalGlassIOR = 1.5f;
+    // static_plp_.globalTransmittanceDist = 10.0f;
+    //
+    //// Set background parameters
+    // static_plp_.useSolidBackground = 0;
+    // static_plp_.backgroundColor = make_float3(0.05f, 0.05f, 0.05f);
+
+    //// Set area light parameters
+    // if (sceneHandler_)
+    //{
+    //     static_plp_.numLightInsts = sceneHandler_->getNumEmissiveInstances();
+    //     static_plp_.enableAreaLights = static_plp_.numLightInsts > 0 ? 1 : 0;
+    // }
+    // else
+    //{
+    //     static_plp_.numLightInsts = 0;
+    //     static_plp_.enableAreaLights = 0;
+    // }
+    // static_plp_.areaLightPowerCoeff = 1.0f;
+    //
+    //// Set firefly reduction parameter
+    // static_plp_.maxRadiance = 10.0f;
 
     // ===== UPDATE PER-FRAME PARAMETERS =====
     // These parameters change every frame
-    
+
     // Set traversable handle
     per_frame_plp_.travHandle = 0; // Default to 0
     if (sceneHandler_)
     {
         per_frame_plp_.travHandle = sceneHandler_->getHandle();
     }
-    
+
     // Frame counters
     per_frame_plp_.numAccumFrames = numAccumFrames_;
     per_frame_plp_.frameIndex = frameCounter_;
 
-    //LOG (DBUG) << per_frame_plp_.numAccumFrames;
-    
+    // LOG (DBUG) << per_frame_plp_.numAccumFrames;
+
     // Camera parameters
     per_frame_plp_.camera = lastCamera_;
     per_frame_plp_.prevCamera = prevCamera_;
-    
+
     // Environment light parameters from property system
     const PropertyService& properties = renderContext_->getPropertyService();
     if (properties.renderProps)
     {
         // EnviroIntensity is already a coefficient (0-2 range)
-        per_frame_plp_.envLightPowerCoeff = static_cast<float>(properties.renderProps->getValOr<double> (RenderKey::EnviroIntensity, DEFAULT_ENVIRO_INTENSITY_PERCENT));
-        
+        per_frame_plp_.envLightPowerCoeff = static_cast<float> (properties.renderProps->getValOr<double> (RenderKey::EnviroIntensity, DEFAULT_ENVIRO_INTENSITY_PERCENT));
+
         // EnviroRotation is in degrees, convert to radians for the shader
-        float envRotationDegrees = static_cast<float>(properties.renderProps->getValOr<double> (RenderKey::EnviroRotation, DEFAULT_ENVIRO_ROTATION));
+        float envRotationDegrees = static_cast<float> (properties.renderProps->getValOr<double> (RenderKey::EnviroRotation, DEFAULT_ENVIRO_ROTATION));
         per_frame_plp_.envLightRotation = envRotationDegrees * (M_PI / 180.0f);
-        
+
         // Check if environment rendering is enabled
         per_frame_plp_.enableEnvLight = properties.renderProps->getValOr<bool> (RenderKey::RenderEnviro, DEFAULT_RENDER_ENVIRO) ? 1 : 0;
     }
@@ -1303,38 +1321,38 @@ void RiPREngine::updateLaunchParameters (const mace::InputEvent& input)
         per_frame_plp_.envLightRotation = DEFAULT_ENVIRO_ROTATION * (M_PI / 180.0f);
         per_frame_plp_.enableEnvLight = DEFAULT_RENDER_ENVIRO ? 1 : 0;
     }
-    
+
     // Mouse position for picking
     per_frame_plp_.mousePosition = int2 (static_cast<int32_t> (input.getX()), static_cast<int32_t> (input.getY()));
-    
+
     // Rendering control flags
-    per_frame_plp_.maxPathLength = 4; // Maximum path length for path tracing
-    per_frame_plp_.bufferIndex = frameCounter_ & 1; // Alternating buffer index
+    per_frame_plp_.maxPathLength = 4;                                // Maximum path length for path tracing
+    per_frame_plp_.bufferIndex = frameCounter_ & 1;                  // Alternating buffer index
     per_frame_plp_.resetFlowBuffer = (numAccumFrames_ == 0) ? 1 : 0; // Reset flow on first frame
-    per_frame_plp_.enableJittering = 1; // Enable anti-aliasing jitter
-    per_frame_plp_.enableBumpMapping = 1; // Enable bump/normal mapping
-    per_frame_plp_.enableDebugPrint = 0; // Disable debug output by default
-    
+    per_frame_plp_.enableJittering = 1;                              // Enable anti-aliasing jitter
+    per_frame_plp_.enableBumpMapping = 1;                            // Enable bump/normal mapping
+    per_frame_plp_.enableDebugPrint = 0;                             // Disable debug output by default
+
     // Debug switches (initially all off)
     per_frame_plp_.debugSwitches = 0;
 
     // Copy parameters to device
     CUstream stream = renderContext_->getCudaStream();
-    
+
     // Copy static parameters
     CUDADRV_CHECK (cuMemcpyHtoDAsync (
         static_plp_on_device_,
         &static_plp_,
         sizeof (ripr_shared::StaticPipelineLaunchParameters),
         stream));
-    
+
     // Copy per-frame parameters
     CUDADRV_CHECK (cuMemcpyHtoDAsync (
         per_frame_plp_on_device_,
         &per_frame_plp_,
         sizeof (ripr_shared::PerFramePipelineLaunchParameters),
         stream));
-    
+
     // Copy main pipeline parameter structure (just the pointers)
     CUDADRV_CHECK (cuMemcpyHtoDAsync (
         plp_on_device_,
@@ -1406,16 +1424,16 @@ void RiPREngine::updateCameraBody (const mace::InputEvent& input)
 
         // Set lens parameters
         const PropertyService& properties = renderContext_->getPropertyService();
-        if (properties.renderProps)
-        {
-            lastCamera_.lensSize = static_cast<float>(properties.renderProps->getValOr<double> (RenderKey::Aperture, 0.0));
-            lastCamera_.focusDistance = static_cast<float>(properties.renderProps->getValOr<double> (RenderKey::FocalLength, 5.0));
-        }
-        else
-        {
-            lastCamera_.lensSize = 0.0f;
-            lastCamera_.focusDistance = 5.0f;
-        }
+        /* if (properties.renderProps)
+         {
+             lastCamera_.lensSize = static_cast<float>(properties.renderProps->getValOr<double> (RenderKey::Aperture, 0.0));
+             lastCamera_.focusDistance = static_cast<float>(properties.renderProps->getValOr<double> (RenderKey::FocalLength, 5.0));
+         }
+         else
+         {
+             lastCamera_.lensSize = 0.0f;
+             lastCamera_.focusDistance = 5.0f;
+         }*/
 
         // Mark camera as not dirty after processing
         camera->setDirty (false);
