@@ -74,7 +74,7 @@
 
 // PipelineHandler.h
 // Manages multiple OptiX pipelines with a clean, unified interface
-// 
+//
 // Key responsibilities:
 // - Creates and manages multiple pipelines for different rendering modes (GBuffer, PathTrace, etc.)
 // - Ensures each pipeline has its own module (modules cannot be shared between pipelines)
@@ -89,8 +89,6 @@
 // - Pipeline setup is broken into focused, testable steps
 // - Scene is shared across all pipelines (one scene per OptiX context)
 
-
-
 #include "../RenderContext.h"
 
 // Forward declarations
@@ -100,7 +98,8 @@ class PipelineHandler;
 using PipelineHandlerPtr = std::shared_ptr<PipelineHandler>;
 
 // Shared enums for all pipelines
-enum class EntryPointType {
+enum class EntryPointType
+{
     GBuffer,
     PathTrace,
     PathTraceProgressive,
@@ -109,7 +108,8 @@ enum class EntryPointType {
     // Add more as needed
 };
 
-enum class ProgramType {
+enum class ProgramType
+{
     Shading,
     Visibility,
     Miss,
@@ -118,7 +118,8 @@ enum class ProgramType {
 };
 
 // Pipeline configuration (similar to ShockerEngine)
-struct PipelineConfig {
+struct PipelineConfig
+{
     uint32_t maxTraceDepth = 2;
     uint32_t numPayloadDwords = 3;
     uint32_t numAttributeDwords = 2;
@@ -127,7 +128,7 @@ struct PipelineConfig {
     uint32_t traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
     uint32_t exceptionFlags = OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH;
     uint32_t primitiveTypeFlags = OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE;
-    
+
     // Compilation options
     uint32_t maxRegisterCount = OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT;
     OptixCompileOptimizationLevel optimizationLevel = OPTIX_COMPILE_OPTIMIZATION_DEFAULT;
@@ -135,7 +136,8 @@ struct PipelineConfig {
 };
 
 // Data for setting up a complete pipeline
-struct PipelineData {
+struct PipelineData
+{
     EntryPointType entryPoint;
     std::string rayGenName;
     std::string missName;
@@ -149,223 +151,246 @@ struct PipelineData {
 };
 
 // Pipeline state enum for clearer state management
-enum class PipelineState {
-    Uninitialized,    // Pipeline created but not configured
-    Configured,       // Pipeline options set
-    ModuleLoaded,     // PTX module loaded
-    ProgramsCreated,  // Programs created from module
-    Linked,           // Pipeline linked
-    SBTReady,         // SBT allocated and configured
+enum class PipelineState
+{
+    Uninitialized,   // Pipeline created but not configured
+    Configured,      // Pipeline options set
+    ModuleLoaded,    // PTX module loaded
+    ProgramsCreated, // Programs created from module
+    Linked,          // Pipeline linked
+    SBTReady,        // SBT allocated and configured
     Ready            // Ready to launch
 };
 
 // Individual pipeline structure (simplified without template)
-struct Pipeline {
+struct Pipeline
+{
     using Ptr = std::shared_ptr<Pipeline>;
-    
+
     // Core OptiX objects
     optixu::Pipeline optixPipeline;
     optixu::Module optixModule;
-    std::vector<optixu::Module> additionalModules;  // Support multiple modules
-    
+    std::vector<optixu::Module> additionalModules; // Support multiple modules
+
     // Programs organized by type
     std::unordered_map<EntryPointType, optixu::Program> entryPoints;
     std::unordered_map<ProgramType, optixu::Program> programs;
     std::unordered_map<std::string, optixu::HitProgramGroup> hitGroups;
     std::vector<optixu::CallableProgramGroup> callablePrograms;
-    
+
     // Shader binding tables
     cudau::Buffer shaderBindingTable;
     cudau::Buffer hitGroupSBT;
-    
+
     // Configuration and state
     PipelineConfig config;
     EntryPointType currentEntryPoint;
     PipelineState state = PipelineState::Uninitialized;
-    
+
     // Ray type information
     uint32_t numRayTypes = 1;
     uint32_t searchRayIndex = 0;
     uint32_t visibilityRayIndex = 1;
-    
+
     // Set the active entry point
-    void setEntryPoint(EntryPointType ep) {
-        auto it = entryPoints.find(ep);
-        if (it != entryPoints.end() && optixPipeline) {
-            optixPipeline.setRayGenerationProgram(it->second);
+    void setEntryPoint (EntryPointType ep)
+    {
+        auto it = entryPoints.find (ep);
+        if (it != entryPoints.end() && optixPipeline)
+        {
+            optixPipeline.setRayGenerationProgram (it->second);
             currentEntryPoint = ep;
         }
     }
-    
+
     // Check if ready to launch
-    bool isReady() const {
+    bool isReady() const
+    {
         return state == PipelineState::Ready && optixPipeline;
     }
-    
+
     // Check if initialized (for compatibility)
-    bool isInitialized() const {
+    bool isInitialized() const
+    {
         return state >= PipelineState::Linked;
     }
-    
+
     // State transition helpers
-    void transitionTo(PipelineState newState) {
+    void transitionTo (PipelineState newState)
+    {
         // Only allow forward transitions (except reset to Uninitialized)
-        if (newState == PipelineState::Uninitialized || newState > state) {
+        if (newState == PipelineState::Uninitialized || newState > state)
+        {
             state = newState;
         }
     }
-    
+
     // Clean up resources
-    void destroy() {
+    void destroy()
+    {
         // Clean up in reverse order of creation
-        if (hitGroupSBT.isInitialized()) {
+        if (hitGroupSBT.isInitialized())
+        {
             hitGroupSBT.finalize();
         }
-        if (shaderBindingTable.isInitialized()) {
+        if (shaderBindingTable.isInitialized())
+        {
             shaderBindingTable.finalize();
         }
-        
-        for (auto& cp : callablePrograms) {
+
+        for (auto& cp : callablePrograms)
+        {
             if (cp) cp.destroy();
         }
         callablePrograms.clear();
-        
-        for (auto& [name, hg] : hitGroups) {
+
+        for (auto& [name, hg] : hitGroups)
+        {
             if (hg) hg.destroy();
         }
         hitGroups.clear();
-        
-        for (auto& [type, prog] : programs) {
+
+        for (auto& [type, prog] : programs)
+        {
             if (prog) prog.destroy();
         }
         programs.clear();
-        
-        for (auto& [ep, prog] : entryPoints) {
+
+        for (auto& [ep, prog] : entryPoints)
+        {
             if (prog) prog.destroy();
         }
         entryPoints.clear();
-        
-        for (auto& module : additionalModules) {
+
+        for (auto& module : additionalModules)
+        {
             if (module) module.destroy();
         }
         additionalModules.clear();
-        
-        if (optixModule) {
+
+        if (optixModule)
+        {
             optixModule.destroy();
         }
-        
-        if (optixPipeline) {
+
+        if (optixPipeline)
+        {
             optixPipeline.destroy();
         }
-        
+
         state = PipelineState::Uninitialized;
     }
 };
 
 // Main PipelineHandler class
-class PipelineHandler {
-public:
+class PipelineHandler
+{
+ public:
     // Factory method following standard handler pattern
-    static PipelineHandlerPtr create(RenderContextPtr ctx) {
-        return std::make_shared<PipelineHandler>(ctx);
+    static PipelineHandlerPtr create (RenderContextPtr ctx)
+    {
+        return std::make_shared<PipelineHandler> (ctx);
     }
-    
+
     // Constructor/Destructor
-    explicit PipelineHandler(RenderContextPtr ctx);
+    explicit PipelineHandler (RenderContextPtr ctx);
     ~PipelineHandler();
-    
+
     // Pipeline creation and setup (production-style API)
-    void setupPipeline(const PipelineData& data, const std::string& kernelName);
-    void setupPipeline(const PipelineData& data, const std::filesystem::path& ptxFile);
-    
+    void setupPipeline (const PipelineData& data, const std::string& kernelName);
+    void setupPipeline (const PipelineData& data, const std::filesystem::path& ptxFile);
+
     // SBT management
-    void setupSBT(EntryPointType type);
-    void updateSBT(EntryPointType type);
-    void setSceneDependentSBT(EntryPointType type);
-    
+    void setupSBT (EntryPointType type);
+    void updateSBT (EntryPointType type);
+    void setSceneDependentSBT (EntryPointType type);
+
     // Pipeline access
-    Pipeline::Ptr getPipeline(EntryPointType type);
-    bool hasPipeline(EntryPointType type) const;
-    
+    Pipeline::Ptr getPipeline (EntryPointType type);
+    bool hasPipeline (EntryPointType type) const;
+
     // Clean launch API (ShockerEngine-style)
-    void launch(EntryPointType type, CUstream stream, CUdeviceptr plp, 
-                uint32_t width, uint32_t height, uint32_t depth = 1);
-    
+    void launch (EntryPointType type, CUstream stream, CUdeviceptr plp,
+                 uint32_t width, uint32_t height, uint32_t depth = 1);
+
     // Entry point management
     template <typename SpecificEntryPointType>
-    void setEntryPoint(EntryPointType pipelineType, SpecificEntryPointType entryPoint) {
+    void setEntryPoint (EntryPointType pipelineType, SpecificEntryPointType entryPoint)
+    {
         // TODO: Type-safe entry point setting
     }
-    
+
     // Scene management
-    void setScene(optixu::Scene scene);
-    void updateSceneSBT();  // Call this when scene geometry changes
-    
+    void setScene (optixu::Scene scene);
+    void updateSceneSBT(); // Call this when scene geometry changes
+
     // Material and hit group management
-    void setMaterialHitGroups(EntryPointType type, optixu::Material material);
-    optixu::HitProgramGroup getHitGroup(EntryPointType type, const std::string& name);
-    void createEmptyHitGroup(EntryPointType type, const std::string& name);
-    
+    void setMaterialHitGroups (EntryPointType type, optixu::Material material);
+    optixu::HitProgramGroup getHitGroup (EntryPointType type, const std::string& name);
+    void createEmptyHitGroup (EntryPointType type, const std::string& name);
+
     // Configure hit groups for materials on geometry instances
-    void configureMaterialHitGroups(optixu::GeometryInstance* geomInst,
-                                    const std::map<EntryPointType, std::vector<std::pair<uint32_t, std::string>>>& hitGroupConfig);
-    
+    void configureMaterialHitGroups (optixu::GeometryInstance* geomInst,
+                                     const std::map<EntryPointType, std::vector<std::pair<uint32_t, std::string>>>& hitGroupConfig);
+
     // Stack size management
-    void calculateStackSizes(EntryPointType type);
-    void setStackSize(EntryPointType type, uint32_t directCallable, 
-                      uint32_t directCallableFromState, uint32_t continuation);
-    
+    void calculateStackSizes (EntryPointType type);
+    void setStackSize (EntryPointType type, uint32_t directCallable,
+                       uint32_t directCallableFromState, uint32_t continuation);
+
     // Module management - removed as modules are now loaded per-pipeline internally
-    
+
     // Callable program support
-    void setupCallablePrograms(EntryPointType type, 
-                               const std::vector<std::string>& entryPoints);
-    
+    void setupCallablePrograms (EntryPointType type,
+                                const std::vector<std::string>& entryPoints);
+
     // State queries
-    bool isReady(EntryPointType type) const;
+    bool isReady (EntryPointType type) const;
     bool isAnyPipelineReady() const;
     std::vector<EntryPointType> getActivePipelines() const;
-    
+
     // Multi-pipeline coordination
-    void renderSequence(const std::vector<EntryPointType>& sequence,
-                       CUstream stream, CUdeviceptr plp,
-                       uint32_t width, uint32_t height);
-    
+    void renderSequence (const std::vector<EntryPointType>& sequence,
+                         CUstream stream, CUdeviceptr plp,
+                         uint32_t width, uint32_t height);
+
     // Resource management
-    void destroyPipeline(EntryPointType type);
+    void destroyPipeline (EntryPointType type);
     void destroyAll();
-    
-private:
+
+ private:
     // Private implementation
     struct Impl;
     std::unique_ptr<Impl> pImpl;
-    
+
     // Internal methods
-    Pipeline::Ptr createPipeline(EntryPointType type);
-    void linkPipeline(EntryPointType type, uint32_t maxTraceDepth);
-    void setupRayTypes(EntryPointType type, uint32_t numRayTypes);
-    void generateSBTLayout(EntryPointType type);
-    void setMinimalHitGroupSBT(EntryPointType type);
-    void validatePipelineConfig(const PipelineConfig& config);
-    
+    Pipeline::Ptr createPipeline (EntryPointType type);
+    void linkPipeline (EntryPointType type, uint32_t maxTraceDepth);
+    void setupRayTypes (EntryPointType type, uint32_t numRayTypes);
+    void generateSBTLayout (EntryPointType type);
+    void setMinimalHitGroupSBT (EntryPointType type);
+    void validatePipelineConfig (const PipelineConfig& config);
+
     // Refactored pipeline setup steps
-    void createOrGetPipeline(Pipeline::Ptr& pipeline, EntryPointType entryPoint);
-    void configurePipelineOptions(Pipeline::Ptr& pipeline, const PipelineConfig& config);
-    void loadPipelineModule(Pipeline::Ptr& pipeline, const std::string& kernelName, EntryPointType entryPoint);
-    void createPipelinePrograms(Pipeline::Ptr& pipeline, const PipelineData& data);
-    void setupPipelineRayTypes(Pipeline::Ptr& pipeline, const PipelineData& data);
-    void linkAndFinalizePipeline(Pipeline::Ptr& pipeline, const PipelineData& data);
-    
+    void createOrGetPipeline (Pipeline::Ptr& pipeline, EntryPointType entryPoint);
+    void configurePipelineOptions (Pipeline::Ptr& pipeline, const PipelineConfig& config);
+    void loadPipelineModule (Pipeline::Ptr& pipeline, const std::string& kernelName, EntryPointType entryPoint);
+    void createPipelinePrograms (Pipeline::Ptr& pipeline, const PipelineData& data);
+    void setupPipelineRayTypes (Pipeline::Ptr& pipeline, const PipelineData& data);
+    void linkAndFinalizePipeline (Pipeline::Ptr& pipeline, const PipelineData& data);
+
     // Module loading helpers
-    std::vector<char> loadPTXFromFile(const std::filesystem::path& path);
-    std::vector<char> loadOptixIRFromFile(const std::filesystem::path& path);
+    std::vector<char> loadPTXFromFile (const std::filesystem::path& path);
+    std::vector<char> loadOptixIRFromFile (const std::filesystem::path& path);
 };
 
 // Inline implementations for templates
 template <>
-inline void PipelineHandler::setEntryPoint<EntryPointType>(
-    EntryPointType pipelineType, EntryPointType entryPoint) {
-    if (auto pipeline = getPipeline(pipelineType)) {
-        pipeline->setEntryPoint(entryPoint);
+inline void PipelineHandler::setEntryPoint<EntryPointType> (
+    EntryPointType pipelineType, EntryPointType entryPoint)
+{
+    if (auto pipeline = getPipeline (pipelineType))
+    {
+        pipeline->setEntryPoint (entryPoint);
     }
 }

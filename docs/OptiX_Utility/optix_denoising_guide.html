@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OptiX 9 Denoising Guide - OptiX_Utility Wrapper</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+        }
+        h2 {
+            color: #34495e;
+            border-bottom: 2px solid #95a5a6;
+            padding-bottom: 8px;
+            margin-top: 40px;
+            margin-bottom: 20px;
+        }
+        h3 {
+            color: #34495e;
+            margin-top: 25px;
+            margin-bottom: 15px;
+        }
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        code {
+            background-color: #f8f8f8;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #e74c3c;
+        }
+        pre {
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+        pre code {
+            background-color: transparent;
+            color: #ecf0f1;
+            padding: 0;
+        }
+        .note {
+            background-color: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 12px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .warning {
+            background-color: #f8d7da;
+            border-left: 4px solid #dc3545;
+            padding: 12px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .info {
+            background-color: #d1ecf1;
+            border-left: 4px solid #0c5460;
+            padding: 12px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .method-signature {
+            background-color: #ecf0f1;
+            padding: 10px;
+            border-left: 4px solid #3498db;
+            margin: 15px 0;
+            font-family: monospace;
+            overflow-x: auto;
+        }
+        .workflow-step {
+            background-color: #e8f5e9;
+            border-left: 4px solid #4caf50;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .workflow-step h4 {
+            margin-top: 0;
+            color: #2e7d32;
+        }
+        ul {
+            padding-left: 25px;
+        }
+        li {
+            margin: 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>OptiX 9 Denoising Guide - OptiX_Utility Wrapper</h1>
+        
+        <h2>Overview</h2>
+        <p>The OptiX_Utility wrapper provides a comprehensive C++ interface for NVIDIA OptiX's AI-powered denoising capabilities. OptiX 9 introduces advanced denoising models that use deep learning to remove noise from ray-traced images while preserving fine details. This guide covers the complete denoising workflow using the wrapper's <code>Denoiser</code> class.</p>
+
+        <h2>Denoising Models in OptiX 9</h2>
+        <p>OptiX 9 supports multiple denoising models, each optimized for different use cases:</p>
+        
+        <table>
+            <tr>
+                <th>Model Type</th>
+                <th>OptixDenoiserModelKind</th>
+                <th>Description</th>
+                <th>Normalizer Type</th>
+            </tr>
+            <tr>
+                <td>LDR</td>
+                <td><code>OPTIX_DENOISER_MODEL_KIND_LDR</code></td>
+                <td>Low Dynamic Range images (0-1 range)</td>
+                <td>None required</td>
+            </tr>
+            <tr>
+                <td>HDR</td>
+                <td><code>OPTIX_DENOISER_MODEL_KIND_HDR</code></td>
+                <td>High Dynamic Range images</td>
+                <td>Intensity (1 float)</td>
+            </tr>
+            <tr>
+                <td>Temporal</td>
+                <td><code>OPTIX_DENOISER_MODEL_KIND_TEMPORAL</code></td>
+                <td>Temporal denoising using frame history</td>
+                <td>Intensity (1 float)</td>
+            </tr>
+            <tr>
+                <td>AOV</td>
+                <td><code>OPTIX_DENOISER_MODEL_KIND_AOV</code></td>
+                <td>Arbitrary Output Variables denoising</td>
+                <td>Average Color (3 floats)</td>
+            </tr>
+            <tr>
+                <td>Temporal AOV</td>
+                <td><code>OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV</code></td>
+                <td>Temporal AOV denoising with internal guide layers</td>
+                <td>Average Color (3 floats)</td>
+            </tr>
+            <tr>
+                <td>Upscale 2X</td>
+                <td><code>OPTIX_DENOISER_MODEL_KIND_UPSCALE2X</code></td>
+                <td>Denoising with 2x upscaling</td>
+                <td>Average Color (3 floats)</td>
+            </tr>
+            <tr>
+                <td>Temporal Upscale 2X</td>
+                <td><code>OPTIX_DENOISER_MODEL_KIND_TEMPORAL_UPSCALE2X</code></td>
+                <td>Temporal denoising with 2x upscaling</td>
+                <td>Average Color (3 floats)</td>
+            </tr>
+        </table>
+
+        <h2>Core Classes and Structures</h2>
+
+        <h3>Denoiser Class</h3>
+        <p>The main class that manages the denoising pipeline:</p>
+        
+        <div class="method-signature">
+class Denoiser : public Object&lt;Denoiser&gt; {
+    void destroy();
+    void prepare(...);
+    void getTasks(...);
+    void setupState(...);
+    void computeNormalizer(...);
+    void invoke(...);
+};
+        </div>
+
+        <h3>DenoiserSizes Structure</h3>
+        <p>Contains memory requirements for the denoiser:</p>
+        <pre><code>struct DenoiserSizes {
+    size_t stateSize;                      // Persistent state buffer size
+    size_t scratchSize;                    // Temporary scratch buffer size
+    size_t normalizerSize;                 // Normalizer data size (1 or 3 floats)
+    size_t scratchSizeForComputeNormalizer; // Scratch for normalizer computation
+    size_t internalGuideLayerPixelSize;    // Per-pixel size for guide layers
+};</code></pre>
+
+        <h3>DenoisingTask Class</h3>
+        <p>Represents a denoising task for tiled processing:</p>
+        <pre><code>class DenoisingTask {
+    void getOutputTile(int32_t* offsetX, int32_t* offsetY, 
+                      int32_t* width, int32_t* height) const;
+};</code></pre>
+
+        <h3>DenoiserInputBuffers Structure</h3>
+        <p>Specifies input buffers for denoising:</p>
+        <pre><code>struct DenoiserInputBuffers {
+    // Primary buffers
+    BufferView noisyBeauty;               // Required: noisy rendered image
+    BufferView albedo;                    // Optional: material albedo
+    BufferView normal;                    // Optional: surface normals
+    
+    // Temporal buffers
+    BufferView flow;                      // Motion vectors for temporal models
+    BufferView flowTrustworthiness;       // Confidence in motion vectors
+    BufferView previousDenoisedBeauty;    // Previous frame's denoised result
+    BufferView previousInternalGuideLayer; // Internal state from previous frame
+    
+    // AOV buffers
+    BufferView* noisyAovs;                // Array of noisy AOV buffers
+    BufferView* previousDenoisedAovs;     // Previous frame's denoised AOVs
+    
+    // Format specifications
+    OptixPixelFormat beautyFormat;
+    OptixPixelFormat albedoFormat;
+    OptixPixelFormat normalFormat;
+    OptixPixelFormat flowFormat;
+    OptixPixelFormat flowTrustworthinessFormat;
+    OptixPixelFormat* aovFormats;
+    OptixDenoiserAOVType* aovTypes;
+    uint32_t aovCount;
+};</code></pre>
+
+        <h2>Complete Denoising Workflow</h2>
+        
+        <div class="workflow-step">
+            <h4>Step 1: Create the Denoiser</h4>
+            <pre><code>Context context = ...;  // Your OptiX context
+
+// Create a denoiser with specific model and guide options
+Denoiser denoiser = context.createDenoiser(
+    OPTIX_DENOISER_MODEL_KIND_HDR,        // Model type
+    GuideAlbedo::Yes,                     // Use albedo guide
+    GuideNormal::Yes,                     // Use normal guide
+    OPTIX_DENOISER_ALPHA_MODE_COPY        // Alpha channel handling
+);</code></pre>
+        </div>
+
+        <div class="workflow-step">
+            <h4>Step 2: Prepare and Get Memory Requirements</h4>
+            <pre><code>uint32_t imageWidth = 1920;
+uint32_t imageHeight = 1080;
+uint32_t tileWidth = 512;   // Use 0 for full image (no tiling)
+uint32_t tileHeight = 512;  // Use 0 for full image (no tiling)
+
+DenoiserSizes sizes;
+uint32_t numTasks;
+
+// Prepare denoiser and get memory requirements
+denoiser.prepare(imageWidth, imageHeight, tileWidth, tileHeight, 
+                &sizes, &numTasks);</code></pre>
+        </div>
+
+        <div class="workflow-step">
+            <h4>Step 3: Allocate Buffers</h4>
+            <pre><code>// Allocate required buffers based on sizes
+cudau::TypedBuffer&lt;uint8_t&gt; stateBuffer;
+cudau::TypedBuffer&lt;uint8_t&gt; scratchBuffer;
+cudau::TypedBuffer&lt;float&gt; normalizerBuffer;
+
+stateBuffer.resize(sizes.stateSize);
+scratchBuffer.resize(sizes.scratchSize);
+normalizerBuffer.resize(sizes.normalizerSize / sizeof(float));
+
+// Create buffer views
+BufferView stateView(stateBuffer.getCUdeviceptr(), 
+                     stateBuffer.sizeInBytes(), 1);
+BufferView scratchView(scratchBuffer.getCUdeviceptr(), 
+                       scratchBuffer.sizeInBytes(), 1);</code></pre>
+        </div>
+
+        <div class="workflow-step">
+            <h4>Step 4: Get Denoising Tasks (for tiled processing)</h4>
+            <pre><code>std::vector&lt;DenoisingTask&gt; tasks(numTasks);
+denoiser.getTasks(tasks.data());
+
+// Each task represents a tile to be denoised
+for (const auto& task : tasks) {
+    int32_t offsetX, offsetY, width, height;
+    task.getOutputTile(&offsetX, &offsetY, &width, &height);
+    // Process tile at (offsetX, offsetY) with size (width, height)
+}</code></pre>
+        </div>
+
+        <div class="workflow-step">
+            <h4>Step 5: Setup Denoiser State</h4>
+            <pre><code>CUstream stream = 0;  // CUDA stream for async operations
+
+// Initialize the denoiser state (do once per image size)
+denoiser.setupState(stream, stateView, scratchView);</code></pre>
+        </div>
+
+        <div class="workflow-step">
+            <h4>Step 6: Compute Normalizer (for HDR/Temporal/AOV models)</h4>
+            <pre><code>// Allocate scratch buffer for normalizer computation
+cudau::TypedBuffer&lt;uint8_t&gt; normalizerScratch;
+normalizerScratch.resize(sizes.scratchSizeForComputeNormalizer);
+
+BufferView normalizerScratchView(
+    normalizerScratch.getCUdeviceptr(),
+    normalizerScratch.sizeInBytes(), 1);
+
+// Compute normalizer from noisy beauty buffer
+BufferView noisyBeautyView = ...;  // Your noisy image buffer
+OptixPixelFormat beautyFormat = OPTIX_PIXEL_FORMAT_FLOAT3;
+
+denoiser.computeNormalizer(
+    stream,
+    noisyBeautyView,
+    beautyFormat,
+    normalizerScratchView,
+    normalizerBuffer.getCUdeviceptr()
+);</code></pre>
+        </div>
+
+        <div class="workflow-step">
+            <h4>Step 7: Invoke Denoising</h4>
+            <pre><code>// Setup input buffers
+DenoiserInputBuffers inputs = {};
+inputs.noisyBeauty = noisyBeautyView;
+inputs.albedo = albedoView;           // If using albedo guide
+inputs.normal = normalView;           // If using normal guide
+inputs.beautyFormat = OPTIX_PIXEL_FORMAT_FLOAT3;
+inputs.albedoFormat = OPTIX_PIXEL_FORMAT_FLOAT3;
+inputs.normalFormat = OPTIX_PIXEL_FORMAT_FLOAT3;
+
+// For temporal denoising
+inputs.flow = flowView;               // Motion vectors
+inputs.previousDenoisedBeauty = prevBeautyView;
+
+// Setup output buffer
+BufferView denoisedBeautyView = ...;  // Your output buffer
+
+// Process each tile (or single task for full image)
+for (const auto& task : tasks) {
+    denoiser.invoke(
+        stream,
+        task,
+        inputs,
+        IsFirstFrame::No,              // Or ::Yes for first frame
+        normalizerBuffer.getCUdeviceptr(),
+        0.0f,                          // Blend factor (0 = full denoise)
+        denoisedBeautyView,
+        nullptr,                       // Denoised AOVs array (if any)
+        BufferView()                   // Internal guide layer output
+    );
+}</code></pre>
+        </div>
+
+        <h2>Tiled vs Full Image Processing</h2>
+        
+        <div class="info">
+            <strong>Full Image Processing:</strong> Set <code>tileWidth = 0</code> and <code>tileHeight = 0</code> in <code>prepare()</code>. This processes the entire image at once, requiring more memory but simpler workflow.
+        </div>
+        
+        <div class="info">
+            <strong>Tiled Processing:</strong> Specify tile dimensions smaller than image size. The denoiser automatically handles overlap regions for seamless tiling. This reduces memory requirements for large images.
+        </div>
+
+        <h2>Temporal Denoising</h2>
+        <p>Temporal models use information from previous frames to improve quality and temporal stability:</p>
+        
+        <h3>Requirements for Temporal Models</h3>
+        <ul>
+            <li><strong>Motion Vectors:</strong> Provide <code>flow</code> buffer containing per-pixel motion</li>
+            <li><strong>Previous Frame:</strong> Supply <code>previousDenoisedBeauty</code> buffer</li>
+            <li><strong>First Frame Handling:</strong> Use <code>IsFirstFrame::Yes</code> for the first frame</li>
+            <li><strong>Internal Guide Layers:</strong> For TEMPORAL_AOV and TEMPORAL_UPSCALE2X models</li>
+        </ul>
+
+        <pre><code>// Temporal denoising example
+DenoiserInputBuffers temporalInputs = {};
+temporalInputs.noisyBeauty = currentFrameView;
+temporalInputs.flow = motionVectorView;
+temporalInputs.previousDenoisedBeauty = previousFrameView;
+
+// For models requiring internal guide layers
+if (modelKind == OPTIX_DENOISER_MODEL_KIND_TEMPORAL_AOV) {
+    temporalInputs.previousInternalGuideLayer = prevGuideLayerView;
+    
+    BufferView nextGuideLayerView = ...;  // Output for next frame
+    denoiser.invoke(stream, task, temporalInputs, IsFirstFrame::No,
+                   normalizer, 0.0f, denoisedView, nullptr, 
+                   nextGuideLayerView);
+}</code></pre>
+
+        <h2>AOV (Arbitrary Output Variables) Denoising</h2>
+        <p>Denoise multiple render passes simultaneously:</p>
+        
+        <pre><code>// Setup AOV buffers
+const uint32_t aovCount = 3;
+BufferView noisyAovs[aovCount] = { diffuseView, specularView, shadowView };
+BufferView denoisedAovs[aovCount] = { ... };
+OptixPixelFormat aovFormats[aovCount] = { 
+    OPTIX_PIXEL_FORMAT_FLOAT3,
+    OPTIX_PIXEL_FORMAT_FLOAT3,
+    OPTIX_PIXEL_FORMAT_FLOAT
+};
+OptixDenoiserAOVType aovTypes[aovCount] = {
+    OPTIX_DENOISER_AOV_TYPE_DIFFUSE,
+    OPTIX_DENOISER_AOV_TYPE_SPECULAR,
+    OPTIX_DENOISER_AOV_TYPE_SHADOW
+};
+
+DenoiserInputBuffers aovInputs = {};
+aovInputs.noisyBeauty = beautyView;
+aovInputs.noisyAovs = noisyAovs;
+aovInputs.aovFormats = aovFormats;
+aovInputs.aovTypes = aovTypes;
+aovInputs.aovCount = aovCount;
+
+denoiser.invoke(stream, task, aovInputs, IsFirstFrame::No,
+               normalizer, 0.0f, denoisedBeautyView, denoisedAovs,
+               BufferView());</code></pre>
+
+        <h2>Guide Layers</h2>
+        <p>Guide layers help preserve details and improve denoising quality:</p>
+        
+        <h3>Albedo Guide</h3>
+        <ul>
+            <li>Contains the material's base color without lighting</li>
+            <li>Helps preserve texture details</li>
+            <li>Format: typically <code>OPTIX_PIXEL_FORMAT_FLOAT3</code></li>
+        </ul>
+        
+        <h3>Normal Guide</h3>
+        <ul>
+            <li>Contains world-space or view-space normals</li>
+            <li>Helps preserve geometric edges</li>
+            <li>Format: typically <code>OPTIX_PIXEL_FORMAT_FLOAT3</code></li>
+        </ul>
+
+        <div class="note">
+            <strong>Note:</strong> Guide layers are optional but highly recommended for best quality. Enable them during denoiser creation with <code>GuideAlbedo::Yes</code> and <code>GuideNormal::Yes</code>.
+        </div>
+
+        <h2>Memory Management</h2>
+        
+        <h3>Buffer Types and Sizes</h3>
+        <table>
+            <tr>
+                <th>Buffer Type</th>
+                <th>Lifetime</th>
+                <th>Size Calculation</th>
+                <th>Usage</th>
+            </tr>
+            <tr>
+                <td>State Buffer</td>
+                <td>Persistent per image size</td>
+                <td><code>sizes.stateSize</code></td>
+                <td>Maintains denoiser state</td>
+            </tr>
+            <tr>
+                <td>Scratch Buffer</td>
+                <td>Temporary during invoke</td>
+                <td><code>sizes.scratchSize</code></td>
+                <td>Working memory for denoising</td>
+            </tr>
+            <tr>
+                <td>Normalizer</td>
+                <td>Per frame</td>
+                <td><code>sizes.normalizerSize</code></td>
+                <td>HDR intensity or average color</td>
+            </tr>
+            <tr>
+                <td>Normalizer Scratch</td>
+                <td>Temporary during compute</td>
+                <td><code>sizes.scratchSizeForComputeNormalizer</code></td>
+                <td>Working memory for normalizer</td>
+            </tr>
+        </table>
+
+        <h2>Performance Optimization</h2>
+        
+        <h3>Best Practices</h3>
+        <ul>
+            <li><strong>Reuse State Buffer:</strong> Keep the state buffer allocated and reuse for same image size</li>
+            <li><strong>Async Operations:</strong> Use CUDA streams for asynchronous processing</li>
+            <li><strong>Tiling for Large Images:</strong> Use tiled processing for 4K+ images to reduce memory</li>
+            <li><strong>Batch Processing:</strong> Process multiple tiles in parallel when possible</li>
+            <li><strong>Format Selection:</strong> Use appropriate pixel formats (FLOAT3 vs HALF3) based on quality needs</li>
+        </ul>
+
+        <h3>Tile Size Selection</h3>
+        <pre><code>// Recommended tile sizes for different resolutions
+uint32_t getTileSize(uint32_t imageWidth, uint32_t imageHeight) {
+    uint32_t maxDim = std::max(imageWidth, imageHeight);
+    
+    if (maxDim <= 1920)  return 0;      // Full image for HD and below
+    if (maxDim <= 3840)  return 1024;   // 1K tiles for 4K
+    if (maxDim <= 7680)  return 2048;   // 2K tiles for 8K
+    return 2048;                         // 2K tiles for larger
+}</code></pre>
+
+        <h2>Error Handling</h2>
+        
+        <div class="warning">
+            <strong>Common Errors and Solutions:</strong>
+            <ul>
+                <li><strong>Buffer Size Mismatch:</strong> Ensure buffers match sizes from <code>prepare()</code></li>
+                <li><strong>Missing Required Buffers:</strong> Temporal models require flow and previous frame</li>
+                <li><strong>Invalid Tile Configuration:</strong> Tile size must not exceed image size</li>
+                <li><strong>State Not Initialized:</strong> Call <code>setupState()</code> before <code>invoke()</code></li>
+                <li><strong>Tasks Not Retrieved:</strong> Call <code>getTasks()</code> before <code>invoke()</code></li>
+            </ul>
+        </div>
+
+        <h2>Complete Example</h2>
+        <pre><code>// Complete denoising pipeline example
+void denoiseImage(Context& context, 
+                  const BufferView& noisyImage,
+                  const BufferView& albedo,
+                  const BufferView& normal,
+                  BufferView& denoisedImage) {
+    
+    // 1. Create denoiser
+    Denoiser denoiser = context.createDenoiser(
+        OPTIX_DENOISER_MODEL_KIND_HDR,
+        GuideAlbedo::Yes,
+        GuideNormal::Yes,
+        OPTIX_DENOISER_ALPHA_MODE_COPY
+    );
+    
+    // 2. Prepare and get sizes
+    uint32_t width = 1920, height = 1080;
+    DenoiserSizes sizes;
+    uint32_t numTasks;
+    denoiser.prepare(width, height, 0, 0, &sizes, &numTasks);
+    
+    // 3. Allocate buffers
+    cudau::TypedBuffer&lt;uint8_t&gt; stateBuffer(sizes.stateSize);
+    cudau::TypedBuffer&lt;uint8_t&gt; scratchBuffer(sizes.scratchSize);
+    cudau::TypedBuffer&lt;float&gt; normalizer(1);  // HDR uses 1 float
+    
+    BufferView stateView(stateBuffer.getCUdeviceptr(), 
+                        stateBuffer.sizeInBytes(), 1);
+    BufferView scratchView(scratchBuffer.getCUdeviceptr(), 
+                          scratchBuffer.sizeInBytes(), 1);
+    
+    // 4. Get task (single task for full image)
+    DenoisingTask task;
+    denoiser.getTasks(&task);
+    
+    // 5. Setup state
+    CUstream stream = 0;
+    denoiser.setupState(stream, stateView, scratchView);
+    
+    // 6. Compute normalizer
+    cudau::TypedBuffer&lt;uint8_t&gt; normScratch(
+        sizes.scratchSizeForComputeNormalizer);
+    BufferView normScratchView(normScratch.getCUdeviceptr(),
+                               normScratch.sizeInBytes(), 1);
+    
+    denoiser.computeNormalizer(stream, noisyImage, 
+                               OPTIX_PIXEL_FORMAT_FLOAT3,
+                               normScratchView,
+                               normalizer.getCUdeviceptr());
+    
+    // 7. Setup inputs
+    DenoiserInputBuffers inputs = {};
+    inputs.noisyBeauty = noisyImage;
+    inputs.albedo = albedo;
+    inputs.normal = normal;
+    inputs.beautyFormat = OPTIX_PIXEL_FORMAT_FLOAT3;
+    inputs.albedoFormat = OPTIX_PIXEL_FORMAT_FLOAT3;
+    inputs.normalFormat = OPTIX_PIXEL_FORMAT_FLOAT3;
+    
+    // 8. Invoke denoising
+    denoiser.invoke(stream, task, inputs, IsFirstFrame::Yes,
+                   normalizer.getCUdeviceptr(), 0.0f,
+                   denoisedImage, nullptr, BufferView());
+    
+    // 9. Synchronize and cleanup
+    cudaStreamSynchronize(stream);
+    denoiser.destroy();
+}</code></pre>
+
+        <h2>Integration with Ray Tracing Pipeline</h2>
+        <p>Typical integration points in a ray tracing application:</p>
+        
+        <ol>
+            <li><strong>Render Pass:</strong> Generate noisy beauty and guide layers during ray tracing</li>
+            <li><strong>Buffer Management:</strong> Maintain double buffering for temporal denoising</li>
+            <li><strong>Post-Process:</strong> Apply denoising as final step before display</li>
+            <li><strong>Frame Timing:</strong> Account for denoising overhead in frame budget</li>
+        </ol>
+
+        <div class="note">
+            <strong>Performance Tip:</strong> Denoising typically adds 5-20ms per frame depending on resolution and model complexity. Profile your specific use case for accurate timing.
+        </div>
+
+        <h2>Summary</h2>
+        <p>The OptiX_Utility wrapper simplifies the OptiX 9 denoising pipeline through:</p>
+        <ul>
+            <li>Clean C++ interface with RAII semantics</li>
+            <li>Automatic tiling support for large images</li>
+            <li>Type-safe buffer management</li>
+            <li>Comprehensive error checking</li>
+            <li>Support for all OptiX denoising models</li>
+        </ul>
+        
+        <p>Key workflow steps: Create denoiser → Prepare → Allocate buffers → Setup state → Compute normalizer → Invoke denoising. The wrapper handles all low-level OptiX API calls while providing flexibility for advanced use cases.</p>
+
+    </div>
+</body>
+</html>
