@@ -25,7 +25,8 @@ public:
     std::string getDescription() const override { return "Shocker Path Tracing with adaptive sampling and improved convergence"; }
     
     // Pipeline accessors for material handler
-    std::shared_ptr<engine_core::RenderPipeline<engine_core::PathTracingEntryPoint>> getPathTracePipeline() const { return pathTracePipeline_; }
+    // DEPRECATED: Now using PipelineHandler
+    // std::shared_ptr<engine_core::RenderPipeline<engine_core::PathTracingEntryPoint>> getPathTracePipeline() const { return pathTracePipeline_; }
     
     // Light probability computation kernels structure
     struct ComputeProbTex {
@@ -77,9 +78,9 @@ private:
     void updateCameraBody(const mace::InputEvent& input);
     void updateCameraSensor();
     
-    // Pipelines
-    std::shared_ptr<engine_core::RenderPipeline<engine_core::PathTracingEntryPoint>> pathTracePipeline_;
-    std::shared_ptr<engine_core::RenderPipeline<GBufferEntryPoint>> gbufferPipeline_;
+    // Pipelines - DEPRECATED: Now using PipelineHandler
+    // std::shared_ptr<engine_core::RenderPipeline<engine_core::PathTracingEntryPoint>> pathTracePipeline_;
+    // std::shared_ptr<engine_core::RenderPipeline<GBufferEntryPoint>> gbufferPipeline_;
     
     // Scene management
     std::shared_ptr<class ShockerSceneHandler> sceneHandler_;

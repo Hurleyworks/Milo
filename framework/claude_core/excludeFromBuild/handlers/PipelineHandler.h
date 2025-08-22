@@ -265,10 +265,12 @@ public:
     // Scene management
     void setScene(optixu::Scene scene);
     void setScene(EntryPointType type, optixu::Scene scene);
+    void updateSceneSBT();  // Call this when scene geometry changes
     
     // Material and hit group management
     void setMaterialHitGroups(EntryPointType type, optixu::Material material);
     optixu::HitProgramGroup getHitGroup(EntryPointType type, const std::string& name);
+    void createEmptyHitGroup(EntryPointType type, const std::string& name);
     
     // Stack size management
     void calculateStackSizes(EntryPointType type);
@@ -305,7 +307,9 @@ private:
     // Internal methods
     Pipeline<EntryPointType>::Ptr createPipeline(EntryPointType type);
     void linkPipeline(EntryPointType type, uint32_t maxTraceDepth);
+    void setupRayTypes(EntryPointType type, uint32_t numRayTypes);
     void generateSBTLayout(EntryPointType type);
+    void setMinimalHitGroupSBT(EntryPointType type);
     void validatePipelineConfig(const PipelineConfig& config);
     
     // Module loading helpers
