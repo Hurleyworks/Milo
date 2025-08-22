@@ -1,13 +1,14 @@
 #pragma once
 
 // Handlers struct aggregates all specialized handlers for the rendering pipeline.
-// Manages initialization and cleanup of SkyDome, Denoiser, Render, Texture, and Material handlers.
+// Manages initialization and cleanup of SkyDome, Denoiser, Render, Texture, Pipeline, and Material handlers.
 // Provides centralized access to all rendering subsystem handlers.
 // Note: Scene handlers are managed locally by each rendering engine to maintain isolation.
 
 #include "../../claude_core.h"
 #include "SkyDomeHandler.h"
 #include "TextureHandler.h"
+#include "PipelineHandler.h"
 
 // #include "MaterialHandler.h"  // Now engine-specific, not shared
 // #include "ModelHandler.h"  // Not used in engine-only mode
@@ -30,11 +31,21 @@ struct Handlers
 
         // Initialize TextureHandler
         textureHandler = TextureHandler::create (renderContext);
+
+        // Initialize PipelineHandler
+        pipelineHandler = PipelineHandler::create (renderContext);
     }
 
     // Cleanup all handlers
     void cleanup()
     {
+        // Cleanup PipelineHandler
+        if (pipelineHandler)
+        {
+            pipelineHandler->destroyAll();
+            pipelineHandler.reset();
+        }
+
         // Cleanup SkyDomeHandler
         if (skyDomeHandler)
         {
@@ -52,6 +63,6 @@ struct Handlers
 
     // Handler members
     SkyDomeHandlerPtr skyDomeHandler;
-
     TextureHandlerPtr textureHandler;
+    PipelineHandlerPtr pipelineHandler;
 };

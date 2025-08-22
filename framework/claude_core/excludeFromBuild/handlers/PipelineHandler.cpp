@@ -5,6 +5,7 @@
 
 // Private implementation structure
 struct PipelineHandler::Impl {
+    RenderContextPtr renderContext;
     optixu::Context optixContext;
     CUcontext cuContext = nullptr;
     
@@ -15,19 +16,20 @@ struct PipelineHandler::Impl {
     std::unordered_map<std::string, optixu::Module> moduleCache;
     optixu::Scene currentScene;
     
-    explicit Impl(optixu::Context context) : optixContext(context) {
-        // Get CUDA context from OptiX context
-        if (context) {
-            cuContext = context.getCUcontext();
+    explicit Impl(RenderContextPtr ctx) : renderContext(ctx) {
+        // Get OptiX context from RenderContext
+        if (ctx && ctx->isInitialized()) {
+            optixContext = ctx->getOptiXContext();
+            cuContext = ctx->getCudaContext();
         }
     }
 };
 
 // Constructor
-PipelineHandler::PipelineHandler(optixu::Context context) 
-    : pImpl(std::make_unique<Impl>(context)) {
-    if (!context) {
-        throw std::runtime_error("Invalid OptiX context provided to PipelineHandler");
+PipelineHandler::PipelineHandler(RenderContextPtr ctx) 
+    : pImpl(std::make_unique<Impl>(ctx)) {
+    if (!ctx || !ctx->isInitialized()) {
+        throw std::runtime_error("Invalid or uninitialized RenderContext provided to PipelineHandler");
     }
 }
 

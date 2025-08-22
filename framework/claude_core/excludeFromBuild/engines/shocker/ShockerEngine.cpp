@@ -502,6 +502,8 @@ void ShockerEngine::onEnvironmentChanged()
     LOG (INFO) << "Environment changed - accumulation reset";
 }
 
+// Original setupPipelines() - commented out to use new PipelineHandler approach
+#if 0
 void ShockerEngine::setupPipelines()
 {
     LOG (INFO) << "ShockerEngine::setupPipelines()";
@@ -584,6 +586,82 @@ void ShockerEngine::setupPipelines()
 
     // Create shader binding tables
     createSBT();
+}
+#endif // Original setupPipelines() commented out
+
+// New setupPipelines() using PipelineHandler
+void ShockerEngine::setupPipelines()
+{
+    LOG (INFO) << "ShockerEngine::setupPipelines() - Using PipelineHandler";
+
+    if (!renderContext_ || !renderContext_->isInitialized())
+    {
+        LOG (WARNING) << "RenderContext not ready for pipeline setup";
+        return;
+    }
+
+    // Get the PipelineHandler from the RenderContext's handlers
+    auto pipelineHandler = renderContext_->getHandlers().pipelineHandler;
+    if (!pipelineHandler)
+    {
+        LOG (WARNING) << "PipelineHandler not available";
+        return;
+    }
+
+    // TODO: Setup path tracing pipeline using PipelineHandler
+    PipelineData pathTraceData;
+    pathTraceData.entryPoint = EntryPointType::PathTrace;
+    pathTraceData.rayGenName = RT_RG_NAME_STR("pathTraceBaseline");
+    pathTraceData.missName = RT_MS_NAME_STR("pathTraceBaseline");
+    pathTraceData.closestHitName = RT_CH_NAME_STR("pathTraceBaseline");
+    pathTraceData.anyHitName = RT_AH_NAME_STR("visibility");
+    pathTraceData.numRayTypes = shocker_shared::PathTracingRayType::NumTypes;
+    pathTraceData.searchRayIndex = shocker_shared::PathTracingRayType::Closest;
+    pathTraceData.visibilityRayIndex = shocker_shared::PathTracingRayType::Visibility;
+    
+    // Configure pipeline options
+    pathTraceData.config.maxTraceDepth = 8;
+    pathTraceData.config.numPayloadDwords = std::max({
+        shocker_shared::PathTraceRayPayloadSignature::numDwords,
+        shocker_shared::VisibilityRayPayloadSignature::numDwords
+    });
+    pathTraceData.config.numAttributeDwords = optixu::calcSumDwords<float2>();
+    pathTraceData.config.launchParamsName = "shocker_plp";
+    pathTraceData.config.launchParamsSize = sizeof(shocker_shared::PipelineLaunchParameters);
+    pathTraceData.config.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
+    pathTraceData.config.exceptionFlags = OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH;
+    pathTraceData.config.primitiveTypeFlags = OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE;
+
+    // Setup path tracing pipeline
+    pipelineHandler->setupPipeline(pathTraceData, std::string("optix_shocker_kernels"));
+
+    // TODO: Setup GBuffer pipeline using PipelineHandler
+    PipelineData gbufferData;
+    gbufferData.entryPoint = EntryPointType::GBuffer;
+    gbufferData.rayGenName = RT_RG_NAME_STR("setupGBuffers");
+    gbufferData.missName = RT_MS_NAME_STR("setupGBuffers");
+    gbufferData.closestHitName = RT_CH_NAME_STR("setupGBuffers");
+    gbufferData.numRayTypes = shocker_shared::GBufferRayType::NumTypes;
+    gbufferData.searchRayIndex = shocker_shared::GBufferRayType::Primary;
+    
+    // Configure GBuffer pipeline options
+    gbufferData.config.maxTraceDepth = 2;
+    gbufferData.config.numPayloadDwords = shocker_shared::PrimaryRayPayloadSignature::numDwords;
+    gbufferData.config.numAttributeDwords = optixu::calcSumDwords<float2>();
+    gbufferData.config.launchParamsName = "shocker_plp";
+    gbufferData.config.launchParamsSize = sizeof(shocker_shared::PipelineLaunchParameters);
+    gbufferData.config.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
+    gbufferData.config.exceptionFlags = OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH;
+    gbufferData.config.primitiveTypeFlags = OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE;
+
+    // Setup GBuffer pipeline
+    pipelineHandler->setupPipeline(gbufferData, std::string("optix_shocker_gbuffer"));
+
+    // Initialize light probability computation kernels (still needed)
+    initializeLightProbabilityKernels();
+
+    // TODO: Additional setup like SBT will be handled by PipelineHandler
+    LOG (INFO) << "ShockerEngine pipelines setup complete with PipelineHandler";
 }
 
 void ShockerEngine::initializeLightProbabilityKernels()

@@ -80,6 +80,8 @@
 #include "../RenderContext.h"
 
 // Forward declarations
+class RenderContext;
+using RenderContextPtr = std::shared_ptr<RenderContext>;
 class PipelineHandler;
 using PipelineHandlerPtr = std::shared_ptr<PipelineHandler>;
 
@@ -228,13 +230,13 @@ struct Pipeline {
 // Main PipelineHandler class
 class PipelineHandler {
 public:
-    // Factory method
-    static PipelineHandlerPtr create(optixu::Context context) {
-        return std::make_shared<PipelineHandler>(context);
+    // Factory method following standard handler pattern
+    static PipelineHandlerPtr create(RenderContextPtr ctx) {
+        return std::make_shared<PipelineHandler>(ctx);
     }
     
     // Constructor/Destructor
-    explicit PipelineHandler(optixu::Context context);
+    explicit PipelineHandler(RenderContextPtr ctx);
     ~PipelineHandler();
     
     // Pipeline creation and setup (production-style API)
