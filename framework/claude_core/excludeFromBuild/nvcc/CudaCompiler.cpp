@@ -310,8 +310,10 @@ bool CudaCompiler::compileSingleFile (const std::filesystem::path& cuFile,
             args.push_back ("-G");
     }
 
+    // NB!  If ptx files are not being generated it probably means you updated to a new version of vs2022.
+    // and you need to update this path!
     args.push_back ("-ccbin");
-    args.push_back ("C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.42.34433/bin/Hostx64/x64/");
+    args.push_back ("C:/Program Files/Microsoft Visual Studio/2022/Community/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64/");
 
     // Include paths
     args.push_back ("--include-path");

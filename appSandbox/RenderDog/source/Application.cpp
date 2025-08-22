@@ -121,24 +121,25 @@ class Application : public Jahley::App
         std::string ground = "E:/common_content/models/static_gound/static_ground.gltf";
         //  model.loadGLTF (ground);
         //  model.loadGLTF (helmet);
-        model.loadGLTF (testModel);
-        // model.loadGLTF (box);
-          model.loadGLTF (box);
-        // model.loadGLTF (box);
-      //   model.loadGLTF (scifi);
-        // model.loadGLTF (warrior);
-     //   model.loadGLTF (helmet);
+        // model.loadGLTF (testModel);
+        model.loadGLTF (box);
+        // model.loadGLTF (cash);
+        // model.loadGLTF (phone);
+        //  model.loadGLTF (scifi);
+        //  model.loadGLTF (warrior);
+        //  model.loadGLTF (trooper);
+        //   model.loadGLTF (helmet);
         std::vector<std::string> models;
         // models.push_back (testModel);
         // models.push_back (helmet);
-        //  models.push_back (cash);
+        // models.push_back (cash);
         //  models.push_back (scifi);
         //  models.push_back (turtle);
         //  models.push_back (bust);
-        //  models.push_back (phone);
+        //   models.push_back (phone);
         //  models.push_back (train);
         //  models.push_back (warrior);
-        //  models.push_back (trooper);
+        // models.push_back (trooper);
         // models.push_back (vase);
         // models.push_back (box);
         // model.onDrop (models);
@@ -161,7 +162,7 @@ class Application : public Jahley::App
             groundPlane->setClientID (groundPlane->getID());
             sabi::SpaceTime& st = groundPlane->getSpaceTime();
             st.worldTransform.translation() = Eigen::Vector3f (0.0f, 0.0f, 0.0f);
-        model.addNodeToRenderer (groundPlane);
+            model.addNodeToRenderer (groundPlane);
         }
         /*  CgModelPtr c = sabi::MeshOps::createCube();
 

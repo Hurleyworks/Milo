@@ -333,6 +333,83 @@ void ShockerEngine::clearScene()
 
 void ShockerEngine::render (const mace::InputEvent& input, bool updateMotion, uint32_t frameNumber)
 {
+    CUstream stream = streamChain_->waitAvailableAndGetCurrentStream();
+    auto timer = getCurrentTimer();
+    timer->frame.start (stream);
+
+      // Get camera from render context
+    auto camera = renderContext_->getCamera();
+
+    // Update camera only if dirty
+    if (camera && camera->isDirty())
+    {
+        updateCameraBody (input);
+    }
+
+    // Handle motion updates
+    if (updateMotion && sceneHandler_->updateMotion())
+    {
+        restartRender_ = true;
+    }
+
+    // Reset accumulation if needed
+    if (restartRender_)
+    {
+        numAccumFrames_ = 0;
+        restartRender_ = false;
+    }
+
+    // Update launch parameters (keeping as-is for now)
+    updateLaunchParameters (input);
+
+    // Get PipelineHandler from RenderContext
+    auto& handlers = renderContext_->getHandlers();
+    auto pipelineHandler = handlers.pipelineHandler;
+
+    // Define render sequence
+    std::vector<EntryPointType> renderSequence = {
+        EntryPointType::GBuffer,
+        EntryPointType::PathTrace};
+
+    // Execute the render sequence using PipelineHandler
+    pipelineHandler->renderSequence (renderSequence, stream, plp_on_device_,
+                                     renderWidth_, renderHeight_);
+
+    // Synchronize for pick info (always required)
+    CUDADRV_CHECK (cuStreamSynchronize (stream));
+
+    // Output GBuffer debug info if enabled
+    if (enableGBufferDebug_)
+    {
+        outputGBufferDebugInfo (stream);
+    }
+
+    // Increment accumulation counter
+    numAccumFrames_++;
+
+    // Post-processing (required every frame)
+    renderHandler_->copyAccumToLinearBuffers (stream);
+
+    // Denoise every frame
+    bool isNewSequence = (numAccumFrames_ == 1);
+    renderHandler_->denoise (stream, isNewSequence, denoiserHandler_.get(), timer);
+
+    // Update camera sensor
+    updateCameraSensor();
+
+    // Stop frame timer
+    timer->frame.stop (stream);
+
+    // Frame accounting
+    frameCounter_++;
+    reportTimings (frameCounter_);
+    switchTimerBuffer();
+    streamChain_->swap();
+}
+
+#if 0
+void ShockerEngine::render (const mace::InputEvent& input, bool updateMotion, uint32_t frameNumber)
+{
     if (!isInitialized_)
     {
         LOG (WARNING) << "ShockerEngine not initialized";
@@ -482,7 +559,7 @@ void ShockerEngine::render (const mace::InputEvent& input, bool updateMotion, ui
     // Swap StreamChain buffers for next frame
     streamChain_->swap();
 }
-
+#endif
 void ShockerEngine::onEnvironmentChanged()
 {
     LOG (INFO) << "ShockerEngine::onEnvironmentChanged()";
