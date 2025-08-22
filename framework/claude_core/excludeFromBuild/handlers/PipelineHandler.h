@@ -74,7 +74,21 @@
 
 // PipelineHandler.h
 // Manages multiple OptiX pipelines with a clean, unified interface
-// Combines production code's flexible architecture with ShockerEngine's clean API
+// 
+// Key responsibilities:
+// - Creates and manages multiple pipelines for different rendering modes (GBuffer, PathTrace, etc.)
+// - Ensures each pipeline has its own module (modules cannot be shared between pipelines)
+// - Manages pipeline state transitions through a clear state machine
+// - Handles shader binding table (SBT) setup and updates
+// - Coordinates scene assignment across all pipelines
+// - Provides hit group configuration for materials
+//
+// Design principles:
+// - Each pipeline owns its resources (module, programs, SBT)
+// - State transitions are explicit and trackable via PipelineState enum
+// - Pipeline setup is broken into focused, testable steps
+// - Scene is shared across all pipelines (one scene per OptiX context)
+
 
 
 #include "../RenderContext.h"

@@ -1,7 +1,6 @@
 #include "BaseRenderingEngine.h"
 #include "../../RenderContext.h"
 #include "../../tools/PTXManager.h"
-#include "RenderPipeline.h"
 
 BaseRenderingEngine::BaseRenderingEngine() :
     renderContext_(nullptr),
@@ -21,7 +20,6 @@ BaseRenderingEngine::BaseRenderingEngine() :
     restartRender_(true),
     cameraChanged_(false),
     environmentDirty_(false),
-    pipelinePtr_(nullptr),
     skyDomeHandler_(nullptr)
 {
 }

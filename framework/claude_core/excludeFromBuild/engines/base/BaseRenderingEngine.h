@@ -6,7 +6,6 @@
 
 #include "IRenderingEngine.h"
 #include "../../tools/GPUTimerManager.h"
-#include "RenderPipeline.h"
 #include "EngineEntryPoints.h"
 #include "../../common/common_host.h"
 
@@ -81,31 +80,6 @@ protected:
     static constexpr uint32_t DEFAULT_RENDER_HEIGHT = 1080;
     
 protected:
-    // Helper method to create pipeline with engine-specific entry point type
-    template<typename EntryPointType>
-    engine_core::RenderPipeline<EntryPointType>* createPipeline() {
-        auto pipeline = new engine_core::RenderPipeline<EntryPointType>();
-        pipelinePtr_ = static_cast<void*>(pipeline);
-        return pipeline;
-    }
-    
-    // Helper method to get typed pipeline
-    template<typename EntryPointType>
-    engine_core::RenderPipeline<EntryPointType>* getPipeline() {
-        return static_cast<engine_core::RenderPipeline<EntryPointType>*>(pipelinePtr_);
-    }
-    
-    // Cleanup pipeline (derived classes must call with correct type)
-    template<typename EntryPointType>
-    void destroyPipeline() {
-        if (pipelinePtr_) {
-            auto pipeline = static_cast<engine_core::RenderPipeline<EntryPointType>*>(pipelinePtr_);
-            pipeline->destroy();
-            delete pipeline;
-            pipelinePtr_ = nullptr;
-        }
-    }
-    
     // Common helper methods for pipeline setup
     std::string loadPTXData(const char* ptxFileName, bool useEmbedded = true);
     void configurePipelineDefaults(optixu::Pipeline& pipeline, uint32_t numPayloadDwords, size_t launchParamsSize);
@@ -162,10 +136,6 @@ protected:
     bool restartRender_;        // True when accumulation needs to restart
     bool cameraChanged_;        // True when camera has moved
     bool environmentDirty_;     // True when environment light changed
-    
-    // Type-erased pipeline pointer (managed by derived class)
-    // We use void* because OptiX resources aren't copyable/moveable
-    void* pipelinePtr_;
     
     // Stream management for better GPU/CPU overlap
     static constexpr uint32_t NUM_STREAM_BUFFERS = 2;  // Double buffering
