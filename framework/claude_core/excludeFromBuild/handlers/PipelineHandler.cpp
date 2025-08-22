@@ -387,6 +387,43 @@ void PipelineHandler::createEmptyHitGroup(EntryPointType type, const std::string
     LOG(INFO) << "Created empty hit group: " << name << " for pipeline type: " << static_cast<int>(type);
 }
 
+// Configure hit groups for materials on geometry instances
+void PipelineHandler::configureMaterialHitGroups(optixu::GeometryInstance* geomInst,
+                                                 const std::map<EntryPointType, std::vector<std::pair<uint32_t, std::string>>>& hitGroupConfig) {
+    if (!geomInst) {
+        LOG(WARNING) << "No geometry instance provided for hit group configuration";
+        return;
+    }
+    
+    uint32_t numMaterials = geomInst->getNumMaterials();
+    LOG(DBUG) << "Configuring hit groups for " << numMaterials << " material(s)";
+    
+    // Iterate through all materials in the geometry instance
+    for (uint32_t i = 0; i < numMaterials; ++i) {
+        optixu::Material mat = geomInst->getMaterial(0, i); // Material set 0, index i
+        if (!mat) continue;
+        
+        // Apply hit group configuration for each pipeline type
+        for (const auto& [entryPoint, rayTypeConfigs] : hitGroupConfig) {
+            try {
+                // Set hit groups for each ray type
+                for (const auto& [rayType, hitGroupName] : rayTypeConfigs) {
+                    auto hitGroup = getHitGroup(entryPoint, hitGroupName);
+                    mat.setHitGroup(rayType, hitGroup);
+                    LOG(DBUG) << "Set hit group '" << hitGroupName << "' for ray type " << rayType 
+                              << " on pipeline " << static_cast<int>(entryPoint);
+                }
+            }
+            catch (const std::exception& e) {
+                LOG(WARNING) << "Failed to set hit groups for pipeline " << static_cast<int>(entryPoint) 
+                             << ": " << e.what();
+            }
+        }
+    }
+    
+    LOG(DBUG) << "Completed hit group configuration for " << numMaterials << " material(s)";
+}
+
 // Calculate stack sizes
 void PipelineHandler::calculateStackSizes(EntryPointType type) {
     auto pipeline = getPipeline(type);

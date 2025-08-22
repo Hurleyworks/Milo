@@ -208,7 +208,6 @@ void ShockerEngine::cleanup()
     // Clean up pipeline
 
     // Pipeline cleanup is now handled by PipelineHandler in Handlers::cleanup()
-    // pathTracePipeline_ cleanup removed - using PipelineHandler now
 
     // Clean up handlers
     if (renderHandler_)
@@ -287,6 +286,12 @@ void ShockerEngine::addGeometry (sabi::RenderableNode node)
         LOG (WARNING) << "Model handler not initialized";
         return;
     }
+    auto pipelineHandler = renderContext_->getHandlers().pipelineHandler;
+    if (!pipelineHandler)
+    {
+        LOG (DBUG) << "PipelineHandler not initialized";
+        return;
+    }
 
     // Create a weak reference to pass to the model handler
     sabi::RenderableWeakRef weakRef = node;
@@ -306,7 +311,7 @@ void ShockerEngine::addGeometry (sabi::RenderableNode node)
     }
 
     // Update SBT after adding new geometry
-    updateSBT();
+    pipelineHandler->updateSceneSBT();
 
     // Reset accumulation when scene changes
     restartRender_ = true;
@@ -496,98 +501,7 @@ void ShockerEngine::onEnvironmentChanged()
     LOG (INFO) << "Environment changed - accumulation reset";
 }
 
-// Original setupPipelines() - commented out to use new PipelineHandler approach
-#if 0
-void ShockerEngine::setupPipelines()
-{
-    LOG (INFO) << "ShockerEngine::setupPipelines()";
-
-    if (!renderContext_ || !renderContext_->getOptiXContext())
-    {
-        LOG (WARNING) << "Context not ready for pipeline setup";
-        return;
-    }
-
-    optixu::Context optixContext = renderContext_->getOptiXContext();
-    optixu::Scene scene = renderContext_->getScene();
-    if (!scene)
-    {
-        int i = 3;
-    }
-
-    // Create default material for the scene (using inherited member from BaseRenderingEngine)
-  
-    // Note: optixu::Scene doesn't have setMaterialDefault, materials are set per geometry instance
-
-    // Create path tracing pipeline
-    // OLD PIPELINE CODE - DEPRECATED - Now using PipelineHandler
-    // pathTracePipeline_ = std::make_shared<engine_core::RenderPipeline<engine_core::PathTracingEntryPoint>>();
-    // pathTracePipeline_->optixPipeline = optixContext.createPipeline();
-
-    // Calculate max payload size for path tracing
-    uint32_t maxPayloadDwords = std::max ({shocker_shared::PathTraceRayPayloadSignature::numDwords,
-                                           shocker_shared::VisibilityRayPayloadSignature::numDwords});
-
-    // OLD PIPELINE CODE - DEPRECATED
-    // Configure path tracing pipeline options
-    // pathTracePipeline_->optixPipeline.setPipelineOptions (
-    //     maxPayloadDwords,
-    //     optixu::calcSumDwords<float2>(), // Attribute dwords for barycentrics
-    //     "shocker_plp",                   // Pipeline launch parameters name - matches CUDA code
-    //     sizeof (shocker_shared::PipelineLaunchParameters),
-    //     OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-    //     OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
-    //     OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
-
-    LOG (INFO) << "Shocker path tracing pipeline configured with max payload dwords: " << maxPayloadDwords;
-
-    // OLD PIPELINE CODE - DEPRECATED
-    // Create GBuffer pipeline
-    // gbufferPipeline_ = std::make_shared<engine_core::RenderPipeline<GBufferEntryPoint>>();
-    // gbufferPipeline_->optixPipeline = optixContext.createPipeline();
-
-    // Configure GBuffer pipeline options
-    // GBuffer needs payload for primary ray information
-    uint32_t gbufferPayloadDwords = shocker_shared::PrimaryRayPayloadSignature::numDwords;
-
-    // OLD PIPELINE CODE - DEPRECATED
-    // gbufferPipeline_->optixPipeline.setPipelineOptions (
-    //     gbufferPayloadDwords,
-    //     optixu::calcSumDwords<float2>(), // Attribute dwords for barycentrics
-    //     "shocker_plp",                   // Same pipeline launch parameters name
-    //     sizeof (shocker_shared::PipelineLaunchParameters),
-    //     OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING,
-    //     OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH,
-    //     OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
-
-    LOG (INFO) << "Shocker GBuffer pipeline configured with payload dwords: " << gbufferPayloadDwords;
-
-    // Ray type configuration is now handled in the pipeline setup
-
-    // Create modules
-    createModules();
-
-    // Initialize light probability computation kernels
-    initializeLightProbabilityKernels();
-
-    // Create programs
-    createPrograms();
-
-    // Link pipelines
-    linkPipelines();
-
-    // Generate SBT layout for the scene first
-    // This is required before we can build the pipeline SBTs
-    size_t dummySize;
-    scene.generateShaderBindingTableLayout (&dummySize);
-    LOG (INFO) << "Generated scene SBT layout, size: " << dummySize << " bytes";
-
-    // Create shader binding tables
-    createSBT();
-}
-#endif // Original setupPipelines() commented out
-
-// New setupPipelines() using PipelineHandler
+// setupPipelines() using PipelineHandler
 void ShockerEngine::setupPipelines()
 {
     LOG (INFO) << "ShockerEngine::setupPipelines() - Using PipelineHandler";
@@ -606,7 +520,7 @@ void ShockerEngine::setupPipelines()
         return;
     }
 
-    // TODO: Setup path tracing pipeline using PipelineHandler
+    // Setup path tracing pipeline using PipelineHandler
     PipelineData pathTraceData;
     pathTraceData.entryPoint = EntryPointType::PathTrace;
     pathTraceData.rayGenName = RT_RG_NAME_STR("pathTraceBaseline");
@@ -633,7 +547,7 @@ void ShockerEngine::setupPipelines()
     // Setup path tracing pipeline
     pipelineHandler->setupPipeline(pathTraceData, std::string("optix_shocker_kernels"));
 
-    // TODO: Setup GBuffer pipeline using PipelineHandler
+    // Setup GBuffer pipeline using PipelineHandler
     PipelineData gbufferData;
     gbufferData.entryPoint = EntryPointType::GBuffer;
     gbufferData.rayGenName = RT_RG_NAME_STR("setupGBuffers");
@@ -655,12 +569,11 @@ void ShockerEngine::setupPipelines()
     // Setup GBuffer pipeline
     pipelineHandler->setupPipeline(gbufferData, std::string("optix_shocker_gbuffer"));
     
-    // Empty hit group is now created inside setupPipeline before linking
 
     // Initialize light probability computation kernels (still needed)
     initializeLightProbabilityKernels();
 
-    // TODO: Additional setup like SBT will be handled by PipelineHandler
+    // SBT setup is handled by PipelineHandler
     LOG (INFO) << "ShockerEngine pipelines setup complete with PipelineHandler";
 }
 
@@ -722,331 +635,8 @@ void ShockerEngine::initializeLightProbabilityKernels()
     LOG (INFO) << "Light probability computation kernels initialized successfully";
 }
 
-void ShockerEngine::createModules()
-{
-    // OLD PIPELINE CODE - DEPRECATED - Now handled by PipelineHandler
-    LOG (INFO) << "ShockerEngine::createModules() - DEPRECATED";
-    return;
-    
-    /* OLD CODE COMMENTED OUT
-    if (!ptxManager_ || !pathTracePipeline_ || !pathTracePipeline_->optixPipeline ||
-        !gbufferPipeline_ || !gbufferPipeline_->optixPipeline)
-    {
-        LOG (WARNING) << "PTXManager or Pipelines not ready";
-        return;
-    }
-
-    // Load PTX for Shocker path tracing kernels
-    std::vector<char> shockerPtxData = ptxManager_->getPTXData ("optix_shocker_kernels");
-    if (shockerPtxData.empty())
-    {
-        LOG (WARNING) << "Failed to load PTX for optix_shocker_kernels";
-        return;
-    }
-
-    // Create module for path tracing pipeline
-    std::string shockerPtxString (shockerPtxData.begin(), shockerPtxData.end());
-    pathTracePipeline_->optixModule = pathTracePipeline_->optixPipeline.createModuleFromPTXString (
-        shockerPtxString,
-        OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-        DEBUG_SELECT (OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
-        DEBUG_SELECT (OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
-
-    LOG (INFO) << "Shocker path tracing module created successfully";
-
-    // Load PTX for GBuffer kernels
-    std::vector<char> gbufferPtxData = ptxManager_->getPTXData ("optix_shocker_gbuffer");
-    if (gbufferPtxData.empty())
-    {
-        LOG (WARNING) << "Failed to load PTX for optix_shocker_gbuffer";
-        return;
-    }
-
-    // Create module for GBuffer pipeline
-    std::string gbufferPtxString (gbufferPtxData.begin(), gbufferPtxData.end());
-    gbufferPipeline_->optixModule = gbufferPipeline_->optixPipeline.createModuleFromPTXString (
-        gbufferPtxString,
-        OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-        DEBUG_SELECT (OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
-        DEBUG_SELECT (OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE));
-
-    LOG (INFO) << "Shocker GBuffer module created successfully";
-    */
-}
-
-void ShockerEngine::createPrograms()
-{
-    // OLD PIPELINE CODE - DEPRECATED - Now handled by PipelineHandler
-    LOG (INFO) << "ShockerEngine::createPrograms() - DEPRECATED";
-    return;
-    
-    /* OLD CODE COMMENTED OUT
-    // Check both pipelines
-    if (!pathTracePipeline_ || !pathTracePipeline_->optixModule || !pathTracePipeline_->optixPipeline ||
-        !gbufferPipeline_ || !gbufferPipeline_->optixModule || !gbufferPipeline_->optixPipeline)
-    {
-        LOG (WARNING) << "Pipelines not ready";
-        return;
-    }
-
-    optixu::Module emptyModule; // For empty programs
-    optixu::Material defaultMaterial = renderContext_->getDefaultMaterial();
-
-    // Path Tracing Pipeline Programs
-    {
-        auto& p = pathTracePipeline_->optixPipeline;
-        auto& m = pathTracePipeline_->optixModule;
-
-        // Create ray generation program for path tracing
-        pathTracePipeline_->entryPoints[engine_core::PathTracingEntryPoint::PathTrace] =
-            p.createRayGenProgram (m, RT_RG_NAME_STR ("pathTraceBaseline"));
-
-        // Create miss program for path tracing
-        pathTracePipeline_->programs[RT_MS_NAME_STR ("pathTraceBaseline")] = p.createMissProgram (
-            m, RT_MS_NAME_STR ("pathTraceBaseline"));
-
-        // Create hit group for shading
-        pathTracePipeline_->hitPrograms[RT_CH_NAME_STR ("pathTraceBaseline")] = p.createHitProgramGroupForTriangleIS (
-            m, RT_CH_NAME_STR ("pathTraceBaseline"),
-            emptyModule, nullptr);
-
-        // Create hit group for visibility rays (any hit only)
-        pathTracePipeline_->hitPrograms[RT_AH_NAME_STR ("visibility")] = p.createHitProgramGroupForTriangleIS (
-            emptyModule, nullptr,
-            m, RT_AH_NAME_STR ("visibility"));
-
-        // Create empty miss program for visibility rays
-        pathTracePipeline_->programs["emptyMiss"] = p.createMissProgram (emptyModule, nullptr);
-
-        // Set the entry point
-        pathTracePipeline_->setEntryPoint (engine_core::PathTracingEntryPoint::PathTrace);
-
-        // Configure miss programs for ray types
-        p.setNumMissRayTypes (shocker_shared::PathTracingRayType::NumTypes);
-        p.setMissProgram (shocker_shared::PathTracingRayType::Closest,
-                          pathTracePipeline_->programs.at (RT_MS_NAME_STR ("pathTraceBaseline")));
-        p.setMissProgram (shocker_shared::PathTracingRayType::Visibility,
-                          pathTracePipeline_->programs.at ("emptyMiss"));
-
-        LOG (INFO) << "Path tracing pipeline programs created";
-
-       
-
-        // Setup material hit groups for path tracing pipeline on the default material
-        if (defaultMaterial)
-        {
-            // Set hit group for search rays (shading)
-            defaultMaterial.setHitGroup (shocker_shared::PathTracingRayType::Closest,
-                                          pathTracePipeline_->hitPrograms.at (RT_CH_NAME_STR ("pathTraceBaseline")));
-
-            // Set hit group for visibility rays
-            defaultMaterial.setHitGroup (shocker_shared::PathTracingRayType::Visibility,
-                                          pathTracePipeline_->hitPrograms.at (RT_AH_NAME_STR ("visibility")));
-
-            LOG (INFO) << "Path tracing material hit groups configured on default material";
-        }
-    }
-
-    // GBuffer Pipeline Programs
-    {
-        auto& p = gbufferPipeline_->optixPipeline;
-        auto& m = gbufferPipeline_->optixModule;
-
-        // Create ray generation program for GBuffer setup
-        gbufferPipeline_->entryPoints[GBufferEntryPoint_SetupGBuffers] =
-            p.createRayGenProgram (m, RT_RG_NAME_STR ("setupGBuffers"));
-
-        // Create miss program for GBuffer
-        gbufferPipeline_->programs[RT_MS_NAME_STR ("setupGBuffers")] =
-            p.createMissProgram (m, RT_MS_NAME_STR ("setupGBuffers"));
-
-        // Create hit group for GBuffer generation
-        gbufferPipeline_->hitPrograms[RT_CH_NAME_STR ("setupGBuffers")] =
-            p.createHitProgramGroupForTriangleIS (
-                m, RT_CH_NAME_STR ("setupGBuffers"),
-                emptyModule, nullptr);
-
-        // Create empty hit group for unused ray types
-        gbufferPipeline_->hitPrograms["emptyHitGroup"] = p.createEmptyHitProgramGroup();
-
-        // Set the entry point
-        gbufferPipeline_->setEntryPoint (GBufferEntryPoint_SetupGBuffers);
-
-        // Configure miss programs for GBuffer ray types
-        p.setNumMissRayTypes (shocker_shared::GBufferRayType::NumTypes);
-        p.setMissProgram (shocker_shared::GBufferRayType::Primary,
-                          gbufferPipeline_->programs.at (RT_MS_NAME_STR ("setupGBuffers")));
-
-        LOG (INFO) << "GBuffer pipeline programs created";
-    }
-
-    // Setup material hit groups for GBuffer pipeline on the default material
-    if (defaultMaterial)
-    {
-        // Set hit group for primary rays
-        defaultMaterial.setHitGroup (shocker_shared::GBufferRayType::Primary,
-                                      gbufferPipeline_->hitPrograms.at (RT_CH_NAME_STR ("setupGBuffers")));
-
-        // Set empty hit groups for unused ray types
-        for (uint32_t rayType = shocker_shared::GBufferRayType::NumTypes;
-             rayType < shocker_shared::maxNumRayTypes; ++rayType)
-        {
-            defaultMaterial.setHitGroup (rayType, gbufferPipeline_->hitPrograms.at ("emptyHitGroup"));
-        }
-
-        LOG (INFO) << "GBuffer material hit groups configured on default material";
-    }
-    */
-}
-
-void ShockerEngine::linkPipelines()
-{
-    // OLD PIPELINE CODE - DEPRECATED - Now handled by PipelineHandler
-    LOG (INFO) << "ShockerEngine::linkPipelines() - DEPRECATED";
-    return;
-    
-    /* OLD CODE COMMENTED OUT
-    optixu::Scene scene = renderContext_->getScene();
-    LOG (INFO) << "ShockerEngine::linkPipelines()";
-
-    // Link path tracing pipeline with depth 2 (for recursive rays)
-    if (pathTracePipeline_ && pathTracePipeline_->optixPipeline)
-    {
-        // Set the scene on the pipeline
-        pathTracePipeline_->optixPipeline.setScene (scene);
-
-        pathTracePipeline_->optixPipeline.link (2);
-        LOG (INFO) << "Path tracing pipeline linked successfully";
-    }
-
-    // Link GBuffer pipeline with depth 1 (no recursion needed)
-    if (gbufferPipeline_ && gbufferPipeline_->optixPipeline)
-    {
-        // Set the scene on the pipeline
-        gbufferPipeline_->optixPipeline.setScene (scene);
-
-        gbufferPipeline_->optixPipeline.link (1);
-        LOG (INFO) << "GBuffer pipeline linked successfully";
-    }
-}
-
-void ShockerEngine::createSBT()
-{
-    // OLD PIPELINE CODE - DEPRECATED - Now handled by PipelineHandler
-    LOG (INFO) << "ShockerEngine::createSBT() - DEPRECATED";
-    return;
-    
-    /* OLD CODE COMMENTED OUT
-    if (!renderContext_)
-    {
-        LOG (WARNING) << "No render context for SBT creation";
-        return;
-    }
-
-    optixu::Scene scene = renderContext_->getScene();
-
-    auto cuContext = renderContext_->getCudaContext();
-
-    // Get hit group SBT size from scene
-    size_t hitGroupSbtSize = 0;
-    scene.generateShaderBindingTableLayout (&hitGroupSbtSize);
-    LOG (INFO) << "Scene hit group SBT size: " << hitGroupSbtSize << " bytes";
-
-    // Create SBT for path tracing pipeline
-    if (pathTracePipeline_ && pathTracePipeline_->optixPipeline)
-    {
-        auto& p = pathTracePipeline_->optixPipeline;
-        size_t sbtSize;
-        p.generateShaderBindingTableLayout (&sbtSize);
-
-        LOG (INFO) << "Path tracing pipeline SBT size: " << sbtSize << " bytes";
-
-        if (sbtSize > 0)
-        {
-            pathTracePipeline_->sbt.initialize (
-                cuContext, cudau::BufferType::Device, sbtSize, 1);
-            pathTracePipeline_->sbt.setMappedMemoryPersistent (true);
-            p.setShaderBindingTable (pathTracePipeline_->sbt, pathTracePipeline_->sbt.getMappedPointer());
-        }
-
-        // Set hit group SBT for path tracing pipeline
-        if (!pathTracePipeline_->hitGroupSbt.isInitialized())
-        {
-            if (hitGroupSbtSize > 0)
-            {
-                pathTracePipeline_->hitGroupSbt.initialize (cuContext, cudau::BufferType::Device, 1, hitGroupSbtSize);
-                pathTracePipeline_->hitGroupSbt.setMappedMemoryPersistent (true);
-            }
-            else
-            {
-                // Even with no geometry, initialize a minimal buffer
-                pathTracePipeline_->hitGroupSbt.initialize (cuContext, cudau::BufferType::Device, 1, 1);
-                pathTracePipeline_->hitGroupSbt.setMappedMemoryPersistent (true);
-            }
-            pathTracePipeline_->optixPipeline.setHitGroupShaderBindingTable (
-                pathTracePipeline_->hitGroupSbt, pathTracePipeline_->hitGroupSbt.getMappedPointer());
-        }
-
-        LOG (INFO) << "Path tracing pipeline SBT created";
-    }
-
-    // Create SBT for GBuffer pipeline
-    if (gbufferPipeline_ && gbufferPipeline_->optixPipeline)
-    {
-        auto& p = gbufferPipeline_->optixPipeline;
-        size_t sbtSize;
-        p.generateShaderBindingTableLayout (&sbtSize);
-
-        LOG (INFO) << "GBuffer pipeline SBT size: " << sbtSize << " bytes";
-
-        if (sbtSize > 0)
-        {
-            gbufferPipeline_->sbt.initialize (
-                cuContext, cudau::BufferType::Device, sbtSize, 1);
-            gbufferPipeline_->sbt.setMappedMemoryPersistent (true);
-            p.setShaderBindingTable (gbufferPipeline_->sbt, gbufferPipeline_->sbt.getMappedPointer());
-        }
-
-        // Set hit group SBT for GBuffer pipeline
-        if (!gbufferPipeline_->hitGroupSbt.isInitialized())
-        {
-            if (hitGroupSbtSize > 0)
-            {
-                gbufferPipeline_->hitGroupSbt.initialize (cuContext, cudau::BufferType::Device, 1, hitGroupSbtSize);
-                gbufferPipeline_->hitGroupSbt.setMappedMemoryPersistent (true);
-            }
-            else
-            {
-                // Even with no geometry, initialize a minimal buffer
-                gbufferPipeline_->hitGroupSbt.initialize (cuContext, cudau::BufferType::Device, 1, 1);
-                gbufferPipeline_->hitGroupSbt.setMappedMemoryPersistent (true);
-            }
-            gbufferPipeline_->optixPipeline.setHitGroupShaderBindingTable (
-                gbufferPipeline_->hitGroupSbt, gbufferPipeline_->hitGroupSbt.getMappedPointer());
-        }
-
-        LOG (INFO) << "GBuffer pipeline SBT created";
-    }
-    */
-}
-
 void ShockerEngine::updateMaterialHitGroups (ShockerModelPtr model)
 {
-    // OptiX Hit Groups:
-    // A hit group is a collection of programs that execute when a ray intersects geometry.
-    // Each hit group can contain up to three programs:
-    // 1. Closest Hit (CH) - Executes for the closest intersection along a ray (used for shading)
-    // 2. Any Hit (AH) - Executes for any intersection (used for transparency, shadows)
-    // 3. Intersection (IS) - Custom intersection test (for non-triangle primitives)
-    //
-    // Materials in OptiX store references to hit groups for different ray types.
-    // For example:
-    // - Ray type 0 (primary rays) might use a hit group with complex shading
-    // - Ray type 1 (shadow rays) might use a hit group with only an any-hit for shadows
-    //
-    // This function assigns the appropriate hit groups to each material based on ray type,
-    // connecting the material to the actual GPU programs that will execute on ray hits.
-
     LOG (DBUG) << "ShockerEngine::updateMaterialHitGroups() - updating single model";
 
     if (!model)
@@ -1069,9 +659,6 @@ void ShockerEngine::updateMaterialHitGroups (ShockerModelPtr model)
         return;
     }
 
-    // Update hit groups for all materials in this geometry instance
-    uint32_t numMaterials = geomInst->getNumMaterials();
-    
     // Get the PipelineHandler from render context
     if (!renderContext_)
     {
@@ -1086,82 +673,32 @@ void ShockerEngine::updateMaterialHitGroups (ShockerModelPtr model)
         return;
     }
     
-    for (uint32_t i = 0; i < numMaterials; ++i)
+    // Define hit group configuration for Shocker pipelines
+    std::map<EntryPointType, std::vector<std::pair<uint32_t, std::string>>> hitGroupConfig;
+    
+    // Path tracing pipeline configuration
+    hitGroupConfig[EntryPointType::PathTrace] = {
+        {shocker_shared::PathTracingRayType::Closest, RT_CH_NAME_STR("pathTraceBaseline")},  // Ray type 0: shading
+        {shocker_shared::PathTracingRayType::Visibility, RT_AH_NAME_STR("visibility")}       // Ray type 1: shadow rays
+    };
+    
+    // GBuffer pipeline configuration
+    hitGroupConfig[EntryPointType::GBuffer] = {
+        {shocker_shared::GBufferRayType::Primary, RT_CH_NAME_STR("setupGBuffers")}  // Ray type 0: primary rays
+    };
+    
+    // Add empty hit groups for unused ray types in GBuffer (optional)
+    for (uint32_t rayType = shocker_shared::GBufferRayType::NumTypes; 
+         rayType < shocker_shared::maxNumRayTypes; ++rayType)
     {
-        optixu::Material mat = geomInst->getMaterial (0, i); // Material set 0, index i
-        if (!mat)
-            continue;
-
-        // Set hit groups for path tracing pipeline
-        try {
-            // Set shading hit group for primary rays (ray type 0)
-            auto shadingHitGroup = pipelineHandler->getHitGroup(EntryPointType::PathTrace, 
-                                                                RT_CH_NAME_STR("pathTraceBaseline"));
-            mat.setHitGroup(0, shadingHitGroup);
-            
-            // Set visibility hit group for shadow rays (ray type 1)
-            auto visibilityHitGroup = pipelineHandler->getHitGroup(EntryPointType::PathTrace,
-                                                                   RT_AH_NAME_STR("visibility"));
-            mat.setHitGroup(1, visibilityHitGroup);
-        }
-        catch (const std::exception& e) {
-            LOG(WARNING) << "Failed to set path trace hit groups: " << e.what();
-        }
-
-        // Set hit groups for GBuffer pipeline
-        try {
-            // Set hit group for primary rays
-            auto gbufferHitGroup = pipelineHandler->getHitGroup(EntryPointType::GBuffer,
-                                                                RT_CH_NAME_STR("setupGBuffers"));
-            mat.setHitGroup(shocker_shared::GBufferRayType::Primary, gbufferHitGroup);
-            
-            // Set empty hit groups for unused ray types (optional - may not be created)
-            try {
-                auto emptyHitGroup = pipelineHandler->getHitGroup(EntryPointType::GBuffer,
-                                                                  "emptyHitGroup");
-                for (uint32_t rayType = shocker_shared::GBufferRayType::NumTypes;
-                     rayType < shocker_shared::maxNumRayTypes; ++rayType)
-                {
-                    mat.setHitGroup(rayType, emptyHitGroup);
-                }
-            }
-            catch (const std::exception&) {
-                // Empty hit group not found - this is optional
-                LOG(DBUG) << "Empty hit group not set (optional)";
-            }
-        }
-        catch (const std::exception& e) {
-            LOG(WARNING) << "Failed to set GBuffer hit groups: " << e.what();
-        }
-    }
-
-    LOG (DBUG) << "Updated hit groups for " << numMaterials << " material(s) in model";
-}
-
-void ShockerEngine::updateSBT()
-{
-    LOG (DBUG) << "ShockerEngine::updateSBT()";
-
-    if (!renderContext_)
-    {
-        LOG (WARNING) << "No render context for SBT update";
-        return;
+        hitGroupConfig[EntryPointType::GBuffer].push_back({rayType, "emptyHitGroup"});
     }
     
-    // Get the PipelineHandler and update scene SBT for all pipelines
-    auto pipelineHandler = renderContext_->getHandlers().pipelineHandler;
-    if (pipelineHandler)
-    {
-        LOG (DBUG) << "Updating scene SBT via PipelineHandler";
-        pipelineHandler->updateSceneSBT();
-    }
-    else
-    {
-        LOG (WARNING) << "PipelineHandler not available for SBT update";
-    }
-    
-    // PipelineHandler now handles all SBT updates
+    // Use PipelineHandler's generic method to configure all hit groups
+    pipelineHandler->configureMaterialHitGroups(geomInst, hitGroupConfig);
 }
+
+
 
 void ShockerEngine::renderGBuffer (CUstream stream)
 {

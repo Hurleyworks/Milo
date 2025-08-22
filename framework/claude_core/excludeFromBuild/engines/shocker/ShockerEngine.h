@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../base/BaseRenderingEngine.h"
-#include "../base/RenderPipeline.h"
 #include "../base/EngineEntryPoints.h"
 #include "shocker_shared.h"
 
@@ -24,9 +23,6 @@ public:
     std::string getName() const override { return "Shocker Engine"; }
     std::string getDescription() const override { return "Shocker Path Tracing with adaptive sampling and improved convergence"; }
     
-    // Pipeline accessors for material handler
-    // DEPRECATED: Now using PipelineHandler
-    // std::shared_ptr<engine_core::RenderPipeline<engine_core::PathTracingEntryPoint>> getPathTracePipeline() const { return pathTracePipeline_; }
     
     // Light probability computation kernels structure
     struct ComputeProbTex {
@@ -56,11 +52,6 @@ public:
 private:
     // Pipeline setup methods
     void setupPipelines();
-    void createModules();
-    void createPrograms();
-    void createSBT();
-    void updateSBT();  // Update SBT after scene changes
-    void linkPipelines();
     void updateMaterialHitGroups(ShockerModelPtr model);  // Set hit groups on a specific model's materials
     void initializeLightProbabilityKernels();  // Initialize CUDA kernels for light probability computation
     
@@ -77,10 +68,6 @@ private:
     // Camera update methods
     void updateCameraBody(const mace::InputEvent& input);
     void updateCameraSensor();
-    
-    // Pipelines - DEPRECATED: Now using PipelineHandler
-    // std::shared_ptr<engine_core::RenderPipeline<engine_core::PathTracingEntryPoint>> pathTracePipeline_;
-    // std::shared_ptr<engine_core::RenderPipeline<GBufferEntryPoint>> gbufferPipeline_;
     
     // Scene management
     std::shared_ptr<class ShockerSceneHandler> sceneHandler_;

@@ -272,6 +272,10 @@ public:
     optixu::HitProgramGroup getHitGroup(EntryPointType type, const std::string& name);
     void createEmptyHitGroup(EntryPointType type, const std::string& name);
     
+    // Configure hit groups for materials on geometry instances
+    void configureMaterialHitGroups(optixu::GeometryInstance* geomInst,
+                                    const std::map<EntryPointType, std::vector<std::pair<uint32_t, std::string>>>& hitGroupConfig);
+    
     // Stack size management
     void calculateStackSizes(EntryPointType type);
     void setStackSize(EntryPointType type, uint32_t directCallable, 
