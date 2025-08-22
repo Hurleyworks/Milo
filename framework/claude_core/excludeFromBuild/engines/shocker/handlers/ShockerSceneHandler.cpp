@@ -84,6 +84,12 @@ void ShockerSceneHandler::finalize()
             }
             moduleDeform = 0;
         }
+
+         // Clean up acceleration structure scratch memory
+        if (asBuildScratchMem_.isInitialized())
+        {
+            asBuildScratchMem_.finalize();
+        }
     }
     catch (const std::exception& e)
     {
@@ -160,6 +166,10 @@ void ShockerSceneHandler::init()
     instanceDataBuffer_[0].initialize (ctx->getCudaContext(), bufferType, maxNumInstances);
     instanceDataBuffer_[1].initialize (ctx->getCudaContext(), bufferType, maxNumInstances);
     LOG (DBUG) << "Initialized instance data buffers with capacity: " << maxNumInstances;
+
+      // Initialize acceleration structure build scratch memory
+    // Start with 1MB, it will be resized as needed
+    asBuildScratchMem_.initialize (ctx->getCudaContext(), cudau::BufferType::Device, 1024 * 1024, 1);
 }
 
 // Prepare for building the IAS
@@ -169,8 +179,8 @@ void ShockerSceneHandler::prepareForBuild()
     OptixAccelBufferSizes bufferSizes;
     ias.prepareForBuild (&bufferSizes);
 
-    if (bufferSizes.tempSizeInBytes > ctx->getASBuildScratchMem().sizeInBytes())
-        ctx->getASBuildScratchMem().resize (bufferSizes.tempSizeInBytes, 1, ctx->getCudaStream());
+    if (bufferSizes.tempSizeInBytes > asBuildScratchMem_.sizeInBytes())
+        asBuildScratchMem_.resize (bufferSizes.tempSizeInBytes, 1, ctx->getCudaStream());
 
     if (iasMem.isInitialized())
     {
@@ -302,7 +312,7 @@ void ShockerSceneHandler::undeformNode (RenderableNode node)
         GAS* gas = triangleModel->getGAS();
         if (gas)
         {
-            gas->gas.rebuild (ctx->getCudaStream(), gas->gasMem, ctx->getASBuildScratchMem());
+            gas->gas.rebuild (ctx->getCudaStream(), gas->gasMem, asBuildScratchMem_);
         }
 
         // LOG (DBUG) << "Reset deformation and recomputed normals for " << node->getName();
@@ -397,7 +407,7 @@ void ShockerSceneHandler::updateDeformedNode (RenderableNode node)
         GAS* gas = triangleModel->getGAS();
         if (gas)
         {
-            gas->gas.rebuild (ctx->getCudaStream(), gas->gasMem, ctx->getASBuildScratchMem());
+            gas->gas.rebuild (ctx->getCudaStream(), gas->gasMem, asBuildScratchMem_);
         }
     }
     catch (const std::exception& e)
@@ -517,7 +527,7 @@ void ShockerSceneHandler::createInstance (RenderableWeakRef& weakNode)
     instance.setID (index);
 
     GAS* gasData = optiXModel->getGAS();
-    gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, ctx->getASBuildScratchMem());
+    gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, asBuildScratchMem_);
 
     prepareForBuild();
 
@@ -784,7 +794,7 @@ void ShockerSceneHandler::createInstanceList (const WeakRenderableList& weakNode
             nodeMap[index] = weakNode;
 
             GAS* gasData = optiXModel->getGAS();
-            gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, ctx->getASBuildScratchMem());
+            gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, asBuildScratchMem_);
 
             // Populate instance data for GPU access
             populateInstanceData (index, node);
@@ -962,7 +972,7 @@ void ShockerSceneHandler::deselectAll()
 void ShockerSceneHandler::rebuildIAS()
 {
     // Perform the IAS rebuild
-    travHandle = ias.rebuild (ctx->getCudaStream(), instanceBuffer, iasMem, ctx->getASBuildScratchMem());
+    travHandle = ias.rebuild (ctx->getCudaStream(), instanceBuffer, iasMem, asBuildScratchMem_);
 
     // Synchronize the CUDA stream to ensure completion
     CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
@@ -971,7 +981,7 @@ void ShockerSceneHandler::rebuildIAS()
 void ShockerSceneHandler::updateIAS()
 {
     // just update the IAS
-    ias.update (ctx->getCudaStream(), ctx->getASBuildScratchMem());
+    ias.update (ctx->getCudaStream(), asBuildScratchMem_);
 
     // Synchronize the CUDA stream to ensure completion
     CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));

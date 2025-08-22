@@ -82,6 +82,9 @@ class ShockerSceneHandler
     // Finalizes scene setup before rendering
     void finalize();
 
+    // Acceleration structure scratch memory access
+    cudau::Buffer& getASBuildScratchMem() { return asBuildScratchMem_; }
+
     // Initialize Scene Dependent Shader Binding Table (SBT)
     // void initializeSceneDependentSBT (EntryPointType type);  // TODO: Implement with new entry point system
 
@@ -188,6 +191,10 @@ class ShockerSceneHandler
 
     // Buffer for IAS memory storage
     cudau::Buffer iasMem;
+
+    
+    // Acceleration structure scratch memory
+    cudau::Buffer asBuildScratchMem_;
 
     // Typed buffer for OptixInstance data
     cudau::TypedBuffer<OptixInstance> instanceBuffer;

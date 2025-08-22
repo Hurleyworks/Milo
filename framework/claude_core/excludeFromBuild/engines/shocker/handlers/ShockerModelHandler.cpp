@@ -112,6 +112,8 @@ void ShockerModelHandler::addCgModel(RenderableWeakRef weakNode)
         return;
     }
 
+    cudau::Buffer& scratchMem  = sceneHandler_->getASBuildScratchMem();
+
     // Handle instance nodes (references to other models)
     if (node->isInstance())
     {
@@ -241,7 +243,7 @@ void ShockerModelHandler::addCgModel(RenderableWeakRef weakNode)
         }
 
         // Create a Geometry Acceleration Structure (GAS) for ray tracing
-        shockerModel->createGAS (ctx_, scene, shocker_shared::maxNumRayTypes);
+        shockerModel->createGAS (ctx_, scene, shocker_shared::maxNumRayTypes, scratchMem);
         
         // Populate geometry instance data in the global buffer
         if (geomInstSlot != SlotFinder::InvalidSlotIndex)
@@ -270,6 +272,8 @@ void ShockerModelHandler::addCgModelList(const WeakRenderableList& weakNodeList)
         LOG(WARNING) << "Material or scene handler not set - cannot process models";
         return;
     }
+
+    cudau::Buffer& scratchMem = sceneHandler_->getASBuildScratchMem();
 
     // Track the number of instance nodes for logging
     uint32_t instanceCount = 0;
@@ -365,7 +369,7 @@ void ShockerModelHandler::addCgModelList(const WeakRenderableList& weakNodeList)
 
             // Create a Geometry Acceleration Structure (GAS) for ray tracing
             optixu::Scene sceneForGAS = sceneHandler_->getScene();
-            shockerModel->createGAS (ctx_, sceneForGAS, shocker_shared::maxNumRayTypes);
+            shockerModel->createGAS (ctx_, sceneForGAS, shocker_shared::maxNumRayTypes, scratchMem);
             
             // Populate geometry instance data in the global buffer
             if (geomInstSlot != SlotFinder::InvalidSlotIndex)

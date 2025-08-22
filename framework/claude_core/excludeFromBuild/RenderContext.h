@@ -30,7 +30,7 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
     }
 
     // Initialize GPU context and handlers
-    bool initialize ()
+    bool initialize()
     {
         if (!ctx.initialize())
         {
@@ -46,10 +46,6 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
         {
             defaultMaterial_ = ctx.getOptiXContext().createMaterial();
         }
-
-        // Initialize acceleration structure build scratch memory
-        // Start with 1MB, it will be resized as needed
-        asBuildScratchMem_.initialize (ctx.getCudaContext(), cudau::BufferType::Device, 1024 * 1024, 1);
 
         handlers.initialize (shared_from_this());
         return true;
@@ -78,10 +74,6 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
         imageCache_ = imageCache;
         properties_ = properties;
 
-        // Initialize acceleration structure build scratch memory
-        // Start with 1MB, it will be resized as needed
-        asBuildScratchMem_.initialize (ctx.getCudaContext(), cudau::BufferType::Device, 1024 * 1024, 1);
-
         handlers.initialize (shared_from_this());
         return true;
     }
@@ -89,12 +81,6 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
     void cleanup()
     {
         handlers.cleanup();
-
-        // Clean up acceleration structure scratch memory
-        if (asBuildScratchMem_.isInitialized())
-        {
-            asBuildScratchMem_.finalize();
-        }
 
         scene_.destroy();
         defaultMaterial_.destroy();
@@ -125,9 +111,6 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
     ImageCacheHandlerPtr getImageCache() const { return imageCache_; }
     const PropertyService& getPropertyService() const { return properties_; }
 
-    // Acceleration structure scratch memory access
-    cudau::Buffer& getASBuildScratchMem() { return asBuildScratchMem_; }
-
     // Scene management
     optixu::Scene getScene() const { return scene_; }
 
@@ -148,5 +131,5 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
     optixu::Material defaultMaterial_;
 
     // Acceleration structure scratch memory
-    cudau::Buffer asBuildScratchMem_;
+    // cudau::Buffer asBuildScratchMem_;
 };

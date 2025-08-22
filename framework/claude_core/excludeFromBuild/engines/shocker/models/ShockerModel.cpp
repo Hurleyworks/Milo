@@ -103,7 +103,7 @@ void ShockerTriangleModel::createGeometry(RenderContextPtr ctx, RenderableNode& 
     geomInst.setUserData(geomInstSlot_);
 }
 
-void ShockerTriangleModel::createGAS(RenderContextPtr ctx, optixu::Scene  scene, uint32_t numRayTypes)
+void ShockerTriangleModel::createGAS (RenderContextPtr ctx, optixu::Scene scene, uint32_t numRayTypes, cudau::Buffer& scratchMem)
 {
     if (!scene)
         throw std::runtime_error("Scene not provided for GAS creation");
@@ -126,7 +126,7 @@ void ShockerTriangleModel::createGAS(RenderContextPtr ctx, optixu::Scene  scene,
     size_t maxScratchSize = std::max(bufferSizes.tempSizeInBytes,
                                     bufferSizes.tempUpdateSizeInBytes);
     
-    cudau::Buffer& scratchMem = ctx->getASBuildScratchMem();
+   // cudau::Buffer& scratchMem = ctx->getASBuildScratchMem();
     if (maxScratchSize > scratchMem.sizeInBytes())
         scratchMem.resize(maxScratchSize, 1, ctx->getCudaStream());
 

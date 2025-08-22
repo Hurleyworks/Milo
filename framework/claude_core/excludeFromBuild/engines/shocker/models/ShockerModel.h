@@ -33,7 +33,7 @@ public:
     virtual void extractTriangleIndices(MatrixXu& F) {}
 
     // Create a Geometry Acceleration Structure, not all derived classes have geometry
-    virtual void createGAS(RenderContextPtr ctx, optixu::Scene scene, uint32_t numRayTypes) {}
+    virtual void createGAS (RenderContextPtr ctx, optixu::Scene scene, uint32_t numRayTypes, cudau::Buffer& scratchMem) {}
     virtual GAS* getGAS() = 0;
     virtual optixu::GeometryInstance* getGeometryInstance() = 0;
 
@@ -93,7 +93,7 @@ public:
     void createGeometry(RenderContextPtr ctx, RenderableNode& node, optixu::Scene scene) override;
 
     // Creates acceleration structure for this geometry
-    void createGAS(RenderContextPtr ctx, optixu::Scene scene, uint32_t numRayTypes) override;
+    void createGAS (RenderContextPtr ctx, optixu::Scene scene, uint32_t numRayTypes, cudau::Buffer& scratchMem) override;
 
     // Extracts vertex positions into an Eigen matrix
     void extractVertexPositions(MatrixXf& V) override;
@@ -142,15 +142,17 @@ public:
     }
 
     // Updates vertex positions and normals after deformation
-    void updateDeformedGeometry(RenderContextPtr ctx)
+    void updateDeformedGeometry (RenderContextPtr ctx, cudau::Buffer& scratchMem)
     {
         if (!hasDeformation())
             return;
 
+        
+
         // Rebuild GAS after vertex modifications
         GAS* gas = getGAS();
         if (gas)
-            gas->gas.rebuild(ctx->getCudaStream(), gas->gasMem, ctx->getASBuildScratchMem());
+            gas->gas.rebuild (ctx->getCudaStream(), gas->gasMem, scratchMem);
     }
 
     optixu::Material getMaterialAt(uint32_t matSetIdx, uint32_t matIdx)
