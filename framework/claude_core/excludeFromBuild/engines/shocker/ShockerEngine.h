@@ -52,6 +52,7 @@ public:
 private:
     // Pipeline setup methods
     void setupPipelines();
+
     void updateMaterialHitGroups(ShockerModelPtr model);  // Set hit groups on a specific model's materials
     void initializeLightProbabilityKernels();  // Initialize CUDA kernels for light probability computation
     

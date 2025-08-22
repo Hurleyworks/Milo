@@ -44,152 +44,30 @@ void PipelineHandler::setupPipeline(const PipelineData& data, const std::string&
     LOG(INFO) << "Setting up pipeline for kernel: " << kernelName 
               << ", entry point: " << static_cast<int>(data.entryPoint);
     
-    // TODO: Implement pipeline setup
     // 1. Create or get pipeline for the entry point type
     auto pipeline = createPipeline(data.entryPoint);
     
     // 2. Create pipeline if not exists
-    if (!pipeline->optixPipeline) {
-        LOG(INFO) << "Creating OptiX pipeline for entry point: " << static_cast<int>(data.entryPoint);
-        pipeline->optixPipeline = pImpl->optixContext.createPipeline();
-        LOG(INFO) << "OptiX pipeline created successfully";
-    } else {
-        LOG(INFO) << "Using existing OptiX pipeline for entry point: " << static_cast<int>(data.entryPoint);
-    }
+    createOrGetPipeline(pipeline, data.entryPoint);
     
-    // 3. Set pipeline options from config
-    pipeline->config = data.config;
-    pipeline->optixPipeline.setPipelineOptions(
-        data.config.numPayloadDwords,
-        data.config.numAttributeDwords,
-        data.config.launchParamsName.c_str(),
-        data.config.launchParamsSize,
-        static_cast<OptixTraversableGraphFlags>(data.config.traversableGraphFlags),
-        static_cast<OptixExceptionFlags>(data.config.exceptionFlags),
-        static_cast<OptixPrimitiveTypeFlags>(data.config.primitiveTypeFlags)
-    );
+    // 3. Configure pipeline options
+    configurePipelineOptions(pipeline, data.config);
     
-    // 4. Load/create module - EACH PIPELINE MUST HAVE ITS OWN MODULE
-    // Do NOT use cache as modules cannot be shared between pipelines
-    PTXManager* ptxManager = pImpl->renderContext->getPTXManager();
-    if (!ptxManager) {
-        LOG(WARNING) << "PTXManager not available, cannot load module: " << kernelName;
+    // 4. Load module for this pipeline
+    loadPipelineModule(pipeline, kernelName, data.entryPoint);
+    if (!pipeline->optixModule) {
+        LOG(WARNING) << "Failed to load module for pipeline";
         return;
     }
-    
-    std::vector<char> ptxData = ptxManager->getPTXData(kernelName);
-    if (ptxData.empty()) {
-        LOG(WARNING) << "Failed to load PTX data for kernel: " << kernelName;
-        return;
-    }
-    
-    // Create a unique module for THIS pipeline from PTX string
-    std::string ptxString(ptxData.begin(), ptxData.end());
-    pipeline->optixModule = pipeline->optixPipeline.createModuleFromPTXString(
-        ptxString,
-        OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-        DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
-        DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE)
-    );
-    
-    LOG(INFO) << "Created module for pipeline " << static_cast<int>(data.entryPoint) 
-              << " from kernel: " << kernelName;
     
     // 5. Create programs
-    if (!pipeline->optixModule) {
-        LOG(WARNING) << "ERROR: Module not loaded, cannot create programs";
-        return;
-    }
+    createPipelinePrograms(pipeline, data);
     
-    LOG(INFO) << "Creating programs for pipeline type: " << static_cast<int>(data.entryPoint);
+    // 6. Setup ray types
+    setupPipelineRayTypes(pipeline, data);
     
-    optixu::Module emptyModule; // For empty programs
-    
-    // Create ray generation program if specified
-    if (!data.rayGenName.empty()) {
-        auto rayGenProgram = pipeline->optixPipeline.createRayGenProgram(
-            pipeline->optixModule, data.rayGenName.c_str());
-        pipeline->entryPoints[data.entryPoint] = rayGenProgram;
-        LOG(INFO) << "Created ray gen program: " << data.rayGenName;
-    }
-    
-    // Create miss program if specified
-    if (!data.missName.empty()) {
-        auto missProgram = pipeline->optixPipeline.createMissProgram(
-            pipeline->optixModule, data.missName.c_str());
-        pipeline->programs[ProgramType::Miss] = missProgram;
-        LOG(INFO) << "Created miss program: " << data.missName;
-    }
-    
-    // Create closest hit program if specified
-    if (!data.closestHitName.empty()) {
-        auto hitGroup = pipeline->optixPipeline.createHitProgramGroupForTriangleIS(
-            pipeline->optixModule, data.closestHitName.c_str(),
-            emptyModule, nullptr);
-        pipeline->hitGroups[data.closestHitName] = hitGroup;
-        LOG(INFO) << "Created closest hit group: " << data.closestHitName;
-    }
-    
-    // Create any hit program if specified (for visibility)
-    if (!data.anyHitName.empty()) {
-        auto visibilityGroup = pipeline->optixPipeline.createHitProgramGroupForTriangleIS(
-            emptyModule, nullptr,
-            pipeline->optixModule, data.anyHitName.c_str());
-        pipeline->hitGroups[data.anyHitName] = visibilityGroup;
-        LOG(INFO) << "Created any hit group: " << data.anyHitName;
-    }
-    
-    // Set the entry point if we created one
-    if (pipeline->entryPoints.find(data.entryPoint) != pipeline->entryPoints.end()) {
-        pipeline->optixPipeline.setRayGenerationProgram(pipeline->entryPoints[data.entryPoint]);
-        pipeline->currentEntryPoint = data.entryPoint;
-    }
-    
-    // 6. Set ray type information
-    pipeline->numRayTypes = data.numRayTypes;
-    pipeline->searchRayIndex = data.searchRayIndex;
-    pipeline->visibilityRayIndex = data.visibilityRayIndex;
-    
-    // 7. Setup ray types and miss programs (MUST be done BEFORE linking)
-    setupRayTypes(data.entryPoint, data.numRayTypes);
-    
-    // 7b. Create empty hit group for GBuffer pipeline if needed (MUST be done BEFORE linking)
-    if (data.entryPoint == EntryPointType::GBuffer) {
-        // Create empty hit group for unused ray types
-        auto emptyHitGroup = pipeline->optixPipeline.createEmptyHitProgramGroup();
-        pipeline->hitGroups["emptyHitGroup"] = emptyHitGroup;
-        LOG(INFO) << "Created empty hit group for GBuffer pipeline";
-    }
-    
-    // 8. Link pipeline (must be done AFTER all programs are set)
-    LOG(INFO) << "Linking pipeline for type: " << static_cast<int>(data.entryPoint);
-    pipeline->optixPipeline.link(data.config.maxTraceDepth);
-    
-    // 9. Set the entry point
-    if (pipeline->entryPoints.find(data.entryPoint) != pipeline->entryPoints.end()) {
-        pipeline->setEntryPoint(data.entryPoint);
-    }
-    
-    // 10. Set the scene on the pipeline
-    if (pImpl->renderContext) {
-        optixu::Scene scene = pImpl->renderContext->getScene();
-        if (scene) {
-            LOG(INFO) << "Setting scene on pipeline";
-            pipeline->optixPipeline.setScene(scene);
-            pImpl->currentScene = scene;
-        }
-    }
-    
-    // 11. Setup SBT (must be done after linking and scene setup)
-    LOG(INFO) << "Setting up SBT for pipeline type: " << static_cast<int>(data.entryPoint);
-    setupSBT(data.entryPoint);
-    
-    // 12. Setup scene-dependent hit group SBT
-    setSceneDependentSBT(data.entryPoint);
-    
-    
-    pipeline->isInitialized = true;
-    pipeline->sbtDirty = false;
+    // 7. Link and finalize pipeline
+    linkAndFinalizePipeline(pipeline, data);
     
     LOG(INFO) << "Pipeline setup complete for type: " << static_cast<int>(data.entryPoint);
 }
@@ -218,7 +96,13 @@ void PipelineHandler::setupSBT(EntryPointType type) {
             pipeline->shaderBindingTable.getMappedPointer());
     }
     
-    pipeline->sbtDirty = false;
+    // SBT is now ready
+    if (pipeline->state >= PipelineState::Linked) {
+        pipeline->transitionTo(PipelineState::SBTReady);
+        if (pImpl->currentScene) {
+            pipeline->transitionTo(PipelineState::Ready);
+        }
+    }
 }
 
 // Update SBT
@@ -226,7 +110,10 @@ void PipelineHandler::updateSBT(EntryPointType type) {
     auto pipeline = getPipeline(type);
     if (!pipeline) return;
     
-    pipeline->sbtDirty = true;
+    // Mark as needing SBT update by going back to Linked state
+    if (pipeline->state > PipelineState::Linked) {
+        pipeline->transitionTo(PipelineState::Linked);
+    }
     setupSBT(type);
 }
 
@@ -317,19 +204,16 @@ void PipelineHandler::updateSceneSBT() {
     
     // Update SBT for all active pipelines
     for (auto& [type, pipeline] : pImpl->pipelines) {
-        if (pipeline && pipeline->isInitialized) {
+        if (pipeline && pipeline->isInitialized()) {
             setSceneDependentSBT(type);
+            // Mark as ready if we have everything
+            if (pipeline->state == PipelineState::SBTReady) {
+                pipeline->transitionTo(PipelineState::Ready);
+            }
         }
     }
 }
 
-// Set scene for specific pipeline
-void PipelineHandler::setScene(EntryPointType type, optixu::Scene scene) {
-    auto pipeline = getPipeline(type);
-    if (pipeline && pipeline->optixPipeline) {
-        pipeline->optixPipeline.setScene(scene);
-    }
-}
 
 // Set material hit groups
 void PipelineHandler::setMaterialHitGroups(EntryPointType type, optixu::Material material) {
@@ -446,20 +330,6 @@ void PipelineHandler::setStackSize(EntryPointType type, uint32_t directCallable,
     }
 }
 
-// Load module from data
-optixu::Module PipelineHandler::loadModule(const std::string& name, 
-                                           const std::vector<char>& data) {
-    // Module loading must be done per-pipeline, not globally
-    // This method is deprecated and should not be used
-    LOG(WARNING) << "loadModule is deprecated - modules must be created per-pipeline";
-    return optixu::Module();
-}
-
-// Load module from file
-optixu::Module PipelineHandler::loadModule(const std::filesystem::path& ptxFile) {
-    auto data = loadPTXFromFile(ptxFile);
-    return loadModule(ptxFile.stem().string(), data);
-}
 
 // Setup callable programs
 void PipelineHandler::setupCallablePrograms(EntryPointType type,
@@ -499,7 +369,7 @@ bool PipelineHandler::isAnyPipelineReady() const {
 std::vector<EntryPointType> PipelineHandler::getActivePipelines() const {
     std::vector<EntryPointType> active;
     for (const auto& [type, pipeline] : pImpl->pipelines) {
-        if (pipeline->isInitialized) {
+        if (pipeline->isInitialized()) {
             active.push_back(type);
         }
     }
@@ -666,3 +536,164 @@ std::vector<char> PipelineHandler::loadOptixIRFromFile(const std::filesystem::pa
 
 // Note: Pipeline::destroy() is already implemented inline in the header file
 // as part of the Pipeline template struct definition. No separate implementation needed.
+
+// ============================================================================
+// Refactored helper functions for setupPipeline
+// ============================================================================
+
+void PipelineHandler::createOrGetPipeline(Pipeline::Ptr& pipeline, EntryPointType entryPoint) {
+    if (!pipeline->optixPipeline) {
+        LOG(INFO) << "Creating OptiX pipeline for entry point: " << static_cast<int>(entryPoint);
+        pipeline->optixPipeline = pImpl->optixContext.createPipeline();
+        pipeline->transitionTo(PipelineState::Uninitialized);
+        LOG(INFO) << "OptiX pipeline created successfully";
+    } else {
+        LOG(INFO) << "Using existing OptiX pipeline for entry point: " << static_cast<int>(entryPoint);
+    }
+}
+
+void PipelineHandler::configurePipelineOptions(Pipeline::Ptr& pipeline, const PipelineConfig& config) {
+    pipeline->config = config;
+    pipeline->optixPipeline.setPipelineOptions(
+        config.numPayloadDwords,
+        config.numAttributeDwords,
+        config.launchParamsName.c_str(),
+        config.launchParamsSize,
+        static_cast<OptixTraversableGraphFlags>(config.traversableGraphFlags),
+        static_cast<OptixExceptionFlags>(config.exceptionFlags),
+        static_cast<OptixPrimitiveTypeFlags>(config.primitiveTypeFlags)
+    );
+    pipeline->transitionTo(PipelineState::Configured);
+}
+
+void PipelineHandler::loadPipelineModule(Pipeline::Ptr& pipeline, const std::string& kernelName, EntryPointType entryPoint) {
+    // EACH PIPELINE MUST HAVE ITS OWN MODULE - modules cannot be shared between pipelines
+    PTXManager* ptxManager = pImpl->renderContext->getPTXManager();
+    if (!ptxManager) {
+        LOG(WARNING) << "PTXManager not available, cannot load module: " << kernelName;
+        return;
+    }
+    
+    std::vector<char> ptxData = ptxManager->getPTXData(kernelName);
+    if (ptxData.empty()) {
+        LOG(WARNING) << "Failed to load PTX data for kernel: " << kernelName;
+        return;
+    }
+    
+    // Create a unique module for THIS pipeline from PTX string
+    std::string ptxString(ptxData.begin(), ptxData.end());
+    pipeline->optixModule = pipeline->optixPipeline.createModuleFromPTXString(
+        ptxString,
+        OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+        DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+        DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE)
+    );
+    
+    LOG(INFO) << "Created module for pipeline " << static_cast<int>(entryPoint) 
+              << " from kernel: " << kernelName;
+    pipeline->transitionTo(PipelineState::ModuleLoaded);
+}
+
+void PipelineHandler::createPipelinePrograms(Pipeline::Ptr& pipeline, const PipelineData& data) {
+    if (!pipeline->optixModule) {
+        LOG(WARNING) << "Module not loaded, cannot create programs";
+        return;
+    }
+    
+    LOG(INFO) << "Creating programs for pipeline type: " << static_cast<int>(data.entryPoint);
+    
+    optixu::Module emptyModule; // For empty programs
+    
+    // Create ray generation program if specified
+    if (!data.rayGenName.empty()) {
+        auto rayGenProgram = pipeline->optixPipeline.createRayGenProgram(
+            pipeline->optixModule, data.rayGenName.c_str());
+        pipeline->entryPoints[data.entryPoint] = rayGenProgram;
+        LOG(INFO) << "Created ray gen program: " << data.rayGenName;
+    }
+    
+    // Create miss program if specified
+    if (!data.missName.empty()) {
+        auto missProgram = pipeline->optixPipeline.createMissProgram(
+            pipeline->optixModule, data.missName.c_str());
+        pipeline->programs[ProgramType::Miss] = missProgram;
+        LOG(INFO) << "Created miss program: " << data.missName;
+    }
+    
+    // Create closest hit program if specified
+    if (!data.closestHitName.empty()) {
+        auto hitGroup = pipeline->optixPipeline.createHitProgramGroupForTriangleIS(
+            pipeline->optixModule, data.closestHitName.c_str(),
+            emptyModule, nullptr);
+        pipeline->hitGroups[data.closestHitName] = hitGroup;
+        LOG(INFO) << "Created closest hit group: " << data.closestHitName;
+    }
+    
+    // Create any hit program if specified (for visibility)
+    if (!data.anyHitName.empty()) {
+        auto visibilityGroup = pipeline->optixPipeline.createHitProgramGroupForTriangleIS(
+            emptyModule, nullptr,
+            pipeline->optixModule, data.anyHitName.c_str());
+        pipeline->hitGroups[data.anyHitName] = visibilityGroup;
+        LOG(INFO) << "Created any hit group: " << data.anyHitName;
+    }
+    
+    // Set the entry point if we created one
+    if (pipeline->entryPoints.find(data.entryPoint) != pipeline->entryPoints.end()) {
+        pipeline->optixPipeline.setRayGenerationProgram(pipeline->entryPoints[data.entryPoint]);
+        pipeline->currentEntryPoint = data.entryPoint;
+    }
+    
+    pipeline->transitionTo(PipelineState::ProgramsCreated);
+}
+
+void PipelineHandler::setupPipelineRayTypes(Pipeline::Ptr& pipeline, const PipelineData& data) {
+    // Set ray type information
+    pipeline->numRayTypes = data.numRayTypes;
+    pipeline->searchRayIndex = data.searchRayIndex;
+    pipeline->visibilityRayIndex = data.visibilityRayIndex;
+    
+    // Setup ray types and miss programs (MUST be done BEFORE linking)
+    setupRayTypes(data.entryPoint, data.numRayTypes);
+    
+    // Create empty hit group for GBuffer pipeline if needed (MUST be done BEFORE linking)
+    if (data.entryPoint == EntryPointType::GBuffer) {
+        // Create empty hit group for unused ray types
+        auto emptyHitGroup = pipeline->optixPipeline.createEmptyHitProgramGroup();
+        pipeline->hitGroups["emptyHitGroup"] = emptyHitGroup;
+        LOG(INFO) << "Created empty hit group for GBuffer pipeline";
+    }
+}
+
+void PipelineHandler::linkAndFinalizePipeline(Pipeline::Ptr& pipeline, const PipelineData& data) {
+    // Link pipeline (must be done AFTER all programs are set)
+    LOG(INFO) << "Linking pipeline for type: " << static_cast<int>(data.entryPoint);
+    pipeline->optixPipeline.link(data.config.maxTraceDepth);
+    pipeline->transitionTo(PipelineState::Linked);
+    
+    // Set the entry point
+    if (pipeline->entryPoints.find(data.entryPoint) != pipeline->entryPoints.end()) {
+        pipeline->setEntryPoint(data.entryPoint);
+    }
+    
+    // Set the scene on the pipeline
+    if (pImpl->renderContext) {
+        optixu::Scene scene = pImpl->renderContext->getScene();
+        if (scene) {
+            LOG(INFO) << "Setting scene on pipeline";
+            pipeline->optixPipeline.setScene(scene);
+            pImpl->currentScene = scene;
+        }
+    }
+    
+    // Setup SBT (must be done after linking and scene setup)
+    LOG(INFO) << "Setting up SBT for pipeline type: " << static_cast<int>(data.entryPoint);
+    setupSBT(data.entryPoint);
+    
+    // Setup scene-dependent hit group SBT
+    setSceneDependentSBT(data.entryPoint);
+    pipeline->transitionTo(PipelineState::SBTReady);
+    
+    // Mark as ready
+    pipeline->transitionTo(PipelineState::Ready);
+}

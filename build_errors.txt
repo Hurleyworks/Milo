@@ -1,6 +1,0 @@
-﻿=== Build Errors for Claude ===
-Time: 2025-08-22 12:14:34
-==================================================
-
-LINK : fatal error LNK1104: cannot open file '..\..\bin\Debug-windows-x86_64\RenderDog\RenderDog.exe' [E:\1Milo\Milo\builds\VisualStudio2022\projects\RenderDog.vcxproj]
-

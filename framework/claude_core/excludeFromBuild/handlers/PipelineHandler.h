@@ -134,6 +134,17 @@ struct PipelineData {
     PipelineConfig config;
 };
 
+// Pipeline state enum for clearer state management
+enum class PipelineState {
+    Uninitialized,    // Pipeline created but not configured
+    Configured,       // Pipeline options set
+    ModuleLoaded,     // PTX module loaded
+    ProgramsCreated,  // Programs created from module
+    Linked,           // Pipeline linked
+    SBTReady,         // SBT allocated and configured
+    Ready            // Ready to launch
+};
+
 // Individual pipeline structure (simplified without template)
 struct Pipeline {
     using Ptr = std::shared_ptr<Pipeline>;
@@ -156,8 +167,7 @@ struct Pipeline {
     // Configuration and state
     PipelineConfig config;
     EntryPointType currentEntryPoint;
-    bool isInitialized = false;
-    bool sbtDirty = true;
+    PipelineState state = PipelineState::Uninitialized;
     
     // Ray type information
     uint32_t numRayTypes = 1;
@@ -175,7 +185,20 @@ struct Pipeline {
     
     // Check if ready to launch
     bool isReady() const {
-        return isInitialized && optixPipeline && !sbtDirty;
+        return state == PipelineState::Ready && optixPipeline;
+    }
+    
+    // Check if initialized (for compatibility)
+    bool isInitialized() const {
+        return state >= PipelineState::Linked;
+    }
+    
+    // State transition helpers
+    void transitionTo(PipelineState newState) {
+        // Only allow forward transitions (except reset to Uninitialized)
+        if (newState == PipelineState::Uninitialized || newState > state) {
+            state = newState;
+        }
     }
     
     // Clean up resources
@@ -221,8 +244,7 @@ struct Pipeline {
             optixPipeline.destroy();
         }
         
-        isInitialized = false;
-        sbtDirty = true;
+        state = PipelineState::Uninitialized;
     }
 };
 
@@ -263,7 +285,6 @@ public:
     
     // Scene management
     void setScene(optixu::Scene scene);
-    void setScene(EntryPointType type, optixu::Scene scene);
     void updateSceneSBT();  // Call this when scene geometry changes
     
     // Material and hit group management
@@ -280,9 +301,7 @@ public:
     void setStackSize(EntryPointType type, uint32_t directCallable, 
                       uint32_t directCallableFromState, uint32_t continuation);
     
-    // Module management
-    optixu::Module loadModule(const std::string& name, const std::vector<char>& data);
-    optixu::Module loadModule(const std::filesystem::path& ptxFile);
+    // Module management - removed as modules are now loaded per-pipeline internally
     
     // Callable program support
     void setupCallablePrograms(EntryPointType type, 
@@ -314,6 +333,14 @@ private:
     void generateSBTLayout(EntryPointType type);
     void setMinimalHitGroupSBT(EntryPointType type);
     void validatePipelineConfig(const PipelineConfig& config);
+    
+    // Refactored pipeline setup steps
+    void createOrGetPipeline(Pipeline::Ptr& pipeline, EntryPointType entryPoint);
+    void configurePipelineOptions(Pipeline::Ptr& pipeline, const PipelineConfig& config);
+    void loadPipelineModule(Pipeline::Ptr& pipeline, const std::string& kernelName, EntryPointType entryPoint);
+    void createPipelinePrograms(Pipeline::Ptr& pipeline, const PipelineData& data);
+    void setupPipelineRayTypes(Pipeline::Ptr& pipeline, const PipelineData& data);
+    void linkAndFinalizePipeline(Pipeline::Ptr& pipeline, const PipelineData& data);
     
     // Module loading helpers
     std::vector<char> loadPTXFromFile(const std::filesystem::path& path);

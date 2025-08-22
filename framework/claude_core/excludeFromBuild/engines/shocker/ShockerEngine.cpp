@@ -359,8 +359,8 @@ void ShockerEngine::render (const mace::InputEvent& input, bool updateMotion, ui
         auto pathTracePipeline = pipelineHandler->getPipeline(EntryPointType::PathTrace);
         LOG (WARNING) << "Path tracing pipeline not ready. Pipeline exists: " 
                       << (pathTracePipeline ? "YES" : "NO")
-                      << ", isInitialized: " << (pathTracePipeline ? (pathTracePipeline->isInitialized ? "YES" : "NO") : "N/A")
-                      << ", sbtDirty: " << (pathTracePipeline ? (pathTracePipeline->sbtDirty ? "YES" : "NO") : "N/A");
+                      << ", isInitialized: " << (pathTracePipeline ? (pathTracePipeline->isInitialized() ? "YES" : "NO") : "N/A")
+                      << ", state: " << (pathTracePipeline ? std::to_string(static_cast<int>(pathTracePipeline->state)) : "N/A");
         return;
     }
 
@@ -724,8 +724,8 @@ void ShockerEngine::renderGBuffer (CUstream stream)
         auto gbufferPipeline = pipelineHandler->getPipeline(EntryPointType::GBuffer);
         LOG (WARNING) << "GBuffer pipeline not ready. Pipeline exists: " 
                       << (gbufferPipeline ? "YES" : "NO")
-                      << ", isInitialized: " << (gbufferPipeline ? (gbufferPipeline->isInitialized ? "YES" : "NO") : "N/A")
-                      << ", sbtDirty: " << (gbufferPipeline ? (gbufferPipeline->sbtDirty ? "YES" : "NO") : "N/A");
+                      << ", isInitialized: " << (gbufferPipeline ? (gbufferPipeline->isInitialized() ? "YES" : "NO") : "N/A")
+                      << ", state: " << (gbufferPipeline ? std::to_string(static_cast<int>(gbufferPipeline->state)) : "N/A");
         return;
     }
 
