@@ -5,7 +5,7 @@
 
 #include "../RenderEngineManager.h"
 #include "../shocker/ShockerEngine.h"
-#include "../ripr/RiPREngine.h"
+//#include "../ripr/RiPREngine.h"
 
 // Register all built-in rendering engines
 inline void registerBuiltInEngines(RenderEngineManager& manager)
@@ -19,13 +19,13 @@ inline void registerBuiltInEngines(RenderEngineManager& manager)
                               return std::make_unique<ShockerEngine>();
                           });
     
-    // Register RiPR engine
-    manager.registerEngine("ripr",
-                          "RiPR Engine",
-                          "RiPR path tracing engine with adaptive sampling and improved convergence",
-                          []() -> std::unique_ptr<IRenderingEngine> {
-                              return std::make_unique<RiPREngine>();
-                          });
+    //// Register RiPR engine
+    //manager.registerEngine("ripr",
+    //                      "RiPR Engine",
+    //                      "RiPR path tracing engine with adaptive sampling and improved convergence",
+    //                      []() -> std::unique_ptr<IRenderingEngine> {
+    //                          return std::make_unique<RiPREngine>();
+    //                      });
     
     // TODO: Register more engines as they are implemented
     // manager.registerEngine("svgf", []() {

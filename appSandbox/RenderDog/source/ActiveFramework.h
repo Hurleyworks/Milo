@@ -3,7 +3,7 @@
 #include <qms_core/qms_core.h>
 //#include <world_core/world_core.h>
 //#include <image_core/image_core.h>
-#include <milo_core/milo_core.h>
+#include <claude_core/claude_core.h>
 //#include <physics_core/physics_core.h>
 //#include <geometry_core/geometry_core.h>
 #include "ActiveDreamer.h"

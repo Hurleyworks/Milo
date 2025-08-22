@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OptiX Utility - Scene Object Passing Guide</title>
+    <style>
+        :root {
+            --primary-color: #76b900;
+            --secondary-color: #1a1a1a;
+            --background-color: #f5f5f5;
+            --code-background: #282c34;
+            --code-text: #abb2bf;
+            --border-color: #ddd;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: var(--background-color);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--secondary-color) 0%, #2d2d2d 100%);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        header .subtitle {
+            font-size: 1.1rem;
+            color: var(--primary-color);
+            font-weight: 300;
+        }
+
+        .nvidia-badge {
+            display: inline-block;
+            background: var(--primary-color);
+            color: white;
+            padding: 0.2rem 0.5rem;
+            border-radius: 3px;
+            font-size: 0.8rem;
+            margin-left: 1rem;
+        }
+
+        .content-section {
+            background: white;
+            border-radius: 8px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        h2 {
+            color: var(--secondary-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--primary-color);
+        }
+
+        h3 {
+            color: #444;
+            margin-top: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .method-card {
+            background: #f9f9f9;
+            border-left: 4px solid var(--primary-color);
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            border-radius: 4px;
+        }
+
+        .method-card h3 {
+            margin-top: 0;
+            color: var(--primary-color);
+        }
+
+        code {
+            background: #e8e8e8;
+            padding: 0.2rem 0.4rem;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9em;
+        }
+
+        pre {
+            background: var(--code-background);
+            color: var(--code-text);
+            padding: 1.5rem;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 1rem 0;
+            position: relative;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+            color: inherit;
+        }
+
+        .keyword { color: #c678dd; }
+        .type { color: #e06c75; }
+        .function { color: #61afef; }
+        .string { color: #98c379; }
+        .comment { color: #5c6370; font-style: italic; }
+        .variable { color: #e5c07b; }
+
+        .pros-cons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .pros, .cons {
+            padding: 1rem;
+            border-radius: 6px;
+        }
+
+        .pros {
+            background: #e8f5e9;
+            border: 1px solid #4caf50;
+        }
+
+        .cons {
+            background: #ffebee;
+            border: 1px solid #f44336;
+        }
+
+        .pros h4, .cons h4 {
+            margin-bottom: 0.5rem;
+        }
+
+        .pros h4 {
+            color: #2e7d32;
+        }
+
+        .cons h4 {
+            color: #c62828;
+        }
+
+        ul {
+            margin-left: 1.5rem;
+            margin-top: 0.5rem;
+        }
+
+        li {
+            margin: 0.5rem 0;
+        }
+
+        .best-practice {
+            background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
+            border: 2px solid var(--primary-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .best-practice::before {
+            content: "✓ RECOMMENDED";
+            display: block;
+            font-weight: bold;
+            color: var(--primary-color);
+            margin-bottom: 0.5rem;
+        }
+
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 6px;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+
+        .warning::before {
+            content: "⚠ ";
+            font-size: 1.2rem;
+            color: #ff9800;
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 4px;
+        }
+
+        .example-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background: #f0f0f0;
+            font-weight: 600;
+            color: var(--secondary-color);
+        }
+
+        tr:hover {
+            background: #f9f9f9;
+        }
+
+        .performance-badge {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            border-radius: 3px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .performance-fast {
+            background: #4caf50;
+            color: white;
+        }
+
+        .performance-medium {
+            background: #ff9800;
+            color: white;
+        }
+
+        .performance-slow {
+            background: #f44336;
+            color: white;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+            border-top: 1px solid var(--border-color);
+            margin-top: 3rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>OptiX Utility Scene Passing Guide
+                <span class="nvidia-badge">OptiX 9.0</span>
+            </h1>
+            <p class="subtitle">Best practices for passing optixu::Scene objects between classes and functions</p>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="content-section">
+            <h2>Understanding optixu::Scene Architecture</h2>
+            <p>The <code>optixu::Scene</code> class in OptiX Utility follows a <strong>handle/pimpl pattern</strong>. This means the Scene object itself is just a lightweight wrapper containing a single pointer to the internal implementation.</p>
+            
+            <div class="info-box">
+                <strong>Key Point:</strong> Scene objects are handles (like <code>std::shared_ptr</code>), making them cheap to copy and safe to pass by value.
+            </div>
+
+            <pre><code><span class="comment">// Internal structure (simplified)</span>
+<span class="keyword">class</span> <span class="type">Scene</span> : <span class="keyword">public</span> <span class="type">Object</span>&lt;<span class="type">Scene</span>&gt; {
+    <span class="keyword">protected</span>:
+        <span class="type">Priv</span>* <span class="variable">m</span> = <span class="keyword">nullptr</span>;  <span class="comment">// Single pointer to implementation</span>
+    <span class="keyword">public</span>:
+        <span class="comment">// ... member functions ...</span>
+};</code></pre>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Property</th>
+                        <th>Description</th>
+                        <th>Impact</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Object Size</td>
+                        <td>8 bytes (64-bit pointer)</td>
+                        <td><span class="performance-badge performance-fast">Minimal overhead</span></td>
+                    </tr>
+                    <tr>
+                        <td>Copy Cost</td>
+                        <td>Single pointer copy</td>
+                        <td><span class="performance-badge performance-fast">Very fast</span></td>
+                    </tr>
+                    <tr>
+                        <td>Reference Semantics</td>
+                        <td>All copies refer to same scene</td>
+                        <td>Modifications affect all handles</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="content-section">
+            <h2>Recommended Passing Methods</h2>
+
+            <div class="method-card best-practice">
+                <h3>1. Pass by Value (Recommended Default)</h3>
+                <p>Since Scene objects are lightweight handles, passing by value is the preferred method for most use cases.</p>
+                <pre><code><span class="keyword">void</span> <span class="function">processScene</span>(<span class="type">optixu::Scene</span> <span class="variable">scene</span>) {
+    <span class="comment">// Use scene directly</span>
+    <span class="keyword">auto</span> <span class="variable">gas</span> = <span class="variable">scene</span>.<span class="function">createGeometryAccelerationStructure</span>();
+    <span class="comment">// ...</span>
+}
+
+<span class="keyword">class</span> <span class="type">RayTracer</span> {
+<span class="keyword">public</span>:
+    <span class="keyword">void</span> <span class="function">setScene</span>(<span class="type">optixu::Scene</span> <span class="variable">scene</span>) {
+        <span class="variable">m_scene</span> = <span class="variable">scene</span>;  <span class="comment">// Cheap pointer copy</span>
+    }
+<span class="keyword">private</span>:
+    <span class="type">optixu::Scene</span> <span class="variable">m_scene</span>;
+};</code></pre>
+                <div class="pros-cons">
+                    <div class="pros">
+                        <h4>✓ Advantages</h4>
+                        <ul>
+                            <li>Simple and clear semantics</li>
+                            <li>No null pointer concerns</li>
+                            <li>Minimal performance overhead</li>
+                            <li>Natural syntax</li>
+                        </ul>
+                    </div>
+                    <div class="cons">
+                        <h4>✗ Considerations</h4>
+                        <ul>
+                            <li>Creates a new handle (negligible cost)</li>
+                            <li>Can't modify the caller's handle</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="method-card">
+                <h3>2. Pass by Const Value</h3>
+                <p>Use when you want to explicitly indicate the function won't modify the scene structure.</p>
+                <pre><code><span class="keyword">void</span> <span class="function">renderWithScene</span>(<span class="keyword">const</span> <span class="type">optixu::Scene</span> <span class="variable">scene</span>) {
+    <span class="comment">// Read-only operations</span>
+    <span class="keyword">if</span> (<span class="variable">scene</span>.<span class="function">shaderBindingTableLayoutIsReady</span>()) {
+        <span class="comment">// Perform rendering...</span>
+    }
+}</code></pre>
+                <p><strong>Use case:</strong> Functions that only query scene state without creating new objects or modifying structure.</p>
+            </div>
+
+            <div class="method-card">
+                <h3>3. Store as Member Variable</h3>
+                <p>Scene handles can be stored directly in classes without additional wrapping.</p>
+                <pre><code><span class="keyword">class</span> <span class="type">SceneManager</span> {
+<span class="keyword">private</span>:
+    <span class="type">optixu::Scene</span> <span class="variable">m_scene</span>;
+    <span class="type">std::vector</span>&lt;<span class="type">optixu::GeometryInstance</span>&gt; <span class="variable">m_geometries</span>;
+
+<span class="keyword">public</span>:
+    <span class="function">SceneManager</span>(<span class="type">optixu::Scene</span> <span class="variable">scene</span>) 
+        : <span class="variable">m_scene</span>(<span class="variable">scene</span>) {}  <span class="comment">// Direct initialization</span>
+
+    <span class="keyword">void</span> <span class="function">addGeometry</span>() {
+        <span class="keyword">auto</span> <span class="variable">geom</span> = <span class="variable">m_scene</span>.<span class="function">createGeometryInstance</span>();
+        <span class="variable">m_geometries</span>.<span class="function">push_back</span>(<span class="variable">geom</span>);
+    }
+};</code></pre>
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>Patterns to Avoid</h2>
+
+            <div class="warning">
+                <strong>Avoid unnecessary indirection:</strong> Don't use pointers or non-const references unless you specifically need to modify which Scene object a variable refers to.
+            </div>
+
+            <div class="method-card">
+                <h3>❌ Unnecessary Pointer Passing</h3>
+                <pre><code><span class="comment">// AVOID: Adds unnecessary complexity</span>
+<span class="keyword">void</span> <span class="function">processScene</span>(<span class="type">optixu::Scene</span>* <span class="variable">scene</span>) {
+    <span class="keyword">if</span> (<span class="variable">scene</span> && *<span class="variable">scene</span>) {  <span class="comment">// Extra null checks needed</span>
+        <span class="comment">// ...</span>
+    }
+}</code></pre>
+            </div>
+
+            <div class="method-card">
+                <h3>❌ Non-const Reference Without Need</h3>
+                <pre><code><span class="comment">// AVOID: Misleading if not modifying the handle itself</span>
+<span class="keyword">void</span> <span class="function">useScene</span>(<span class="type">optixu::Scene</span>&amp; <span class="variable">scene</span>) {
+    <span class="comment">// If you're not reassigning scene, use pass-by-value instead</span>
+}</code></pre>
+            </div>
+        </div>
+
+        <div class="content-section">
+            <h2>Real-World Examples</h2>
+
+            <h3>Example 1: Multi-Class Ray Tracing System</h3>
+            <pre><code><span class="keyword">class</span> <span class="type">GeometryBuilder</span> {
+<span class="keyword">public</span>:
+    <span class="keyword">static</span> <span class="type">optixu::GeometryInstance</span> <span class="function">createTriangleMesh</span>(
+        <span class="type">optixu::Scene</span> <span class="variable">scene</span>,  <span class="comment">// Pass by value</span>
+        <span class="keyword">const</span> <span class="type">std::vector</span>&lt;<span class="type">Vertex</span>&gt;&amp; <span class="variable">vertices</span>) {
+        
+        <span class="keyword">auto</span> <span class="variable">geomInst</span> = <span class="variable">scene</span>.<span class="function">createGeometryInstance</span>();
+        <span class="comment">// Configure geometry...</span>
+        <span class="keyword">return</span> <span class="variable">geomInst</span>;
+    }
+};
+
+<span class="keyword">class</span> <span class="type">PathTracer</span> {
+<span class="keyword">private</span>:
+    <span class="type">optixu::Scene</span> <span class="variable">m_scene</span>;  <span class="comment">// Store as member</span>
+    <span class="type">optixu::Pipeline</span> <span class="variable">m_pipeline</span>;
+
+<span class="keyword">public</span>:
+    <span class="function">PathTracer</span>(<span class="type">optixu::Context</span> <span class="variable">context</span>) {
+        <span class="variable">m_scene</span> = <span class="variable">context</span>.<span class="function">createScene</span>();
+        <span class="comment">// Initialize pipeline...</span>
+    }
+
+    <span class="keyword">void</span> <span class="function">addMesh</span>(<span class="keyword">const</span> <span class="type">std::vector</span>&lt;<span class="type">Vertex</span>&gt;&amp; <span class="variable">vertices</span>) {
+        <span class="comment">// Pass scene to another class's function</span>
+        <span class="keyword">auto</span> <span class="variable">geom</span> = <span class="type">GeometryBuilder</span>::<span class="function">createTriangleMesh</span>(<span class="variable">m_scene</span>, <span class="variable">vertices</span>);
+        <span class="comment">// Use geom...</span>
+    }
+};</code></pre>
+
+            <h3>Example 2: Scene Configuration Pipeline</h3>
+            <pre><code><span class="keyword">class</span> <span class="type">SceneConfigurator</span> {
+<span class="keyword">public</span>:
+    <span class="comment">// Chain multiple operations on the same scene</span>
+    <span class="keyword">static</span> <span class="keyword">void</span> <span class="function">setupLighting</span>(<span class="type">optixu::Scene</span> <span class="variable">scene</span>) {
+        <span class="comment">// Configure lighting...</span>
+    }
+
+    <span class="keyword">static</span> <span class="keyword">void</span> <span class="function">setupMaterials</span>(<span class="type">optixu::Scene</span> <span class="variable">scene</span>) {
+        <span class="comment">// Configure materials...</span>
+    }
+
+    <span class="keyword">static</span> <span class="keyword">void</span> <span class="function">optimizeForPerformance</span>(<span class="type">optixu::Scene</span> <span class="variable">scene</span>) {
+        <span class="variable">scene</span>.<span class="function">markShaderBindingTableLayoutDirty</span>();
+        <span class="comment">// Other optimizations...</span>
+    }
+};
+
+<span class="comment">// Usage</span>
+<span class="type">optixu::Scene</span> <span class="variable">scene</span> = <span class="variable">context</span>.<span class="function">createScene</span>();
+<span class="type">SceneConfigurator</span>::<span class="function">setupLighting</span>(<span class="variable">scene</span>);
+<span class="type">SceneConfigurator</span>::<span class="function">setupMaterials</span>(<span class="variable">scene</span>);
+<span class="type">SceneConfigurator</span>::<span class="function">optimizeForPerformance</span>(<span class="variable">scene</span>);</code></pre>
+        </div>
+
+        <div class="content-section">
+            <h2>Performance Comparison</h2>
+            
+            <table>
+                <thead>
+                    <tr>
+                        <th>Method</th>
+                        <th>Assembly Instructions</th>
+                        <th>Memory Access</th>
+                        <th>Performance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>Scene scene</code></td>
+                        <td>1 MOV (8 bytes)</td>
+                        <td>Register</td>
+                        <td><span class="performance-badge performance-fast">Optimal</span></td>
+                    </tr>
+                    <tr>
+                        <td><code>const Scene scene</code></td>
+                        <td>1 MOV (8 bytes)</td>
+                        <td>Register</td>
+                        <td><span class="performance-badge performance-fast">Optimal</span></td>
+                    </tr>
+                    <tr>
+                        <td><code>Scene& scene</code></td>
+                        <td>1 LEA (address)</td>
+                        <td>Memory indirect</td>
+                        <td><span class="performance-badge performance-medium">Good</span></td>
+                    </tr>
+                    <tr>
+                        <td><code>Scene* scene</code></td>
+                        <td>1 MOV + null check</td>
+                        <td>Memory indirect</td>
+                        <td><span class="performance-badge performance-medium">Good</span></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="content-section">
+            <h2>Summary and Quick Reference</h2>
+            
+            <div class="best-practice">
+                <h3>Golden Rule</h3>
+                <p>Treat <code>optixu::Scene</code> like you would treat <code>std::shared_ptr</code> - pass by value unless you have a specific reason not to.</p>
+            </div>
+
+            <div class="example-grid">
+                <div class="info-box">
+                    <h4>✓ DO</h4>
+                    <ul>
+                        <li>Pass by value in most cases</li>
+                        <li>Store directly as member variables</li>
+                        <li>Use const when appropriate</li>
+                        <li>Trust the handle semantics</li>
+                    </ul>
+                </div>
+                <div class="info-box">
+                    <h4>✗ DON'T</h4>
+                    <ul>
+                        <li>Use pointers unnecessarily</li>
+                        <li>Pass by non-const reference without need</li>
+                        <li>Worry about copy performance</li>
+                        <li>Add extra indirection layers</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>OptiX Utility Documentation | NVIDIA OptiX 9.0 | C++ Ray Tracing Framework</p>
+        <p>© 2024 - Best Practices Guide</p>
+    </footer>
+</body>
+</html>

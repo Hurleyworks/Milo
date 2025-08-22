@@ -20,7 +20,7 @@ project  "RenderDog"
 	local GEOMETRY = FRAMEWORK_ROOT .. "geometry_core/";
 	local IMAGING = FRAMEWORK_ROOT .. "image_core/";
 	local NEWTON = FRAMEWORK_ROOT .. "physics_core/";
-	local RENDER = FRAMEWORK_ROOT .. "milo_core/";
+	local RENDER = FRAMEWORK_ROOT .. "claude_core/";
 	local WORLD = FRAMEWORK_ROOT .. "world_core/";
 
 

@@ -32,21 +32,21 @@
 #include "excludeFromBuild/engines/shocker/handlers/ShockerRenderHandler.cpp"
 #include "excludeFromBuild/engines/shocker/handlers/ShockerDenoiserHandler.cpp"
 
-// ripr handlers
-#include "excludeFromBuild/engines/ripr/handlers/RiPRModelHandler.cpp"
-#include "excludeFromBuild/engines/ripr/handlers/RiPRMaterialHandler.cpp"
-#include "excludeFromBuild/engines/ripr/handlers/RiPRSceneHandler.cpp"
-#include "excludeFromBuild/engines/ripr/handlers/RiPRRenderHandler.cpp"
-#include "excludeFromBuild/engines/ripr/handlers/RiPRDenoiserHandler.cpp"
-#include "excludeFromBuild/engines/ripr/handlers/ModelHandler.cpp"
+//// ripr handlers
+//#include "excludeFromBuild/engines/ripr/handlers/RiPRModelHandler.cpp"
+//#include "excludeFromBuild/engines/ripr/handlers/RiPRMaterialHandler.cpp"
+//#include "excludeFromBuild/engines/ripr/handlers/RiPRSceneHandler.cpp"
+//#include "excludeFromBuild/engines/ripr/handlers/RiPRRenderHandler.cpp"
+//#include "excludeFromBuild/engines/ripr/handlers/RiPRDenoiserHandler.cpp"
+//#include "excludeFromBuild/engines/ripr/handlers/ModelHandler.cpp"
 
 // engines
 #include "excludeFromBuild/engines/base/BaseRenderingEngine.cpp"
 #include "excludeFromBuild/engines/RenderEngineManager.cpp"
 #include "excludeFromBuild/engines/shocker/ShockerEngine.cpp"
-#include "excludeFromBuild/engines/ripr/RiPREngine.cpp"
+//#include "excludeFromBuild/engines/ripr/RiPREngine.cpp"
 
 // models
 
 #include "excludeFromBuild/engines/shocker/models/ShockerModel.cpp"
-#include "excludeFromBuild/engines/ripr/models/RiPRModel.cpp"
+//#include "excludeFromBuild/engines/ripr/models/RiPRModel.cpp"
