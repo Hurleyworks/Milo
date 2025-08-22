@@ -569,6 +569,11 @@ void ShockerEngine::setupPipelines()
     // Setup GBuffer pipeline
     pipelineHandler->setupPipeline(gbufferData, std::string("optix_shocker_gbuffer"));
     
+    // Ensure scene is set on all pipelines after setup
+    if (renderContext_ && renderContext_->getScene()) {
+        pipelineHandler->setScene(renderContext_->getScene());
+        LOG(INFO) << "Scene set on PipelineHandler after pipeline setup";
+    }
 
     // Initialize light probability computation kernels (still needed)
     initializeLightProbabilityKernels();
@@ -696,6 +701,9 @@ void ShockerEngine::updateMaterialHitGroups (ShockerModelPtr model)
     
     // Use PipelineHandler's generic method to configure all hit groups
     pipelineHandler->configureMaterialHitGroups(geomInst, hitGroupConfig);
+    
+    // Update scene SBT after geometry changes (setScene is redundant here as scene is already set)
+    pipelineHandler->updateSceneSBT();
 }
 
 

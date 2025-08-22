@@ -134,10 +134,9 @@ struct PipelineData {
     PipelineConfig config;
 };
 
-// Individual pipeline structure (inspired by ShockerEngine's RenderPipeline)
-template <typename EntryPointEnumType>
+// Individual pipeline structure (simplified without template)
 struct Pipeline {
-    using Ptr = std::shared_ptr<Pipeline<EntryPointEnumType>>;
+    using Ptr = std::shared_ptr<Pipeline>;
     
     // Core OptiX objects
     optixu::Pipeline optixPipeline;
@@ -145,7 +144,7 @@ struct Pipeline {
     std::vector<optixu::Module> additionalModules;  // Support multiple modules
     
     // Programs organized by type
-    std::unordered_map<EntryPointEnumType, optixu::Program> entryPoints;
+    std::unordered_map<EntryPointType, optixu::Program> entryPoints;
     std::unordered_map<ProgramType, optixu::Program> programs;
     std::unordered_map<std::string, optixu::HitProgramGroup> hitGroups;
     std::vector<optixu::CallableProgramGroup> callablePrograms;
@@ -156,7 +155,7 @@ struct Pipeline {
     
     // Configuration and state
     PipelineConfig config;
-    EntryPointEnumType currentEntryPoint;
+    EntryPointType currentEntryPoint;
     bool isInitialized = false;
     bool sbtDirty = true;
     
@@ -166,7 +165,7 @@ struct Pipeline {
     uint32_t visibilityRayIndex = 1;
     
     // Set the active entry point
-    void setEntryPoint(EntryPointEnumType ep) {
+    void setEntryPoint(EntryPointType ep) {
         auto it = entryPoints.find(ep);
         if (it != entryPoints.end() && optixPipeline) {
             optixPipeline.setRayGenerationProgram(it->second);
@@ -249,7 +248,7 @@ public:
     void setSceneDependentSBT(EntryPointType type);
     
     // Pipeline access
-    Pipeline<EntryPointType>::Ptr getPipeline(EntryPointType type);
+    Pipeline::Ptr getPipeline(EntryPointType type);
     bool hasPipeline(EntryPointType type) const;
     
     // Clean launch API (ShockerEngine-style)
@@ -309,7 +308,7 @@ private:
     std::unique_ptr<Impl> pImpl;
     
     // Internal methods
-    Pipeline<EntryPointType>::Ptr createPipeline(EntryPointType type);
+    Pipeline::Ptr createPipeline(EntryPointType type);
     void linkPipeline(EntryPointType type, uint32_t maxTraceDepth);
     void setupRayTypes(EntryPointType type, uint32_t numRayTypes);
     void generateSBTLayout(EntryPointType type);

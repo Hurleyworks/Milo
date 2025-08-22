@@ -11,10 +11,10 @@ struct PipelineHandler::Impl {
     CUcontext cuContext = nullptr;
     
     // Storage for all pipelines
-    std::unordered_map<EntryPointType, Pipeline<EntryPointType>::Ptr> pipelines;
+    std::unordered_map<EntryPointType, Pipeline::Ptr> pipelines;
     
     // Shared resources
-    std::unordered_map<std::string, optixu::Module> moduleCache;
+    // std::unordered_map<std::string, optixu::Module> moduleCache; // REMOVED: modules cannot be shared
     optixu::Scene currentScene;
     
     explicit Impl(RenderContextPtr ctx) : renderContext(ctx) {
@@ -69,39 +69,31 @@ void PipelineHandler::setupPipeline(const PipelineData& data, const std::string&
         static_cast<OptixPrimitiveTypeFlags>(data.config.primitiveTypeFlags)
     );
     
-    // 4. Load/create module
-    // Check if module already exists in cache
-    auto moduleIt = pImpl->moduleCache.find(kernelName);
-    if (moduleIt == pImpl->moduleCache.end()) {
-        // Load PTX data from PTXManager
-        PTXManager* ptxManager = pImpl->renderContext->getPTXManager();
-        if (!ptxManager) {
-            LOG(WARNING) << "PTXManager not available, cannot load module: " << kernelName;
-            return;
-        }
-        
-        std::vector<char> ptxData = ptxManager->getPTXData(kernelName);
-        if (ptxData.empty()) {
-            LOG(WARNING) << "Failed to load PTX data for kernel: " << kernelName;
-            return;
-        }
-        
-        // Create module from PTX string
-        std::string ptxString(ptxData.begin(), ptxData.end());
-        pipeline->optixModule = pipeline->optixPipeline.createModuleFromPTXString(
-            ptxString,
-            OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
-            DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
-            DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE)
-        );
-        
-        // Cache the module
-        pImpl->moduleCache[kernelName] = pipeline->optixModule;
-        LOG(INFO) << "Created and cached module for kernel: " << kernelName;
-    } else {
-        pipeline->optixModule = moduleIt->second;
-        LOG(INFO) << "Using cached module for kernel: " << kernelName;
+    // 4. Load/create module - EACH PIPELINE MUST HAVE ITS OWN MODULE
+    // Do NOT use cache as modules cannot be shared between pipelines
+    PTXManager* ptxManager = pImpl->renderContext->getPTXManager();
+    if (!ptxManager) {
+        LOG(WARNING) << "PTXManager not available, cannot load module: " << kernelName;
+        return;
     }
+    
+    std::vector<char> ptxData = ptxManager->getPTXData(kernelName);
+    if (ptxData.empty()) {
+        LOG(WARNING) << "Failed to load PTX data for kernel: " << kernelName;
+        return;
+    }
+    
+    // Create a unique module for THIS pipeline from PTX string
+    std::string ptxString(ptxData.begin(), ptxData.end());
+    pipeline->optixModule = pipeline->optixPipeline.createModuleFromPTXString(
+        ptxString,
+        OPTIX_COMPILE_DEFAULT_MAX_REGISTER_COUNT,
+        DEBUG_SELECT(OPTIX_COMPILE_OPTIMIZATION_LEVEL_0, OPTIX_COMPILE_OPTIMIZATION_DEFAULT),
+        DEBUG_SELECT(OPTIX_COMPILE_DEBUG_LEVEL_FULL, OPTIX_COMPILE_DEBUG_LEVEL_NONE)
+    );
+    
+    LOG(INFO) << "Created module for pipeline " << static_cast<int>(data.entryPoint) 
+              << " from kernel: " << kernelName;
     
     // 5. Create programs
     if (!pipeline->optixModule) {
@@ -280,7 +272,7 @@ void PipelineHandler::setSceneDependentSBT(EntryPointType type) {
 }
 
 // Get pipeline
-Pipeline<EntryPointType>::Ptr PipelineHandler::getPipeline(EntryPointType type) {
+Pipeline::Ptr PipelineHandler::getPipeline(EntryPointType type) {
     auto it = pImpl->pipelines.find(type);
     return (it != pImpl->pipelines.end()) ? it->second : nullptr;
 }
@@ -457,19 +449,10 @@ void PipelineHandler::setStackSize(EntryPointType type, uint32_t directCallable,
 // Load module from data
 optixu::Module PipelineHandler::loadModule(const std::string& name, 
                                            const std::vector<char>& data) {
-    // Check cache first
-    auto it = pImpl->moduleCache.find(name);
-    if (it != pImpl->moduleCache.end()) {
-        return it->second;
-    }
-    
-    // Create new module
-    // TODO: Determine if data is PTX or OptiX IR and create accordingly
-    optixu::Module module;
-    // module = pipeline->optixPipeline.createModuleFromOptixIR(...);
-    
-    pImpl->moduleCache[name] = module;
-    return module;
+    // Module loading must be done per-pipeline, not globally
+    // This method is deprecated and should not be used
+    LOG(WARNING) << "loadModule is deprecated - modules must be created per-pipeline";
+    return optixu::Module();
 }
 
 // Load module from file
@@ -553,17 +536,17 @@ void PipelineHandler::destroyAll() {
         }
     }
     pImpl->pipelines.clear();
-    pImpl->moduleCache.clear();
+    // Module cache removed - each pipeline owns its module
 }
 
 // Private: Create pipeline
-Pipeline<EntryPointType>::Ptr PipelineHandler::createPipeline(EntryPointType type) {
+Pipeline::Ptr PipelineHandler::createPipeline(EntryPointType type) {
     auto it = pImpl->pipelines.find(type);
     if (it != pImpl->pipelines.end()) {
         return it->second;
     }
     
-    auto pipeline = std::make_shared<Pipeline<EntryPointType>>();
+    auto pipeline = std::make_shared<Pipeline>();
     pImpl->pipelines[type] = pipeline;
     return pipeline;
 }
