@@ -12,15 +12,10 @@ BaseRenderingEngine::BaseRenderingEngine() :
     numAccumFrames_(0),
     renderWidth_(0),
     renderHeight_(0),
-    plpOnDevice_(0),
     isInitialized_(false),
-    buffersInitialized_(false),
-    needsRebuild_(false),
-    needsDimensionCheck_(false),
     restartRender_(true),
     cameraChanged_(false),
-    environmentDirty_(false),
-    skyDomeHandler_(nullptr)
+    environmentDirty_(false)
 {
 }
 
@@ -67,9 +62,6 @@ void BaseRenderingEngine::initialize(RenderContext* ctx)
     frameCounter_ = 0;
     numAccumFrames_ = 0;
     timerIndex_ = 0;
-    buffersInitialized_ = false;
-    needsRebuild_ = false;
-    needsDimensionCheck_ = true;
     
     // Initialize StreamChain for better GPU/CPU overlap
     streamChain_ = std::make_unique<StreamChain<NUM_STREAM_BUFFERS>>();
@@ -196,44 +188,6 @@ void BaseRenderingEngine::clearScene()
     // Derived classes should override to clear their scene handlers
     numAccumFrames_ = 0;
     LOG(WARNING) << "Engine " << engineName_ << " should override clearScene() to clear scene handlers";
-}
-
-std::string BaseRenderingEngine::loadPTXData(const char* ptxFileName, bool useEmbedded)
-{
-    if (!ptxManager_)
-    {
-        LOG(WARNING) << "PTXManager not available";
-        return std::string();
-    }
-    
-    // Get PTX from manager
-    std::vector<char> ptxData = ptxManager_->getPTXData(ptxFileName, useEmbedded);
-    if (ptxData.empty())
-    {
-        LOG(WARNING) << "Failed to load PTX: " << ptxFileName;
-        return std::string();
-    }
-    
-    LOG(INFO) << "Loaded PTX for " << engineName_ << ": " << ptxFileName 
-              << " (size: " << ptxData.size() << " bytes)";
-    
-    // Convert to string
-    return std::string(ptxData.begin(), ptxData.end());
-}
-
-void BaseRenderingEngine::configurePipelineDefaults(optixu::Pipeline& pipeline, 
-                                                   uint32_t numPayloadDwords, 
-                                                   size_t launchParamsSize)
-{
-    pipeline.setPipelineOptions(
-        numPayloadDwords,
-        optixu::calcSumDwords<float2>(),  // Standard attribute size for barycentrics
-        "plp",                            // Pipeline launch parameters name
-        launchParamsSize,
-        static_cast<OptixTraversableGraphFlags>(getDefaultPipelineFlags()),
-        static_cast<OptixExceptionFlags>(getDefaultExceptionFlags()),
-        static_cast<OptixPrimitiveTypeFlags>(getDefaultPrimitiveFlags())
-    );
 }
 
 

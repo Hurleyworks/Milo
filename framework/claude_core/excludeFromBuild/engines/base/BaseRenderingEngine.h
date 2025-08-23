@@ -80,10 +80,6 @@ protected:
     static constexpr uint32_t DEFAULT_RENDER_HEIGHT = 1080;
     
 protected:
-    // Common helper methods for pipeline setup
-    std::string loadPTXData(const char* ptxFileName, bool useEmbedded = true);
-    void configurePipelineDefaults(optixu::Pipeline& pipeline, uint32_t numPayloadDwords, size_t launchParamsSize);
-    
     // Helper to get common pipeline flags
     static constexpr uint32_t getDefaultPipelineFlags() {
         return OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
@@ -123,14 +119,9 @@ protected:
     uint32_t renderWidth_;
     uint32_t renderHeight_;
     
-    // Device memory pointer for launch parameters (actual struct is engine-specific)
-    CUdeviceptr plpOnDevice_;
     
     // State flags
     bool isInitialized_;
-    bool buffersInitialized_;
-    bool needsRebuild_;
-    bool needsDimensionCheck_;  // Set when window might have resized
     
     // Common render state flags
     bool restartRender_;        // True when accumulation needs to restart
@@ -142,6 +133,4 @@ protected:
     std::unique_ptr<StreamChain<NUM_STREAM_BUFFERS>> streamChain_;
   
     
-    // Common handlers
-    std::shared_ptr<SkyDomeHandler> skyDomeHandler_;
 };

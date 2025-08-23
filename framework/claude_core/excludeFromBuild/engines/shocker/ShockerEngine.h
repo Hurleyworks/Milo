@@ -41,13 +41,6 @@ public:
     
     // Accessor for light probability computation kernels
     const ComputeProbTex& getComputeProbTex() const { return computeProbTex_; }
-    
-    // GBuffer entry points
-    enum GBufferEntryPoint
-    {
-        GBufferEntryPoint_SetupGBuffers = 0,
-        GBufferEntryPoint_Count
-    };
 
 private:
     // Pipeline setup methods
