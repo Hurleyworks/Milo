@@ -11,8 +11,8 @@
 #include "PipelineHandler.h"
 #include "DenoiserHandler.h"
 #include "ScreenBufferHandler.h"
+#include "MaterialHandler.h"
 
-// #include "MaterialHandler.h"  // Now engine-specific, not shared
 // #include "ModelHandler.h"  // Not used in engine-only mode
 
 // Forward declarations
@@ -37,6 +37,11 @@ struct Handlers
         // Initialize TextureHandler
         textureHandler = TextureHandler::create (renderContext);
 
+        // Initialize MaterialHandler
+        materialHandler = MaterialHandler::create (renderContext);
+        if (materialHandler)
+            materialHandler->initialize();
+
         // Initialize PipelineHandler
         pipelineHandler = PipelineHandler::create (renderContext);
 
@@ -59,6 +64,13 @@ struct Handlers
         {
             pipelineHandler->destroyAll();
             pipelineHandler.reset();
+        }
+
+        // Cleanup MaterialHandler
+        if (materialHandler)
+        {
+            materialHandler->finalize();
+            materialHandler.reset();
         }
 
         // Cleanup SkyDomeHandler
@@ -87,6 +99,7 @@ struct Handlers
     ScreenBufferHandlerPtr screenBufferHandler;
     SkyDomeHandlerPtr skyDomeHandler;
     TextureHandlerPtr textureHandler;
+    MaterialHandlerPtr materialHandler;
     PipelineHandlerPtr pipelineHandler;
     DenoiserHandlerPtr denoiserHandler;
 };

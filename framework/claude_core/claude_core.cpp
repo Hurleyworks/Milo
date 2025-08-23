@@ -24,6 +24,7 @@
 #include "excludeFromBuild/handlers/SkyDomeHandler.cpp"
 #include "excludeFromBuild/handlers/TextureHandler.cpp"
 #include "excludeFromBuild/handlers/AreaLightHandler.cpp"
+#include "excludeFromBuild/handlers/MaterialHandler.cpp"
 #include "excludeFromBuild/handlers/PipelineHandler.cpp"
 #include "excludeFromBuild/handlers/DenoiserHandler.cpp"
 #include "excludeFromBuild/handlers/ScreenBufferHandler.cpp"
