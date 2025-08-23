@@ -76,18 +76,6 @@ private:
     CUdeviceptr per_frame_plp_on_device_ = 0;
     CUdeviceptr plp_on_device_ = 0;
 
-     // G-buffer storage
-    struct GBuffers
-    {
-        cudau::Array gBuffer0[2];
-        cudau::Array gBuffer1[2];
-
-        void initialize (CUcontext cuContext, uint32_t width, uint32_t height);
-        void resize (uint32_t width, uint32_t height);
-        void finalize();
-    };
-
-    GBuffers gbuffers_;
     //
     // Camera state
     ripr_shared::PerspectiveCamera lastCamera_;

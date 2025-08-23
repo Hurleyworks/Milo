@@ -147,48 +147,10 @@ void RiPREngine::initialize (RenderContext* ctx)
         LOG (WARNING) << "Invalid render dimensions for RNG buffer initialization";
     }
 
-    gbuffers_.initialize (renderContext_->getCudaContext(), renderWidth_, renderHeight_);
+    // GBuffers are now managed by ScreenBufferHandler in renderContext_->getHandlers().screenBufferHandler
 }
 
-#if 1
-// GBuffers implementation
-void RiPREngine::GBuffers::initialize (CUcontext cuContext, uint32_t width, uint32_t height)
-{
-    for (int i = 0; i < 2; ++i)
-    {
-        gBuffer0[i].initialize2D (
-            cuContext, cudau::ArrayElementType::UInt32, (sizeof (ripr_shared::GBuffer0Elements) + 3) / 4,
-            cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
-            width, height, 1);
-        gBuffer1[i].initialize2D (
-            cuContext, cudau::ArrayElementType::UInt32, (sizeof (ripr_shared::GBuffer1Elements) + 3) / 4,
-            cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
-            width, height, 1);
-    }
-    LOG (INFO) << "G-buffers initialized";
-}
-
-void RiPREngine::GBuffers::resize (uint32_t width, uint32_t height)
-{
-    for (int i = 0; i < 2; ++i)
-    {
-        gBuffer0[i].resize (width, height);
-        gBuffer1[i].resize (width, height);
-    }
-    LOG (INFO) << "G-buffers resized to " << width << "x" << height;
-}
-
-void RiPREngine::GBuffers::finalize()
-{
-    for (int i = 1; i >= 0; --i)
-    {
-        gBuffer1[i].finalize();
-        gBuffer0[i].finalize();
-    }
-    LOG (INFO) << "G-buffers finalized";
-}
-
-#endif
+// GBuffers are now managed by ScreenBufferHandler - implementation removed
 void RiPREngine::cleanup()
 {
     if (!isInitialized_)
@@ -208,7 +170,7 @@ void RiPREngine::cleanup()
     //     }
     //     plpOnDevice_ = 0;
     // }
-    gbuffers_.finalize();
+    // GBuffers are now managed by ScreenBufferHandler - no need to finalize here
 
     // Free device memory
     if (static_plp_on_device_)
@@ -685,11 +647,15 @@ void RiPREngine::updateLaunchParameters (const mace::InputEvent& input)
         static_plp_.rngBuffer = rngBuffer_.getBlockBuffer2D();
     }
 
-    // Set GBuffers
-    static_plp_.GBuffer0[0] = gbuffers_.gBuffer0[0].getSurfaceObject (0);
-    static_plp_.GBuffer0[1] = gbuffers_.gBuffer0[1].getSurfaceObject (0);
-    static_plp_.GBuffer1[0] = gbuffers_.gBuffer1[0].getSurfaceObject (0);
-    static_plp_.GBuffer1[1] = gbuffers_.gBuffer1[1].getSurfaceObject (0);
+    // Set GBuffers from ScreenBufferHandler
+    auto screenBufferHandler = renderContext_->getHandlers().screenBufferHandler;
+    if (screenBufferHandler && screenBufferHandler->isInitialized())
+    {
+        static_plp_.GBuffer0[0] = screenBufferHandler->getGBuffer0SurfaceObject(0);
+        static_plp_.GBuffer0[1] = screenBufferHandler->getGBuffer0SurfaceObject(1);
+        static_plp_.GBuffer1[0] = screenBufferHandler->getGBuffer1SurfaceObject(0);
+        static_plp_.GBuffer1[1] = screenBufferHandler->getGBuffer1SurfaceObject(1);
+    }
 
     // Set material data buffer from the generic material handler in Handlers
     auto materialHandler = renderContext_->getHandlers().materialHandler;
@@ -757,7 +723,7 @@ void RiPREngine::updateLaunchParameters (const mace::InputEvent& input)
     }
 
     // Set accumulation buffer pointers from ScreenBufferHandler
-    auto screenBufferHandler = renderContext_->getHandlers().screenBufferHandler;
+    // (reusing screenBufferHandler declared earlier in the function)
     if (screenBufferHandler && screenBufferHandler->isInitialized())
     {
         static_plp_.beautyAccumBuffer = screenBufferHandler->getBeautyAccumSurfaceObject();
