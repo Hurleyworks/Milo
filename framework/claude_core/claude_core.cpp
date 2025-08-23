@@ -33,20 +33,18 @@
 #include "excludeFromBuild/engines/shocker/handlers/ShockerModelHandler.cpp"
 #include "excludeFromBuild/engines/shocker/handlers/ShockerSceneHandler.cpp"
 
+// ripr handlers  
+#include "excludeFromBuild/engines/ripr/handlers/RiPRModelHandler.cpp"
+#include "excludeFromBuild/engines/ripr/handlers/RiPRSceneHandler.cpp"
 
-//// ripr handlers
-//#include "excludeFromBuild/engines/ripr/handlers/RiPRModelHandler.cpp"
-//#include "excludeFromBuild/engines/ripr/handlers/RiPRMaterialHandler.cpp"
-//#include "excludeFromBuild/engines/ripr/handlers/RiPRSceneHandler.cpp"
-//#include "excludeFromBuild/engines/ripr/handlers/RiPRRenderHandler.cpp"
-//#include "excludeFromBuild/engines/ripr/handlers/RiPRDenoiserHandler.cpp"
-//#include "excludeFromBuild/engines/ripr/handlers/ModelHandler.cpp"
+// ripr models
+#include "excludeFromBuild/engines/ripr/models/RiPRModel.cpp"
 
 // engines
 #include "excludeFromBuild/engines/base/BaseRenderingEngine.cpp"
 #include "excludeFromBuild/engines/RenderEngineManager.cpp"
 #include "excludeFromBuild/engines/shocker/ShockerEngine.cpp"
-//#include "excludeFromBuild/engines/ripr/RiPREngine.cpp"
+#include "excludeFromBuild/engines/ripr/RiPREngine.cpp"
 
 // models
 
