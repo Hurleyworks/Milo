@@ -9,6 +9,7 @@
 #include "SkyDomeHandler.h"
 #include "TextureHandler.h"
 #include "PipelineHandler.h"
+#include "DenoiserHandler.h"
 
 // #include "MaterialHandler.h"  // Now engine-specific, not shared
 // #include "ModelHandler.h"  // Not used in engine-only mode
@@ -34,11 +35,21 @@ struct Handlers
 
         // Initialize PipelineHandler
         pipelineHandler = PipelineHandler::create (renderContext);
+
+        // Initialize DenoiserHandler
+        denoiserHandler = DenoiserHandler::create (renderContext);
     }
 
     // Cleanup all handlers
     void cleanup()
     {
+        // Cleanup DenoiserHandler
+        if (denoiserHandler)
+        {
+            denoiserHandler->finalize();
+            denoiserHandler.reset();
+        }
+
         // Cleanup PipelineHandler
         if (pipelineHandler)
         {
@@ -65,4 +76,5 @@ struct Handlers
     SkyDomeHandlerPtr skyDomeHandler;
     TextureHandlerPtr textureHandler;
     PipelineHandlerPtr pipelineHandler;
+    DenoiserHandlerPtr denoiserHandler;
 };
