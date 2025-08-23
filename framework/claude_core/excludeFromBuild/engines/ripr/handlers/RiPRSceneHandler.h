@@ -5,6 +5,7 @@
 // selection state, and traversal for ray tracing
 
 #include "../../../RenderContext.h"
+#include "../../../handlers/SceneHandler.h"
 
 using sabi::RenderableNode;
 using sabi::RenderableWeakRef;
@@ -67,8 +68,8 @@ class RiPRSceneHandler
     // Deselect all nodes in the scene
     void deselectAll();
 
-    // Get traversable handle for the scene - used for ray traversal
-    OptixTraversableHandle getHandle() { return travHandle; }
+    // Get traversable handle for the scene - used for ray traversal (inline delegation for zero overhead)
+    OptixTraversableHandle getHandle() { return sceneHandler_ ? sceneHandler_->getTraversableHandle() : 0; }
 
     // Completely rebuilds the Instance Acceleration Structure
     void rebuildIAS();
@@ -82,7 +83,10 @@ class RiPRSceneHandler
     // Finalizes scene setup before rendering
     void finalize();
 
-    // Acceleration structure scratch memory access
+    // Get instance count (inline delegation for zero overhead)
+    size_t getInstanceCount() const { return sceneHandler_ ? sceneHandler_->getInstanceCount() : 0; }
+    
+    // Acceleration structure scratch memory access (still needed for GAS operations)
     cudau::Buffer& getASBuildScratchMem() { return asBuildScratchMem_; }
 
     // Initialize Scene Dependent Shader Binding Table (SBT)
@@ -131,12 +135,12 @@ class RiPRSceneHandler
         // Step 2: Sort indices in descending order for stable removal
         std::sort (expiredIndices.rbegin(), expiredIndices.rend());
 
-        // Step 3: Remove from IAS in descending order
+        // Step 3: Remove from SceneHandler in descending order
         for (uint32_t index : expiredIndices)
         {
-            if (index < ias.getNumChildren())
+            if (sceneHandler_ && index < sceneHandler_->getInstanceCount())
             {
-                ias.removeChildAt (index);
+                sceneHandler_->removeInstanceAt(index);
             }
         }
 
@@ -177,6 +181,9 @@ class RiPRSceneHandler
     // Reference to the render context for OptiX operations
     RenderContextPtr ctx = nullptr;
 
+    // Generic scene handler for IAS management
+    SceneHandlerPtr sceneHandler_;
+
     // Model handler for managing RiPR models
     RiPRModelHandlerPtr modelHandler_;
 
@@ -186,18 +193,8 @@ class RiPRSceneHandler
     // Maps instance indices to renderable nodes
     NodeMap nodeMap;
 
-    // Instance Acceleration Structure (IAS) for ray traversal optimization
-    optixu::InstanceAccelerationStructure ias;
-
-    // Buffer for IAS memory storage
-    cudau::Buffer iasMem;
-
-    
-    // Acceleration structure scratch memory
+    // Acceleration structure scratch memory (still needed for GAS rebuilds)
     cudau::Buffer asBuildScratchMem_;
-
-    // Typed buffer for OptixInstance data
-    cudau::TypedBuffer<OptixInstance> instanceBuffer;
 
     // Instance data buffers (double buffered for async updates)
     cudau::TypedBuffer<shared::InstanceData> instanceDataBuffer_[2];
@@ -205,14 +202,14 @@ class RiPRSceneHandler
     // Maximum number of instances supported
     static constexpr uint32_t maxNumInstances = 16384;
 
-    // Traversable handle for the scene - entry point for ray traversal
-    OptixTraversableHandle travHandle = 0;
-
     // Initialize the scene structures
     void init();
 
-    // Prepare Instance Acceleration Structure (IAS) for build
+    // Prepare for IAS build (minimal now that SceneHandler handles most of it)
     void prepareForBuild();
+
+    // Helper method to convert RenderableNode to optixu::Instance
+    optixu::Instance convertNodeToInstance(const RenderableWeakRef& weakNode);
 
     // Resize Scene Dependent Shader Binding Table (SBT)
     void resizeSceneDependentSBT();

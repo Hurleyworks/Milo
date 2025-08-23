@@ -258,12 +258,12 @@ void RiPRSceneHandler::createInstance(RenderableWeakRef& weakNode) {
 // New:
 void RiPRSceneHandler::rebuildIAS() {
     sceneHandler_->buildIAS();
-    travHandle = sceneHandler_->getTraversableHandle();
+    // No need to cache travHandle - delegate directly
 }
 
 void RiPRSceneHandler::updateIAS() {
     sceneHandler_->updateIAS();
-    travHandle = sceneHandler_->getTraversableHandle();
+    // No need to cache travHandle - delegate directly
 }</pre>
             </div>
             
@@ -315,21 +315,28 @@ bool RiPRSceneHandler::updateMotion() {
                     <li>Remove: <code>optixu::InstanceAccelerationStructure ias;</code></li>
                     <li>Remove: <code>cudau::Buffer iasMem;</code></li>
                     <li>Remove: <code>cudau::TypedBuffer&lt;OptixInstance&gt; instanceBuffer;</code></li>
+                    <li>Remove: <code>OptixTraversableHandle travHandle;</code> - delegate to SceneHandler instead</li>
                     <li>Keep: <code>NodeMap nodeMap;</code> for RiPR-specific tracking</li>
                 </ul>
             </div>
             
             <div class="step">
                 <h3>Update Getter Methods</h3>
-                <p>Proxy appropriate calls to SceneHandler.</p>
+                <p>Implement as inline methods in the header for zero overhead delegation.</p>
                 <pre>
-OptixTraversableHandle RiPRSceneHandler::getHandle() {
-    return sceneHandler_->getTraversableHandle();
-}
-
-size_t RiPRSceneHandler::getInstanceCount() {
-    return sceneHandler_->getInstanceCount();
-}</pre>
+// In RiPRSceneHandler.h - inline for performance
+class RiPRSceneHandler {
+public:
+    // Inline delegation - no performance overhead
+    OptixTraversableHandle getHandle() { 
+        return sceneHandler_->getTraversableHandle(); 
+    }
+    
+    size_t getInstanceCount() { 
+        return sceneHandler_->getInstanceCount(); 
+    }
+};</pre>
+                <p><strong>Note:</strong> SceneHandler::getTraversableHandle() should also be inline in its header for maximum performance.</p>
             </div>
         </div>
 
@@ -342,13 +349,16 @@ size_t RiPRSceneHandler::getInstanceCount() {
                 <strong>Maintainability:</strong> Centralized IAS logic makes updates easier
             </div>
             <div class="benefit">
-                <strong>Performance:</strong> Leverages optimized update vs rebuild logic
+                <strong>Performance:</strong> Leverages optimized update vs rebuild logic with zero-overhead inline delegation
             </div>
             <div class="benefit">
                 <strong>Consistency:</strong> All engines use the same IAS management approach
             </div>
             <div class="benefit">
                 <strong>Separation of Concerns:</strong> Clear distinction between generic and engine-specific code
+            </div>
+            <div class="benefit">
+                <strong>No State Duplication:</strong> Single source of truth for traversable handle in SceneHandler
             </div>
         </div>
 
@@ -463,6 +473,8 @@ size_t RiPRSceneHandler::getInstanceCount() {
         <h2>📝 Notes</h2>
         <div class="section">
             <p><strong>Key Insight:</strong> The refactoring should be transparent to users of RiPRSceneHandler. The public API should remain unchanged or minimally changed.</p>
+            <p><strong>Performance Note:</strong> By implementing getTraversableHandle() and other frequently-called getters as inline functions in the headers, we achieve zero-overhead delegation. This eliminates any performance concerns about the extra layer of indirection.</p>
+            <p><strong>Design Principle:</strong> RiPRSceneHandler no longer stores its own OptixTraversableHandle. Instead, it delegates directly to SceneHandler, maintaining a single source of truth and eliminating synchronization issues.</p>
             <p><strong>Future Consideration:</strong> Once refactored, similar patterns can be applied to ShockerSceneHandler and other engine-specific scene handlers.</p>
             <p><strong>Documentation:</strong> Update inline comments and documentation to reflect the new architecture and delegation pattern.</p>
         </div>

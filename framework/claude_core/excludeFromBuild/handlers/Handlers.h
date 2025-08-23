@@ -32,10 +32,9 @@ struct Handlers
         // Initialize ScreenBufferHandler (fundamental buffer management)
         screenBufferHandler = ScreenBufferHandler::create (renderContext);
 
-        // Initialize SceneHandler (manages IAS)
+        // Create SceneHandler (manages IAS) - uses lazy initialization
+        // Will only initialize when first instance is added
         sceneHandler = SceneHandler::create (renderContext);
-        if (sceneHandler)
-            sceneHandler->initialize();
 
         // Initialize SkyDomeHandler
         skyDomeHandler = SkyDomeHandler::create (renderContext);

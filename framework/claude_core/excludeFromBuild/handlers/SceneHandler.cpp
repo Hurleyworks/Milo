@@ -19,6 +19,15 @@ void SceneHandler::initialize()
         return;
     }
 
+    // Check if already initialized
+    if (ias_)
+    {
+        LOG(DBUG) << "SceneHandler already initialized";
+        return;
+    }
+
+    LOG(DBUG) << "SceneHandler lazy initialization triggered";
+    
     // Initialize the OptiX scene
     scene_ = renderContext_->getScene();
     
@@ -224,6 +233,12 @@ void SceneHandler::buildOrUpdateIAS()
 
 void SceneHandler::addInstance(const optixu::Instance& instance)
 {
+    // Lazy initialization - only initialize when first instance is added
+    if (!ias_)
+    {
+        initialize();
+    }
+    
     instances_.push_back(instance);
     ias_.addChild(instance);
     isDirty_ = true;
