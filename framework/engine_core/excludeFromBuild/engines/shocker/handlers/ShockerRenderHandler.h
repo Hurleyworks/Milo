@@ -78,7 +78,7 @@ public:
     
     // Denoising operation
     // Returns true if denoising was performed, false if denoiser not available
-    bool denoise(CUstream stream, bool isNewSequence, class ShockerDenoiserHandler* denoiserHandler, struct GPUTimerManager::GPUTimer* timer = nullptr);
+    bool denoise(CUstream stream, bool isNewSequence, class DenoiserHandler* denoiserHandler, struct GPUTimerManager::GPUTimer* timer = nullptr);
     
     // Resize support
     bool resize(uint32_t newWidth, uint32_t newHeight);

@@ -3,7 +3,7 @@
 #include "../../../tools/PTXManager.h"
 #include "../../../tools/GPUTimerManager.h"
 #include "../shocker_shared.h"
-#include "ShockerDenoiserHandler.h"
+#include "../../../handlers/DenoiserHandler.h"
 
 ShockerRenderHandler::ShockerRenderHandler(RenderContextPtr ctx)
     : renderContext_(ctx)
@@ -233,7 +233,7 @@ void ShockerRenderHandler::clearAccumBuffers(CUstream stream)
 }
 
 
-bool ShockerRenderHandler::denoise(CUstream stream, bool isNewSequence, ShockerDenoiserHandler* denoiserHandler, GPUTimerManager::GPUTimer* timer)
+bool ShockerRenderHandler::denoise(CUstream stream, bool isNewSequence, DenoiserHandler* denoiserHandler, GPUTimerManager::GPUTimer* timer)
 {
     if (!initialized_)
     {
@@ -254,55 +254,34 @@ bool ShockerRenderHandler::denoise(CUstream stream, bool isNewSequence, ShockerD
         timer->denoise.start(stream);
     }
     
-    // Setup denoiser input buffers
-    optixu::DenoiserInputBuffers inputBuffers = {};
-    inputBuffers.noisyBeauty = linearBeautyBuffer_;
-    inputBuffers.albedo = linearAlbedoBuffer_;
-    inputBuffers.normal = linearNormalBuffer_;
-    inputBuffers.flow = linearFlowBuffer_;  // Motion vectors for temporal denoising
+    // Setup denoiser input buffers using the new struct
+    DenoiserInputBuffers inputs;
+    inputs.noisyBeauty = &linearBeautyBuffer_;
+    inputs.albedo = &linearAlbedoBuffer_;
+    inputs.normal = &linearNormalBuffer_;
+    inputs.flow = &linearFlowBuffer_;  // Motion vectors for temporal denoising
     
     // For temporal denoising: if new sequence, use noisy beauty as previous
-    inputBuffers.previousDenoisedBeauty = linearBeautyBuffer_;
+    inputs.previousDenoisedBeauty = &linearBeautyBuffer_;
     
     // Set all formats
-    inputBuffers.beautyFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
-    inputBuffers.albedoFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
-    inputBuffers.normalFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
-    inputBuffers.flowFormat = OPTIX_PIXEL_FORMAT_FLOAT2;  // Motion vectors are float2
+    inputs.beautyFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
+    inputs.albedoFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
+    inputs.normalFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
+    inputs.flowFormat = OPTIX_PIXEL_FORMAT_FLOAT2;  // Motion vectors are float2
     
-    // Compute HDR normalizer
-    CUdeviceptr hdrNormalizer = 0;
-    CUDADRV_CHECK(cuMemAlloc(&hdrNormalizer, sizeof(float)));
+    // Setup output buffers
+    DenoiserOutputBuffers outputs;
+    outputs.denoisedBeauty = &linearBeautyBuffer_;  // Output back to beauty buffer
     
-    // Use RAII to ensure cleanup
-    struct HDRNormalizerCleanup {
-        CUdeviceptr ptr;
-        ~HDRNormalizerCleanup() noexcept {
-            if (ptr) {
-                CUresult result = cuMemFree(ptr);
-                if (result != CUDA_SUCCESS) {
-                    LOG(WARNING) << "Failed to free HDR normalizer memory: " << result;
-                }
-            }
-        }
-    } cleanup{hdrNormalizer};
-    
-    denoiserHandler->getDenoiser().computeNormalizer(
-        stream,
-        linearBeautyBuffer_, OPTIX_PIXEL_FORMAT_FLOAT4,
-        denoiserHandler->getScratchBuffer(), hdrNormalizer);
-    
-    // Denoise (output goes back to beauty buffer since we don't have separate denoised buffer)
-    const auto& denoisingTasks = denoiserHandler->getTasks();
-    for (int i = 0; i < denoisingTasks.size(); ++i)
-    {
-        denoiserHandler->getDenoiser().invoke(
-            stream, denoisingTasks[i],
-            inputBuffers, optixu::IsFirstFrame(isNewSequence),
-            hdrNormalizer, 0.0f,
-            linearBeautyBuffer_,  // Output to beauty buffer
-            nullptr, optixu::BufferView()); // no AOV outputs, no internal guide layer
-    }
+    // Use the new DenoiserHandler's cleaner API
+    // It manages HDR normalizer internally
+    denoiserHandler->computeAndDenoise(
+        stream, 
+        inputs, 
+        outputs, 
+        isNewSequence,
+        0.0f);  // blend factor: 0 = full denoise
     
     // Stop timing if timer provided
     if (timer)

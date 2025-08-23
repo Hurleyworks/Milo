@@ -51,7 +51,6 @@
 #include "excludeFromBuild/engines/shocker/handlers/ShockerMaterialHandler.cpp"
 #include "excludeFromBuild/engines/shocker/handlers/ShockerSceneHandler.cpp"
 #include "excludeFromBuild/engines/shocker/handlers/ShockerRenderHandler.cpp"
-#include "excludeFromBuild/engines/shocker/handlers/ShockerDenoiserHandler.cpp"
 
 // engines
 #include "excludeFromBuild/engines/base/BaseRenderingEngine.cpp"

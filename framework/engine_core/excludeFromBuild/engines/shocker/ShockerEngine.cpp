@@ -4,8 +4,8 @@
 #include "handlers/ShockerMaterialHandler.h"
 #include "handlers/ShockerModelHandler.h"
 #include "handlers/ShockerRenderHandler.h"
-#include "handlers/ShockerDenoiserHandler.h"
 #include "models/ShockerModel.h"
+#include "../../handlers/DenoiserHandler.h"  // For DenoiserConfig
 
 ShockerEngine::ShockerEngine()
 {
@@ -81,19 +81,26 @@ void ShockerEngine::initialize (RenderContext* ctx)
     renderHandler_ = ShockerRenderHandler::create (renderContext);
     initializeHandlerWithDimensions (renderHandler_, "RenderHandler");
 
-    // Initialize Shocker-specific denoiser handler
-    denoiserHandler_ = ShockerDenoiserHandler::create (ctx->shared_from_this());
-    if (denoiserHandler_ && renderWidth_ > 0 && renderHeight_ > 0)
+    // Initialize the shared denoiser handler from RenderContext
+    auto& denoiserHandler = renderContext_->getHandlers().denoiserHandler;
+    if (denoiserHandler && renderWidth_ > 0 && renderHeight_ > 0)
     {
-        if (!denoiserHandler_->initialize (renderWidth_, renderHeight_, true)) // true = use temporal denoiser
+        // Configure denoiser for temporal denoising
+        DenoiserConfig config;
+        config.model = DenoiserConfig::Model::Temporal;
+        config.useAlbedo = true;
+        config.useNormal = true;
+        config.useFlow = true;
+        
+        if (!denoiserHandler->initialize (renderWidth_, renderHeight_, config))
         {
-            LOG (WARNING) << "Failed to initialize ShockerDenoiserHandler";
+            LOG (WARNING) << "Failed to initialize DenoiserHandler";
         }
         else
         {
             // Setup denoiser state after initialization
-            denoiserHandler_->setupState (renderContext_->getCudaStream());
-            LOG (INFO) << "ShockerDenoiserHandler initialized successfully";
+            denoiserHandler->setupState (renderContext_->getCudaStream());
+            LOG (INFO) << "DenoiserHandler initialized successfully for ShockerEngine";
         }
     }
 
@@ -267,12 +274,7 @@ void ShockerEngine::cleanup()
         rngBuffer_.finalize();
     }
 
-    // Clean up Shocker-specific denoiser handler
-    if (denoiserHandler_)
-    {
-        denoiserHandler_->finalize();
-        denoiserHandler_.reset();
-    }
+    // Note: DenoiserHandler is now managed by RenderContext and will be cleaned up there
 
     // Clean up light probability computation module
     if (computeProbTex_.cudaModule)
@@ -468,7 +470,8 @@ void ShockerEngine::render (const mace::InputEvent& input, bool updateMotion, ui
 
         // Denoise if denoiser is available
         bool isNewSequence = (numAccumFrames_ == 1);
-        renderHandler_->denoise (stream, isNewSequence, denoiserHandler_.get(), timer);
+        auto& denoiserHandler = renderContext_->getHandlers().denoiserHandler;
+        renderHandler_->denoise (stream, isNewSequence, denoiserHandler.get(), timer);
     }
 
     // Update camera sensor with rendered image
