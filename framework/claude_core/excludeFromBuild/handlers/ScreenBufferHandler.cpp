@@ -194,43 +194,68 @@ void ScreenBufferHandler::copyAccumToLinearBuffers(CUstream stream)
 {
     if (!initialized_ || !kernelCopyAccumToLinear_)
     {
+        LOG(DBUG) << "Copy kernel not available, skipping copyAccumToLinearBuffers";
         return;
     }
 
-    // Store surface objects in variables first to get their addresses
+    // Get surface objects
     CUsurfObject beautySurf = accumBuffers_.beautyAccumBuffer.getSurfaceObject(0);
     CUsurfObject albedoSurf = accumBuffers_.albedoAccumBuffer.getSurfaceObject(0);
     CUsurfObject normalSurf = accumBuffers_.normalAccumBuffer.getSurfaceObject(0);
     CUsurfObject flowSurf = accumBuffers_.flowAccumBuffer.getSurfaceObject(0);
+    
+    // Get device pointers
+    float4* beautyPtr = linearBuffers_.linearBeautyBuffer.getDevicePointer();
+    float4* albedoPtr = linearBuffers_.linearAlbedoBuffer.getDevicePointer();
+    float4* normalPtr = linearBuffers_.linearNormalBuffer.getDevicePointer();
+    float2* flowPtr = linearBuffers_.linearFlowBuffer.getDevicePointer();
+    
+    // Create imageSize parameter
+    uint2 imageSize = make_uint2(width_, height_);
 
+    // Set up kernel parameters matching the copySurfacesToLinear kernel signature
     void* kernelParams[] = {
         &beautySurf,
         &albedoSurf,
         &normalSurf,
         &flowSurf,
-        linearBuffers_.linearBeautyBuffer.getDevicePointer(),
-        linearBuffers_.linearAlbedoBuffer.getDevicePointer(),
-        linearBuffers_.linearNormalBuffer.getDevicePointer(),
-        linearBuffers_.linearFlowBuffer.getDevicePointer(),
-        &width_,
-        &height_
+        &beautyPtr,
+        &albedoPtr,
+        &normalPtr,
+        &flowPtr,
+        &imageSize
     };
 
+    // Launch configuration
     uint32_t blockSizeX = 16;
     uint32_t blockSizeY = 16;
     uint32_t gridSizeX = (width_ + blockSizeX - 1) / blockSizeX;
     uint32_t gridSizeY = (height_ + blockSizeY - 1) / blockSizeY;
 
-    cuLaunchKernel(kernelCopyAccumToLinear_,
-                   gridSizeX, gridSizeY, 1,
-                   blockSizeX, blockSizeY, 1,
-                   0, stream, kernelParams, nullptr);
+    // Launch the kernel
+    CUresult result = cuLaunchKernel(
+        kernelCopyAccumToLinear_,
+        gridSizeX, gridSizeY, 1,     // Grid dimensions
+        blockSizeX, blockSizeY, 1,    // Block dimensions
+        0,                            // Shared memory size
+        stream,                       // Stream
+        kernelParams,                 // Kernel parameters
+        nullptr                       // Extra options
+    );
+    
+    if (result != CUDA_SUCCESS)
+    {
+        const char* errorName = nullptr;
+        cuGetErrorName(result, &errorName);
+        LOG(WARNING) << "Failed to launch copySurfacesToLinear kernel: " << errorName;
+    }
 }
 
 
 bool ScreenBufferHandler::initializeRngStates(uint64_t seed)
 {
-    if (!initialized_)
+    // Check if RNG buffer is initialized (not the handler itself, as this is called during initialization)
+    if (!rngBuffer_.isInitialized())
     {
         return false;
     }
@@ -266,13 +291,12 @@ size_t ScreenBufferHandler::getTotalGPUMemoryUsage() const
 
     size_t total = 0;
     
-    // G-buffers (double buffered, 2 buffers with 16 uint32_t elements each)
-    total += 2 * width_ * height_ * 16 * sizeof(uint32_t);
-    total += 2 * width_ * height_ * 16 * sizeof(uint32_t);
+    // G-buffers (double buffered, 2 buffers with 4 uint32_t elements each)
+    total += 2 * width_ * height_ * 4 * sizeof(uint32_t);  // gBuffer0
+    total += 2 * width_ * height_ * 4 * sizeof(uint32_t);  // gBuffer1
     
-    // Accumulation buffers (3 buffers of float4 + 1 buffer of float2)
-    total += 3 * width_ * height_ * sizeof(float4);
-    total += width_ * height_ * sizeof(float2);  // flow accumulation buffer
+    // Accumulation buffers (4 buffers of float4)
+    total += 4 * width_ * height_ * sizeof(float4);  // beauty, albedo, normal, flow
     
     // Linear buffers (4 float4 + 1 float2)
     total += 4 * width_ * height_ * sizeof(float4);
@@ -362,11 +386,41 @@ void ScreenBufferHandler::resizeRngBuffer(CUcontext cuContext, uint32_t width, u
 
 bool ScreenBufferHandler::loadKernels()
 {
-    // TODO: Load PTX module for buffer copy operations
-    // For now, we'll use the PTX from the engine's copy buffers module
-    // This will need to be updated when we have dedicated PTX for claude_core
+    if (!renderContext_ || !renderContext_->getPTXManager())
+    {
+        LOG(WARNING) << "PTXManager not available for loading copy kernels";
+        return false;
+    }
     
-    LOG(DBUG) << "Buffer copy kernels loading deferred - will use engine-specific kernels";
+    // Load the Shocker copy buffers kernel (temporary until we have a generic one)
+    std::vector<char> ptxData = renderContext_->getPTXManager()->getPTXData("optix_shocker_copybuffers");
+    
+    if (ptxData.empty())
+    {
+        LOG(WARNING) << "Failed to get PTX data for optix_shocker_copybuffers";
+        return false;
+    }
+    
+    LOG(DBUG) << "Loading PTX data for copy buffers (" << ptxData.size() << " bytes)";
+    
+    CUresult cuResult = cuModuleLoadData(&moduleCopyBuffers_, ptxData.data());
+    if (cuResult != CUDA_SUCCESS)
+    {
+        LOG(WARNING) << "Failed to load copy buffers module: " << cuResult;
+        return false;
+    }
+    
+    // Get the kernel function
+    cuResult = cuModuleGetFunction(&kernelCopyAccumToLinear_, moduleCopyBuffers_, "copySurfacesToLinear");
+    if (cuResult != CUDA_SUCCESS)
+    {
+        LOG(WARNING) << "Failed to get copySurfacesToLinear kernel: " << cuResult;
+        cuModuleUnload(moduleCopyBuffers_);
+        moduleCopyBuffers_ = nullptr;
+        return false;
+    }
+    
+    LOG(INFO) << "Copy buffer kernels loaded successfully";
     return true;
 }
 
@@ -416,11 +470,11 @@ void ScreenBufferHandler::GBuffers::initialize(CUcontext cuContext, uint32_t wid
     for (int i = 0; i < 2; ++i)
     {
         gBuffer0[i].initialize2D(
-            cuContext, cudau::ArrayElementType::UInt32, 16,  // Fixed size for GBuffer0 data
+            cuContext, cudau::ArrayElementType::UInt32, 4,  // 16 bytes / 4 = 4 uint32 channels
             cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
             width, height, 1);
         gBuffer1[i].initialize2D(
-            cuContext, cudau::ArrayElementType::UInt32, 16,  // Fixed size for GBuffer1 data
+            cuContext, cudau::ArrayElementType::UInt32, 4,  // 16 bytes / 4 = 4 uint32 channels
             cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
             width, height, 1);
     }
@@ -464,7 +518,7 @@ void ScreenBufferHandler::AccumulationBuffers::initialize(CUcontext cuContext, u
         cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
         width, height, 1);
     flowAccumBuffer.initialize2D(
-        cuContext, cudau::ArrayElementType::Float32, 2,  // float2 for motion vectors
+        cuContext, cudau::ArrayElementType::Float32, 4,  // float4 for motion vectors (Shocker compatibility)
         cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
         width, height, 1);
     LOG(DBUG) << "Accumulation buffers initialized";

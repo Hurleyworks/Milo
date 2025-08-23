@@ -51,6 +51,10 @@ bool DenoiserHandler::initialize(uint32_t width, uint32_t height, const Denoiser
         prepareDenoiser();
         allocateBuffers();
         
+        // Setup state once after initialization
+        CUstream stream = renderContext_->getCudaStream();
+        denoiser_.setupState(stream, stateBuffer_, scratchBuffer_);
+        
         initialized_ = true;
         
         LOG(INFO) << "DenoiserHandler initialized successfully"
@@ -115,6 +119,10 @@ void DenoiserHandler::resize(uint32_t width, uint32_t height)
     createDenoiser();
     prepareDenoiser();
     allocateBuffers();
+    
+    // Setup state once after resize
+    CUstream stream = renderContext_->getCudaStream();
+    denoiser_.setupState(stream, stateBuffer_, scratchBuffer_);
 }
 
 // Update configuration
@@ -146,6 +154,10 @@ void DenoiserHandler::updateConfig(const DenoiserConfig& config)
         createDenoiser();
         prepareDenoiser();
         allocateBuffers();
+        
+        // Setup state once after model change
+        CUstream stream = renderContext_->getCudaStream();
+        denoiser_.setupState(stream, stateBuffer_, scratchBuffer_);
     }
 }
 
@@ -240,27 +252,6 @@ void DenoiserHandler::enableUpscaling(bool enable)
     updateConfig(newConfig);
 }
 
-// Setup denoiser state
-void DenoiserHandler::setupState(CUstream stream)
-{
-    if (!initialized_)
-    {
-        LOG(WARNING) << "Cannot setup state - DenoiserHandler not initialized";
-        return;
-    }
-    
-    try
-    {
-        denoiser_.setupState(stream, stateBuffer_, scratchBuffer_);
-        CUDADRV_CHECK(cuStreamSynchronize(stream));
-        
-        LOG(INFO) << "DenoiserHandler state setup complete";
-    }
-    catch (const std::exception& e)
-    {
-        LOG(WARNING) << "Failed to setup DenoiserHandler state: " << e.what();
-    }
-}
 
 // Compute HDR normalizer
 void DenoiserHandler::computeNormalizer(
@@ -321,11 +312,18 @@ void DenoiserHandler::denoise(
     try
     {
         // Setup OptiX denoiser input structure
-        optixu::DenoiserInputBuffers optixInputs;
+        optixu::DenoiserInputBuffers optixInputs = {};  // Zero-initialize all fields
         optixInputs.beautyFormat = inputs.beautyFormat;
         optixInputs.albedoFormat = inputs.albedoFormat;
         optixInputs.normalFormat = inputs.normalFormat;
         optixInputs.flowFormat = inputs.flowFormat;
+        
+        // Explicitly set AOV-related fields to nullptr (critical for HDR model)
+        optixInputs.noisyAovs = nullptr;
+        optixInputs.previousDenoisedAovs = nullptr;
+        optixInputs.aovFormats = nullptr;
+        optixInputs.aovTypes = nullptr;
+        optixInputs.numAovs = 0;
         
         optixInputs.noisyBeauty = *inputs.noisyBeauty;
         
@@ -360,16 +358,21 @@ void DenoiserHandler::denoise(
             // outputs.internalGuideLayerForNextFrame will be filled by the denoiser
         }
         
+        // Refresh tasks before invoking - required as denoiser state can be invalidated
+        denoiser_.getTasks(denoisingTasks_.data());
+        
         // Execute denoising for all tasks
         for (const auto& task : denoisingTasks_)
         {
+            // For HDR model with guide layers, we pass nullptr for AOV outputs
+            // The production code shows this pattern works correctly
             denoiser_.invoke(
                 stream, task,
                 optixInputs, optixu::IsFirstFrame(isFirstFrame),
                 hdrNormalizer_.getCUdeviceptr(), blendFactor,
-                *outputs.denoisedBeauty,
-                nullptr,  // No AOV outputs in this simplified version
-                outputs.internalGuideLayerForNextFrame);
+                *outputs.denoisedBeauty,  // Pass the dereferenced buffer directly
+                nullptr,  // No AOV outputs for HDR model
+                optixu::BufferView());  // Empty BufferView for internal guide layer
         }
     }
     catch (const std::exception& e)
@@ -445,7 +448,7 @@ void DenoiserHandler::createDenoiser()
     denoiser_ = renderContext_->getOptiXContext().createDenoiser(
         modelKind_, useAlbedo, useNormal, config_.alphaMode);
     
-    LOG(INFO) << "Created OptiX denoiser with model: " << static_cast<int>(modelKind_)
+    LOG(DBUG) << "Created OptiX denoiser with model: " << static_cast<int>(modelKind_)
               << ", albedo: " << (config_.useAlbedo ? "yes" : "no")
               << ", normal: " << (config_.useNormal ? "yes" : "no");
 }
@@ -486,7 +489,7 @@ void DenoiserHandler::prepareDenoiser()
     internalGuideLayerPixelSize_ = denoiserSizes.internalGuideLayerPixelSize;
     
     // Log buffer sizes
-    LOG(INFO) << "Denoiser buffer sizes:"
+    LOG(DBUG) << "Denoiser buffer sizes:"
               << " State: " << (stateBufferSize_ / (1024 * 1024)) << " MB"
               << ", Scratch: " << (scratchBufferSize_ / (1024 * 1024)) << " MB"
               << ", Normalizer Scratch: " << (normalizerScratchSize_ / (1024 * 1024)) << " MB"

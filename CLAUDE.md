@@ -271,6 +271,13 @@ Each engine has its own:
 - **Premake Build System**: The project uses Premake5 for generating Visual Studio solutions
 - **Memory System**: The project may have memory files stored by Serena MCP for context across conversations
 - **Git Workflow**: Avoid making git commits unless explicitly requested - provide commit messages for user to execute
+- **Handler System**: ALWAYS use the centralized Handler system in RenderContext. All handlers are accessible via `renderContext_->getHandlers()`. This provides:
+  - Centralized initialization and cleanup through the Handlers struct
+  - Shared access between all handlers (handlers can access each other)
+  - Consistent factory pattern with `::create(RenderContextPtr)` methods
+  - Proper lifecycle management with initialize/finalize patterns
+  - Example: Access ScreenBufferHandler via `renderContext_->getHandlers().screenBufferHandler`
+  - Never create handlers independently - always go through the Handlers struct
 
 
 ## Core Development Philosophy

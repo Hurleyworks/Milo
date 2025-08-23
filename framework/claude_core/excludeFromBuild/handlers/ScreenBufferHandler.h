@@ -161,7 +161,7 @@ private:
         cudau::TypedBuffer<float4> linearBeautyBuffer;
         cudau::TypedBuffer<float4> linearAlbedoBuffer;
         cudau::TypedBuffer<float4> linearNormalBuffer;
-        cudau::TypedBuffer<float2> linearFlowBuffer;
+        cudau::TypedBuffer<float2> linearFlowBuffer;  // float2 for motion vectors
         cudau::TypedBuffer<float4> linearDenoisedBeautyBuffer;
 
         void initialize(CUcontext cuContext, uint32_t width, uint32_t height);

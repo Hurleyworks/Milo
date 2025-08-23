@@ -3,8 +3,6 @@
 #include "handlers/ShockerSceneHandler.h"
 #include "handlers/ShockerMaterialHandler.h"
 #include "handlers/ShockerModelHandler.h"
-#include "handlers/ShockerRenderHandler.h"
-#include "handlers/ShockerDenoiserHandler.h"
 #include "models/ShockerModel.h"
 
 ShockerEngine::ShockerEngine()
@@ -86,25 +84,47 @@ void ShockerEngine::initialize (RenderContext* ctx)
         LOG (INFO) << "Initial SBT setup for empty scene completed";
     }
 
-    // Create render handler
-    renderHandler_ = ShockerRenderHandler::create (renderContext);
-    initializeHandlerWithDimensions (renderHandler_, "RenderHandler");
-
-    // Initialize Shocker-specific denoiser handler
-    denoiserHandler_ = ShockerDenoiserHandler::create (ctx->shared_from_this());
-    if (denoiserHandler_ && renderWidth_ > 0 && renderHeight_ > 0)
+    // Initialize ScreenBufferHandler from RenderContext if needed
+    auto screenBufferHandler = renderContext->getHandlers().screenBufferHandler;
+    if (screenBufferHandler && renderWidth_ > 0 && renderHeight_ > 0)
     {
-        if (!denoiserHandler_->initialize (renderWidth_, renderHeight_, true)) // true = use temporal denoiser
+        if (!screenBufferHandler->isInitialized())
         {
-            LOG (WARNING) << "Failed to initialize ShockerDenoiserHandler";
-        }
-        else
-        {
-            // Setup denoiser state after initialization
-            denoiserHandler_->setupState (renderContext_->getCudaStream());
-            LOG (INFO) << "ShockerDenoiserHandler initialized successfully";
+            if (!screenBufferHandler->initialize(renderWidth_, renderHeight_))
+            {
+                LOG(WARNING) << "Failed to initialize ScreenBufferHandler";
+            }
+            else
+            {
+                LOG(INFO) << "ScreenBufferHandler initialized with dimensions " 
+                          << renderWidth_ << "x" << renderHeight_;
+            }
         }
     }
+
+    // Initialize DenoiserHandler after ScreenBufferHandler
+    auto denoiserHandler = renderContext->getHandlers().denoiserHandler;
+    if (denoiserHandler && renderWidth_ > 0 && renderHeight_ > 0)
+    {
+        if (!denoiserHandler->isInitialized())
+        {
+            // Configure denoiser for HDR mode (spatial only, no temporal)
+            DenoiserConfig config;
+            config.model = DenoiserConfig::Model::HDR;  // Basic HDR denoiser
+            config.useAlbedo = true;
+            config.useNormal = true;
+            config.useFlow = false;  // HDR model doesn't use motion vectors
+            config.alphaMode = OPTIX_DENOISER_ALPHA_MODE_COPY;
+            config.useTiling = false;  // Can enable for very large framebuffers
+            
+            if (!denoiserHandler->initialize(renderWidth_, renderHeight_, config))
+            {
+                LOG(WARNING) << "Failed to initialize DenoiserHandler";
+            }
+        }
+    }
+
+   
 
     // Allocate launch parameters on device
     allocateLaunchParameters();
@@ -217,14 +237,9 @@ void ShockerEngine::cleanup()
     // Clean up pipeline
 
     // Pipeline cleanup is now handled by PipelineHandler in Handlers::cleanup()
+    // ScreenBufferHandler cleanup is handled by RenderContext's Handlers::cleanup()
 
     // Clean up handlers
-    if (renderHandler_)
-    {
-        renderHandler_->finalize();
-        renderHandler_.reset();
-    }
-
     if (modelHandler_)
     {
         modelHandler_->finalize();
@@ -249,13 +264,6 @@ void ShockerEngine::cleanup()
     if (rngBuffer_.isInitialized())
     {
         rngBuffer_.finalize();
-    }
-
-    // Clean up Shocker-specific denoiser handler
-    if (denoiserHandler_)
-    {
-        denoiserHandler_->finalize();
-        denoiserHandler_.reset();
     }
 
     // Clean up light probability computation module
@@ -397,11 +405,55 @@ void ShockerEngine::render (const mace::InputEvent& input, bool updateMotion, ui
     numAccumFrames_++;
 
     // Post-processing (required every frame)
-    renderHandler_->copyAccumToLinearBuffers (stream);
-
-    // Denoise every frame
-    bool isNewSequence = (numAccumFrames_ == 1);
-    renderHandler_->denoise (stream, isNewSequence, denoiserHandler_.get(), timer);
+    if (handlers.screenBufferHandler && handlers.screenBufferHandler->isInitialized())
+    {
+        handlers.screenBufferHandler->copyAccumToLinearBuffers (stream);
+        
+        // Apply denoising if handler is available
+        if (handlers.denoiserHandler && handlers.denoiserHandler->isInitialized())
+        {
+            // Start denoise timer
+            timer->denoise.start(stream);
+            
+            // Set up input buffers from ScreenBufferHandler
+            DenoiserInputBuffers inputs;
+            inputs.noisyBeauty = &handlers.screenBufferHandler->getLinearBeautyBuffer();
+            inputs.albedo = &handlers.screenBufferHandler->getLinearAlbedoBuffer();
+            inputs.normal = &handlers.screenBufferHandler->getLinearNormalBuffer();
+            // HDR model doesn't use flow/motion vectors
+            inputs.flow = nullptr;
+            inputs.previousDenoisedBeauty = nullptr;  // HDR model doesn't use temporal data
+            
+            // Set pixel formats
+            inputs.beautyFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
+            inputs.albedoFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
+            inputs.normalFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
+            
+            // Set up output buffer
+            DenoiserOutputBuffers outputs;
+            outputs.denoisedBeauty = &handlers.screenBufferHandler->getLinearDenoisedBeautyBuffer();
+            outputs.denoisedAlbedo = nullptr;  // Not using AOV outputs
+            outputs.denoisedNormal = nullptr;
+            
+            // Execute denoising (compute normalizer and denoise in one call)
+            bool isFirstFrame = (numAccumFrames_ <= 1);
+            float blendFactor = 0.0f;  // 0 = full denoise, 1 = full noisy
+            
+            handlers.denoiserHandler->computeAndDenoise(
+                stream,
+                inputs,
+                outputs,
+                isFirstFrame,
+                blendFactor
+            );
+            
+            // Synchronize to ensure denoising completes
+            CUDADRV_CHECK(cuStreamSynchronize(stream));
+            
+            // Stop denoise timer
+            timer->denoise.stop(stream);
+        }
+    }
 
     // Update camera sensor
     updateCameraSensor();
@@ -542,14 +594,46 @@ void ShockerEngine::render (const mace::InputEvent& input, bool updateMotion, ui
     numAccumFrames_++;
 
     // Copy accumulation buffers to linear buffers for display
-    if (renderHandler_ && renderHandler_->isInitialized())
+    auto screenBufferHandler2 = renderContext_->getHandlers().screenBufferHandler;
+    if (screenBufferHandler2 && screenBufferHandler2->isInitialized())
     {
         // Copy accumulation buffers to linear buffers
-        renderHandler_->copyAccumToLinearBuffers (stream);
+        screenBufferHandler2->copyAccumToLinearBuffers (stream);
 
         // Denoise if denoiser is available
         bool isNewSequence = (numAccumFrames_ == 1);
-        renderHandler_->denoise (stream, isNewSequence, denoiserHandler_.get(), timer);
+        if (denoiserHandler_ && denoiserHandler_->isInitialized())
+        {
+            if (timer) timer->denoise.start(stream);
+            
+            // Setup denoiser input buffers from ScreenBufferHandler
+            optixu::DenoiserInputBuffers inputBuffers = {};
+            inputBuffers.noisyBeauty = screenBufferHandler2->getLinearBeautyBuffer();
+            inputBuffers.albedo = screenBufferHandler2->getLinearAlbedoBuffer();
+            inputBuffers.normal = screenBufferHandler2->getLinearNormalBuffer();
+            inputBuffers.flow = screenBufferHandler2->getLinearFlowBuffer();
+            
+            // Compute HDR normalizer
+            float hdrNormalizer = 1.0f;
+            denoiserHandler_->getDenoiser().computeNormalizer(
+                stream,
+                screenBufferHandler2->getLinearBeautyBuffer(), OPTIX_PIXEL_FORMAT_FLOAT4,
+                denoiserHandler_->getScratchBuffer(), hdrNormalizer);
+            
+            // Denoise (output goes back to beauty buffer)
+            const auto& denoisingTasks = denoiserHandler_->getTasks();
+            for (int i = 0; i < denoisingTasks.size(); ++i)
+            {
+                denoiserHandler_->getDenoiser().invoke(
+                    stream, denoisingTasks[i],
+                    inputBuffers, optixu::IsFirstFrame(isNewSequence),
+                    hdrNormalizer, 0.0f,
+                    screenBufferHandler2->getLinearBeautyBuffer(),  // Output to beauty buffer
+                    nullptr, optixu::BufferView()); // no AOV outputs, no internal guide layer
+            }
+            
+            if (timer) timer->denoise.stop(stream);
+        }
     }
 
     // Update camera sensor with rendered image
@@ -937,28 +1021,21 @@ void ShockerEngine::updateLaunchParameters (const mace::InputEvent& input)
         }
     }
     
-    // Set accumulation buffer pointers from RenderHandler
-    if (renderHandler_)
+    // Set accumulation buffer pointers from ScreenBufferHandler
+    auto screenBufferHandler = renderContext_->getHandlers().screenBufferHandler;
+    if (screenBufferHandler && screenBufferHandler->isInitialized())
     {
-        static_plp_.beautyAccumBuffer = renderHandler_->getBeautyAccumSurfaceObject();
-        static_plp_.albedoAccumBuffer = renderHandler_->getAlbedoAccumSurfaceObject();
-        static_plp_.normalAccumBuffer = renderHandler_->getNormalAccumSurfaceObject();
-    }
-    
-    // Set pick info buffer pointers
-    if (renderHandler_)
-    {
+        static_plp_.beautyAccumBuffer = screenBufferHandler->getBeautyAccumSurfaceObject();
+        static_plp_.albedoAccumBuffer = screenBufferHandler->getAlbedoAccumSurfaceObject();
+        static_plp_.normalAccumBuffer = screenBufferHandler->getNormalAccumSurfaceObject();
+        static_plp_.flowAccumBuffer = screenBufferHandler->getFlowAccumSurfaceObject();
+        
+        // Set pick info buffer pointers
         for (int i = 0; i < 2; ++i)
         {
             static_plp_.pickInfos[i] = reinterpret_cast<shocker_shared::PickInfo*> (
-                renderHandler_->getPickInfoPointer (i));
+                screenBufferHandler->getPickInfoPointer (i));
         }
-    }
-    
-    // Set flow accumulation buffer
-    if (renderHandler_)
-    {
-        static_plp_.flowAccumBuffer = renderHandler_->getFlowAccumSurfaceObject();
     }
     
     // Set experimental glass parameters (default values)
@@ -1162,19 +1239,32 @@ void ShockerEngine::updateCameraSensor()
         return;
     }
 
-    // Get the linear beauty buffer from our RenderHandler
-    if (!renderHandler_ || !renderHandler_->isInitialized())
+    // Get the handlers from RenderContext
+    auto& handlers = renderContext_->getHandlers();
+    auto screenBufferHandler = handlers.screenBufferHandler;
+    if (!screenBufferHandler || !screenBufferHandler->isInitialized())
     {
-        LOG (WARNING) << "RenderHandler not available or not initialized";
+        LOG (WARNING) << "ScreenBufferHandler not available or not initialized";
         return;
     }
 
-    // Use the linear beauty buffer from ShockerRenderHandler
-    auto& linearBeautyBuffer = renderHandler_->getLinearBeautyBuffer();
+    // Choose which buffer to display: denoised if available, otherwise linear beauty
+    cudau::TypedBuffer<float4>* displayBuffer = nullptr;
+    
+    if (handlers.denoiserHandler && handlers.denoiserHandler->isInitialized())
+    {
+        // Use denoised buffer when denoiser is available
+        displayBuffer = &screenBufferHandler->getLinearDenoisedBeautyBuffer();
+    }
+    else
+    {
+        // Fall back to linear beauty buffer
+        displayBuffer = &screenBufferHandler->getLinearBeautyBuffer();
+    }
 
     // Since linear buffers are device-only, we need to copy to host
     std::vector<float4> hostPixels (renderWidth_ * renderHeight_);
-    linearBeautyBuffer.read (hostPixels.data(), renderWidth_ * renderHeight_);
+    displayBuffer->read (hostPixels.data(), renderWidth_ * renderHeight_);
 
     // Update the camera sensor with the rendered image
     bool previewMode = false; // Full quality display
@@ -1191,9 +1281,10 @@ void ShockerEngine::updateCameraSensor()
 
 void ShockerEngine::outputGBufferDebugInfo (CUstream stream)
 {
-    if (!renderHandler_)
+    auto screenBufferHandler = renderContext_->getHandlers().screenBufferHandler;
+    if (!screenBufferHandler || !screenBufferHandler->isInitialized())
     {
-        LOG (WARNING) << "RenderHandler not available for debug output";
+        LOG (WARNING) << "ScreenBufferHandler not available for debug output";
         return;
     }
 
@@ -1202,7 +1293,7 @@ void ShockerEngine::outputGBufferDebugInfo (CUstream stream)
 
     // Read pick info - exactly like Shocker code
     shocker_shared::PickInfo pickInfoOnHost;
-    renderHandler_->getPickInfo (bufferIndex).read (&pickInfoOnHost, 1, stream);
+    screenBufferHandler->getPickInfoBuffer(bufferIndex).read (&pickInfoOnHost, 1, stream);
 
     // Only output debug information if geometry was hit (not environment/background)
     if (pickInfoOnHost.hit && pickInfoOnHost.matSlot != 0xFFFFFFFF)

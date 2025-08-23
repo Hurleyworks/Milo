@@ -141,9 +141,6 @@ public:
     void enableKernelPrediction(bool enable);
     void enableUpscaling(bool enable);
     
-    // State setup (must be called after initialization)
-    void setupState(CUstream stream);
-    
     // Main denoising operations
     
     // Compute HDR normalizer from noisy input

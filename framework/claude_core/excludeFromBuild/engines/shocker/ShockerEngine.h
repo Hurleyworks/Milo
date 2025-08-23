@@ -75,11 +75,6 @@ private:
     std::shared_ptr<class ShockerMaterialHandler> materialHandler_;
     std::shared_ptr<class ShockerModelHandler> modelHandler_;
     
-    // Render handler
-    std::shared_ptr<class ShockerRenderHandler> renderHandler_;
-    
-    // Denoiser handler (Shocker-specific to avoid conflicts with other engines)
-    std::shared_ptr<class ShockerDenoiserHandler> denoiserHandler_;
     
     // Launch parameters
    // shocker_shared::PipelineLaunchParameters plp_;

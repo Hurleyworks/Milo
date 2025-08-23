@@ -32,8 +32,7 @@
 #include "excludeFromBuild/engines/shocker/handlers/ShockerModelHandler.cpp"
 #include "excludeFromBuild/engines/shocker/handlers/ShockerMaterialHandler.cpp"
 #include "excludeFromBuild/engines/shocker/handlers/ShockerSceneHandler.cpp"
-#include "excludeFromBuild/engines/shocker/handlers/ShockerRenderHandler.cpp"
-#include "excludeFromBuild/engines/shocker/handlers/ShockerDenoiserHandler.cpp"
+
 
 //// ripr handlers
 //#include "excludeFromBuild/engines/ripr/handlers/RiPRModelHandler.cpp"
