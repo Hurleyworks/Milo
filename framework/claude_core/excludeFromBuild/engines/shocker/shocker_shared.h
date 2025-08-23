@@ -77,18 +77,8 @@ namespace shocker_shared
         unsigned int atInfinity : 1;
     };
 
-    struct PickInfo
-    {
-        uint32_t instSlot;
-        uint32_t geomInstSlot;
-        uint32_t primIndex;
-        uint32_t matSlot;
-        Point3D positionInWorld;
-        Normal3D normalInWorld;
-        RGB albedo;
-        RGB emittance;
-        uint32_t hit : 1;
-    };
+    // PickInfo has been moved to common_shared.h for use across all engines
+    using PickInfo = shared::PickInfo;
 
     struct HitPointParams
     {

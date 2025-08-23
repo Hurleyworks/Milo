@@ -68,11 +68,11 @@ bool ScreenBufferHandler::initialize(uint32_t width, uint32_t height)
             return false;
         }
 
-        // Initialize pick info buffers - commented out until PickInfo is defined
-        // for (int i = 0; i < 2; ++i)
-        // {
-        //     pickInfoBuffers_[i].initialize(cudaContext_, cudau::BufferType::Device, 1);
-        // }
+        // Initialize pick info buffers (double buffered)
+        for (int i = 0; i < 2; ++i)
+        {
+            pickInfoBuffers_[i].initialize(cudaContext_, cudau::BufferType::Device, 1);
+        }
 
         // Load CUDA kernels for buffer operations
         if (!loadKernels())
@@ -106,10 +106,11 @@ void ScreenBufferHandler::finalize()
 
     cleanupKernels();
     
-    // for (int i = 1; i >= 0; --i)
-    // {
-    //     pickInfoBuffers_[i].finalize();
-    // }
+    // Finalize pick info buffers
+    for (int i = 1; i >= 0; --i)
+    {
+        pickInfoBuffers_[i].finalize();
+    }
     
     finalizeRngBuffer();
     linearBuffers_.finalize();
@@ -161,10 +162,9 @@ bool ScreenBufferHandler::resize(uint32_t width, uint32_t height)
 
         // RNG buffer needs special handling to preserve states
         resizeRngBuffer(cudaContext_, width, height);
-        {
-            LOG(WARNING) << "Failed to resize RNG buffer";
-            return false;
-        }
+        
+        // Pick info buffers don't need resizing as they store single pixel info
+        // They remain at size 1
 
         LOG(INFO) << "ScreenBufferHandler resized successfully. GPU memory usage: " 
                   << (getTotalGPUMemoryUsage() / (1024.0 * 1024.0)) << " MB";
@@ -201,11 +201,13 @@ void ScreenBufferHandler::copyAccumToLinearBuffers(CUstream stream)
     CUsurfObject beautySurf = accumBuffers_.beautyAccumBuffer.getSurfaceObject(0);
     CUsurfObject albedoSurf = accumBuffers_.albedoAccumBuffer.getSurfaceObject(0);
     CUsurfObject normalSurf = accumBuffers_.normalAccumBuffer.getSurfaceObject(0);
+    CUsurfObject flowSurf = accumBuffers_.flowAccumBuffer.getSurfaceObject(0);
 
     void* kernelParams[] = {
         &beautySurf,
         &albedoSurf,
         &normalSurf,
+        &flowSurf,
         linearBuffers_.linearBeautyBuffer.getDevicePointer(),
         linearBuffers_.linearAlbedoBuffer.getDevicePointer(),
         linearBuffers_.linearNormalBuffer.getDevicePointer(),
@@ -268,8 +270,9 @@ size_t ScreenBufferHandler::getTotalGPUMemoryUsage() const
     total += 2 * width_ * height_ * 16 * sizeof(uint32_t);
     total += 2 * width_ * height_ * 16 * sizeof(uint32_t);
     
-    // Accumulation buffers (3 buffers of float4)
+    // Accumulation buffers (3 buffers of float4 + 1 buffer of float2)
     total += 3 * width_ * height_ * sizeof(float4);
+    total += width_ * height_ * sizeof(float2);  // flow accumulation buffer
     
     // Linear buffers (4 float4 + 1 float2)
     total += 4 * width_ * height_ * sizeof(float4);
@@ -277,6 +280,9 @@ size_t ScreenBufferHandler::getTotalGPUMemoryUsage() const
     
     // RNG buffer
     total += width_ * height_ * sizeof(shared::PCG32RNG);
+    
+    // Pick info buffers (double buffered, single pixel each)
+    total += 2 * sizeof(shared::PickInfo);
     
     return total;
 }
@@ -457,6 +463,10 @@ void ScreenBufferHandler::AccumulationBuffers::initialize(CUcontext cuContext, u
         cuContext, cudau::ArrayElementType::Float32, 4,
         cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
         width, height, 1);
+    flowAccumBuffer.initialize2D(
+        cuContext, cudau::ArrayElementType::Float32, 2,  // float2 for motion vectors
+        cudau::ArraySurface::Enable, cudau::ArrayTextureGather::Disable,
+        width, height, 1);
     LOG(DBUG) << "Accumulation buffers initialized";
 }
 
@@ -465,11 +475,13 @@ void ScreenBufferHandler::AccumulationBuffers::resize(uint32_t width, uint32_t h
     beautyAccumBuffer.resize(width, height);
     albedoAccumBuffer.resize(width, height);
     normalAccumBuffer.resize(width, height);
+    flowAccumBuffer.resize(width, height);
     LOG(DBUG) << "Accumulation buffers resized to " << width << "x" << height;
 }
 
 void ScreenBufferHandler::AccumulationBuffers::finalize()
 {
+    flowAccumBuffer.finalize();
     normalAccumBuffer.finalize();
     albedoAccumBuffer.finalize();
     beautyAccumBuffer.finalize();

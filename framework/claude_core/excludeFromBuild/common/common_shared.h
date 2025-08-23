@@ -1275,4 +1275,19 @@ namespace shared {
         uint32_t isEmissive : 1;  // Flag for emissive instances
         float emissiveScale;       // Instance-level emissive multiplier
     };
+
+    // PickInfo structure for mouse picking functionality
+    // Moved from shocker_shared to allow use across all engines
+    struct PickInfo
+    {
+        uint32_t instSlot;
+        uint32_t geomInstSlot;
+        uint32_t primIndex;
+        uint32_t matSlot;
+        Point3D positionInWorld;
+        Normal3D normalInWorld;
+        RGB albedo;
+        RGB emittance;
+        uint32_t hit : 1;
+    };
 }

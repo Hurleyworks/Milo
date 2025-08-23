@@ -1,8 +1,9 @@
 #pragma once
 
 #include "../common/common_host.h"
-#include "../common/common_shared.h"  // For PCG32RNG
+#include "../common/common_shared.h"  // For PCG32RNG and PickInfo
 #include "../RenderContext.h"
+#include <array>
 
 class ScreenBufferHandler;
 using ScreenBufferHandlerPtr = std::shared_ptr<ScreenBufferHandler>;
@@ -60,6 +61,7 @@ public:
     const cudau::Array& getBeautyAccumBuffer() const { return accumBuffers_.beautyAccumBuffer; }
     const cudau::Array& getAlbedoAccumBuffer() const { return accumBuffers_.albedoAccumBuffer; }
     const cudau::Array& getNormalAccumBuffer() const { return accumBuffers_.normalAccumBuffer; }
+    const cudau::Array& getFlowAccumBuffer() const { return accumBuffers_.flowAccumBuffer; }
 
     // Linear buffer access for display/denoising
     const cudau::TypedBuffer<float4>& getLinearBeautyBuffer() const { return linearBuffers_.linearBeautyBuffer; }
@@ -71,11 +73,18 @@ public:
     // RNG buffer access
     const cudau::Array& getRngBuffer() const { return rngBuffer_; }
 
-    // Pick info buffer access (double buffered) - commented out until PickInfo is defined
-    // const cudau::TypedBuffer<PickInfo>& getPickInfoBuffer(int index = -1) const 
-    // { 
-    //     return pickInfoBuffers_[index >= 0 ? index : currentFrameIndex_]; 
-    // }
+    // Pick info buffer access (double buffered)
+    const cudau::TypedBuffer<shared::PickInfo>& getPickInfoBuffer(int index = -1) const 
+    { 
+        return pickInfoBuffers_[index >= 0 ? index : currentFrameIndex_]; 
+    }
+    
+    // Get pick info pointer for direct kernel access
+    shared::PickInfo* getPickInfoPointer(int bufferIndex) const
+    {
+        return pickInfoBuffers_[bufferIndex].isInitialized() ? 
+               pickInfoBuffers_[bufferIndex].getDevicePointer() : nullptr;
+    }
 
     // Surface object access for OptiX pipeline parameters
     auto getRngBufferSurfaceObject() const { return rngBuffer_.getSurfaceObject(0); }
@@ -84,6 +93,7 @@ public:
     auto getBeautyAccumSurfaceObject() const { return accumBuffers_.beautyAccumBuffer.getSurfaceObject(0); }
     auto getAlbedoAccumSurfaceObject() const { return accumBuffers_.albedoAccumBuffer.getSurfaceObject(0); }
     auto getNormalAccumSurfaceObject() const { return accumBuffers_.normalAccumBuffer.getSurfaceObject(0); }
+    auto getFlowAccumSurfaceObject() const { return accumBuffers_.flowAccumBuffer.getSurfaceObject(0); }
 
     // Buffer pointers for direct kernel access
     float4* getLinearBeautyPointer() { return linearBuffers_.linearBeautyBuffer.getDevicePointer(); }
@@ -131,6 +141,7 @@ private:
         cudau::Array beautyAccumBuffer;
         cudau::Array albedoAccumBuffer;
         cudau::Array normalAccumBuffer;
+        cudau::Array flowAccumBuffer;  // Motion vectors accumulation
 
         void initialize(CUcontext cuContext, uint32_t width, uint32_t height);
         void resize(uint32_t width, uint32_t height);
@@ -155,7 +166,7 @@ private:
     AccumulationBuffers accumBuffers_;
     LinearBuffers linearBuffers_;
     cudau::Array rngBuffer_;
-    // std::array<cudau::TypedBuffer<PickInfo>, 2> pickInfoBuffers_;  // Commented out until PickInfo is defined
+    std::array<cudau::TypedBuffer<shared::PickInfo>, 2> pickInfoBuffers_;
 
     // Internal methods
     bool initializeRngBuffer(CUcontext cuContext, uint32_t width, uint32_t height);
