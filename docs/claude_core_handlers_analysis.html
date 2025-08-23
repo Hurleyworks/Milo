@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Core: DenoiserHandler & ScreenBufferHandler Integration Analysis</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #764ba2;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+        }
+        h2 {
+            color: #667eea;
+            margin-top: 30px;
+            margin-bottom: 15px;
+        }
+        h3 {
+            color: #555;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+        .class-box {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .class-name {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #764ba2;
+            margin-bottom: 10px;
+        }
+        .integration-flow {
+            background: linear-gradient(90deg, #667eea15 0%, #764ba215 100%);
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        .buffer-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .buffer-item {
+            background: #f0f4f8;
+            padding: 12px;
+            border-radius: 6px;
+            border-left: 3px solid #667eea;
+        }
+        .buffer-name {
+            font-weight: bold;
+            color: #764ba2;
+            font-size: 0.95em;
+        }
+        .buffer-type {
+            color: #666;
+            font-size: 0.85em;
+            font-family: monospace;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th {
+            background: #667eea;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        tr:hover {
+            background: #f8f9fa;
+        }
+        .highlight {
+            background: #ffeaa7;
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+        .success {
+            color: #00b894;
+            font-weight: bold;
+        }
+        .warning {
+            color: #fdcb6e;
+            font-weight: bold;
+        }
+        .arrow {
+            display: inline-block;
+            margin: 0 10px;
+            color: #667eea;
+            font-weight: bold;
+        }
+        .summary-box {
+            background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 30px 0;
+        }
+        .metric {
+            display: inline-block;
+            background: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            margin: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .metric-label {
+            color: #666;
+            font-size: 0.85em;
+        }
+        .metric-value {
+            color: #764ba2;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Claude Core: DenoiserHandler & ScreenBufferHandler Integration Analysis</h1>
+        
+        <div class="summary-box">
+            <h2>Executive Summary</h2>
+            <p>The <strong>DenoiserHandler</strong> and <strong>ScreenBufferHandler</strong> form a complementary pair in the Claude Core rendering framework. 
+            They work together seamlessly with <span class="success">zero buffer duplication</span> and clean separation of concerns.</p>
+            
+            <div style="margin-top: 15px;">
+                <span class="metric">
+                    <span class="metric-label">Resource Overlap:</span>
+                    <span class="metric-value">~8 bytes</span>
+                </span>
+                <span class="metric">
+                    <span class="metric-label">Integration Type:</span>
+                    <span class="metric-value">Complementary</span>
+                </span>
+                <span class="metric">
+                    <span class="metric-label">Memory Efficiency:</span>
+                    <span class="metric-value">Optimal</span>
+                </span>
+            </div>
+        </div>
+
+        <h2>🏗️ Architecture Overview</h2>
+        
+        <div class="class-box">
+            <div class="class-name">ScreenBufferHandler</div>
+            <p><strong>Role:</strong> Centralized GPU buffer management for the rendering pipeline</p>
+            <p><strong>Responsibility:</strong> Owns and manages all render targets and display buffers</p>
+            
+            <h4>Managed Buffers:</h4>
+            <div class="buffer-list">
+                <div class="buffer-item">
+                    <div class="buffer-name">G-Buffers</div>
+                    <div class="buffer-type">cudau::Array (double buffered)</div>
+                </div>
+                <div class="buffer-item">
+                    <div class="buffer-name">Beauty Accumulation</div>
+                    <div class="buffer-type">cudau::Array</div>
+                </div>
+                <div class="buffer-item">
+                    <div class="buffer-name">Albedo Accumulation</div>
+                    <div class="buffer-type">cudau::Array</div>
+                </div>
+                <div class="buffer-item">
+                    <div class="buffer-name">Normal Accumulation</div>
+                    <div class="buffer-type">cudau::Array</div>
+                </div>
+                <div class="buffer-item">
+                    <div class="buffer-name">Linear Beauty</div>
+                    <div class="buffer-type">cudau::TypedBuffer&lt;float4&gt;</div>
+                </div>
+                <div class="buffer-item">
+                    <div class="buffer-name">Linear Albedo</div>
+                    <div class="buffer-type">cudau::TypedBuffer&lt;float4&gt;</div>
+                </div>
+                <div class="buffer-item">
+                    <div class="buffer-name">Linear Normal</div>
+                    <div class="buffer-type">cudau::TypedBuffer&lt;float4&gt;</div>
+                </div>
+                <div class="buffer-item">
+                    <div class="buffer-name">Linear Flow</div>
+                    <div class="buffer-type">cudau::TypedBuffer&lt;float2&gt;</div>
+                </div>
+                <div class="buffer-item">
+                    <div class="buffer-name">Linear Denoised Beauty</div>
+                    <div class="buffer-type">cudau::TypedBuffer&lt;float4&gt;</div>
+                </div>
+                <div class="buffer-item">
+                    <div class="buffer-name">RNG States</div>
+                    <div class="buffer-type">cudau::Array</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="class-box">
+            <div class="class-name">DenoiserHandler</div>
+            <p><strong>Role:</strong> OptiX AI-accelerated denoising pipeline</p>
+            <p><strong>Responsibility:</strong> Processes noisy render buffers to produce clean output</p>
+            
+            <h4>Managed Resources:</h4>
+            <div class="buffer-list">
+                <div class="buffer-item">
+                    <div class="buffer-name">State Buffer</div>
+                    <div class="buffer-type">cudau::Buffer (OptiX internal)</div>
+                </div>
+                <div class="buffer-item">
+                    <div class="buffer-name">Scratch Buffer</div>
+                    <div class="buffer-type">cudau::Buffer (working memory)</div>
+                </div>
+                <div class="buffer-item">
+                    <div class="buffer-name">HDR Normalizer</div>
+                    <div class="buffer-type">cudau::Buffer</div>
+                </div>
+                <div class="buffer-item">
+                    <div class="buffer-name">Internal Guide Layers</div>
+                    <div class="buffer-type">cudau::Buffer[2] (temporal)</div>
+                </div>
+            </div>
+        </div>
+
+        <h2>🔄 Integration Pipeline</h2>
+        
+        <div class="integration-flow">
+            <h3>Data Flow Architecture</h3>
+            <p style="font-size: 1.1em; text-align: center;">
+                <strong>Render</strong> 
+                <span class="arrow">→</span> 
+                <strong>ScreenBufferHandler</strong> 
+                <span class="arrow">→</span> 
+                <strong>DenoiserHandler</strong> 
+                <span class="arrow">→</span> 
+                <strong>Display</strong>
+            </p>
+        </div>
+
+        <h3>Integration Code Example</h3>
+        <div class="code-block">// Step 1: Render to accumulation buffers
+// ... rendering operations ...
+
+// Step 2: Copy accumulated data to linear buffers
+screenBufferHandler->copyAccumToLinearBuffers(stream);
+
+// Step 3: Setup denoiser inputs from ScreenBufferHandler
+DenoiserInputBuffers inputs;
+inputs.noisyBeauty = &screenBufferHandler->getLinearBeautyBuffer();
+inputs.albedo = &screenBufferHandler->getLinearAlbedoBuffer();
+inputs.normal = &screenBufferHandler->getLinearNormalBuffer();
+inputs.flow = &screenBufferHandler->getLinearFlowBuffer();
+
+// Step 4: Setup denoiser outputs (buffer owned by ScreenBufferHandler)
+DenoiserOutputBuffers outputs;
+outputs.denoisedBeauty = &screenBufferHandler->getLinearDenoisedBeautyBuffer();
+
+// Step 5: Execute denoising
+denoiserHandler->computeAndDenoise(stream, inputs, outputs, isFirstFrame);
+
+// Step 6: Display denoised result
+// linearDenoisedBeautyBuffer is ready for display</div>
+
+        <h2>📊 Resource Analysis</h2>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Resource Type</th>
+                    <th>ScreenBufferHandler</th>
+                    <th>DenoiserHandler</th>
+                    <th>Overlap Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Render Buffers</td>
+                    <td>✓ Owns all render targets</td>
+                    <td>✗ References only</td>
+                    <td class="success">No Duplication</td>
+                </tr>
+                <tr>
+                    <td>Denoiser State</td>
+                    <td>✗ Not needed</td>
+                    <td>✓ Owns OptiX state</td>
+                    <td class="success">No Duplication</td>
+                </tr>
+                <tr>
+                    <td>Temporal Buffers</td>
+                    <td>✓ Double-buffered G-buffers</td>
+                    <td>✓ Internal guide layers</td>
+                    <td class="success">Different Purpose</td>
+                </tr>
+                <tr>
+                    <td>Width/Height</td>
+                    <td>✓ Stored</td>
+                    <td>✓ Stored</td>
+                    <td class="warning">Minor (~8 bytes)</td>
+                </tr>
+                <tr>
+                    <td>RenderContext</td>
+                    <td>✓ Shared pointer</td>
+                    <td>✓ Shared pointer</td>
+                    <td class="success">Shared Reference</td>
+                </tr>
+                <tr>
+                    <td>Output Buffer</td>
+                    <td>✓ Owns linearDenoisedBeauty</td>
+                    <td>✗ Writes to it only</td>
+                    <td class="success">No Duplication</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>✅ Key Benefits of This Design</h2>
+        
+        <div class="integration-flow">
+            <ul style="margin: 0;">
+                <li><strong>Separation of Concerns:</strong> Buffer management cleanly separated from denoising logic</li>
+                <li><strong>Zero Buffer Duplication:</strong> DenoiserHandler operates on ScreenBufferHandler's buffers via pointers</li>
+                <li><strong>Memory Efficiency:</strong> Only ~8 bytes of redundant storage (width/height)</li>
+                <li><strong>Performance:</strong> Direct GPU pointer access eliminates unnecessary copies</li>
+                <li><strong>Flexibility:</strong> Denoising can be enabled/disabled without changing buffer management</li>
+                <li><strong>Reusability:</strong> DenoiserHandler can work with any compatible buffer source</li>
+                <li><strong>Clean Interface:</strong> Well-defined buffer types create a clear contract between handlers</li>
+            </ul>
+        </div>
+
+        <h2>🎯 Conclusion</h2>
+        
+        <div class="summary-box">
+            <p>The <strong>ScreenBufferHandler</strong> and <strong>DenoiserHandler</strong> demonstrate excellent architectural design with:</p>
+            <ul>
+                <li><span class="highlight">Perfect complementary roles</span> - one manages buffers, one processes them</li>
+                <li><span class="highlight">Zero resource duplication</span> - shared data is passed by reference</li>
+                <li><span class="highlight">Clean interfaces</span> - compatible buffer types enable seamless integration</li>
+                <li><span class="highlight">Independent lifecycles</span> - each handler can be initialized/destroyed independently</li>
+            </ul>
+            <p style="margin-top: 15px;"><strong>Recommendation:</strong> This design pattern should be maintained as it represents 
+            best practices for GPU resource management and processing pipeline separation.</p>
+        </div>
+
+        <div style="text-align: center; margin-top: 30px; color: #999; font-size: 0.9em;">
+            Analysis performed on Claude Core framework - /mnt/e/1Milo/Milo/framework/claude_core
+        </div>
+    </div>
+</body>
+</html>

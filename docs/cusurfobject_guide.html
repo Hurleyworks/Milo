@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CUsurfObject - CUDA Surface Objects Guide</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+        
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+        
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+            font-size: 2.2em;
+        }
+        
+        h2 {
+            color: #34495e;
+            border-left: 4px solid #3498db;
+            padding-left: 15px;
+            margin-top: 30px;
+            margin-bottom: 15px;
+        }
+        
+        .intro {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 25px;
+            font-size: 1.1em;
+        }
+        
+        ul {
+            padding-left: 20px;
+        }
+        
+        li {
+            margin-bottom: 8px;
+            position: relative;
+        }
+        
+        li::marker {
+            color: #3498db;
+        }
+        
+        .workflow {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+        
+        .workflow ol {
+            margin: 0;
+            padding-left: 25px;
+        }
+        
+        .workflow li {
+            margin-bottom: 10px;
+            font-weight: 500;
+        }
+        
+        code {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        
+        .highlight {
+            background: linear-gradient(120deg, #a8edea 0%, #fed6e3 100%);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #ff6b6b;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            color: #666;
+        }
+        
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            
+            .container {
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 1.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CUsurfObject</h1>
+        
+        <div class="intro">
+            A <code>CUsurfObject</code> is a CUDA surface object, which is part of NVIDIA's CUDA programming model.
+        </div>
+
+        <h2>What it is</h2>
+        <p>A <code>CUsurfObject</code> is an opaque handle that represents a CUDA surface object. Surface objects provide a way to read from and write to CUDA arrays (particularly 2D and 3D arrays) with hardware-accelerated, cache-coherent access patterns.</p>
+
+        <h2>Key Characteristics</h2>
+        <ul>
+            <li><strong>Hardware acceleration</strong>: Surface reads and writes are handled by dedicated hardware units</li>
+            <li><strong>Cache coherency</strong>: Automatic cache management for better performance</li>
+            <li><strong>Flexible access</strong>: Supports various data types and access patterns</li>
+            <li><strong>Bounds checking</strong>: Can provide automatic bounds checking in debug mode</li>
+        </ul>
+
+        <h2>Common Use Cases</h2>
+        <ul>
+            <li><strong>Image processing</strong>: Reading/writing pixel data in 2D textures</li>
+            <li><strong>Volume rendering</strong>: Accessing 3D volumetric data</li>
+            <li><strong>General array operations</strong>: Any scenario requiring efficient 2D/3D array access</li>
+            <li><strong>Graphics interoperability</strong>: Working with OpenGL or DirectX textures</li>
+        </ul>
+
+        <h2>Basic Workflow</h2>
+        <div class="workflow">
+            <ol>
+                <li>Create a CUDA array</li>
+                <li>Create a surface object from the array using <code>cuSurfObjectCreate()</code></li>
+                <li>Pass the surface object to CUDA kernels</li>
+                <li>Use surface read/write functions (<code>surf2Dread</code>, <code>surf2Dwrite</code>, etc.) in kernels</li>
+                <li>Destroy the surface object when done with <code>cuSurfObjectDestroy()</code></li>
+            </ol>
+        </div>
+
+        <div class="highlight">
+            <strong>💡 Key Takeaway:</strong> Surface objects are particularly useful when you need efficient, cache-friendly access to 2D or 3D data structures in CUDA kernels, especially for graphics and image processing applications.
+        </div>
+
+        <div class="footer">
+            <p>CUDA Surface Objects - Hardware-accelerated array access for high-performance computing</p>
+        </div>
+    </div>
+</body>
+</html>
