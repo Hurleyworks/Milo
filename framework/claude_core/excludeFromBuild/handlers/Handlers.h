@@ -10,6 +10,7 @@
 #include "TextureHandler.h"
 #include "PipelineHandler.h"
 #include "DenoiserHandler.h"
+#include "ScreenBufferHandler.h"
 
 // #include "MaterialHandler.h"  // Now engine-specific, not shared
 // #include "ModelHandler.h"  // Not used in engine-only mode
@@ -27,6 +28,9 @@ struct Handlers
     // Initialize all handlers
     void initialize (RenderContextPtr renderContext)
     {
+        // Initialize ScreenBufferHandler (fundamental buffer management)
+        screenBufferHandler = ScreenBufferHandler::create (renderContext);
+
         // Initialize SkyDomeHandler
         skyDomeHandler = SkyDomeHandler::create (renderContext);
 
@@ -70,9 +74,17 @@ struct Handlers
             // TextureHandler's destructor handles cleanup
             textureHandler.reset();
         }
+
+        // Cleanup ScreenBufferHandler
+        if (screenBufferHandler)
+        {
+            screenBufferHandler->finalize();
+            screenBufferHandler.reset();
+        }
     }
 
     // Handler members
+    ScreenBufferHandlerPtr screenBufferHandler;
     SkyDomeHandlerPtr skyDomeHandler;
     TextureHandlerPtr textureHandler;
     PipelineHandlerPtr pipelineHandler;

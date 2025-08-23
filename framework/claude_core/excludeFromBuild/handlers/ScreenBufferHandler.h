@@ -69,6 +69,13 @@ public:
     const cudau::TypedBuffer<float4>& getLinearNormalBuffer() const { return linearBuffers_.linearNormalBuffer; }
     const cudau::TypedBuffer<float2>& getLinearFlowBuffer() const { return linearBuffers_.linearFlowBuffer; }
     const cudau::TypedBuffer<float4>& getLinearDenoisedBeautyBuffer() const { return linearBuffers_.linearDenoisedBeautyBuffer; }
+    
+    // Non-const versions for denoising (denoiser may need write access)
+    cudau::TypedBuffer<float4>& getLinearBeautyBuffer() { return linearBuffers_.linearBeautyBuffer; }
+    cudau::TypedBuffer<float4>& getLinearAlbedoBuffer() { return linearBuffers_.linearAlbedoBuffer; }
+    cudau::TypedBuffer<float4>& getLinearNormalBuffer() { return linearBuffers_.linearNormalBuffer; }
+    cudau::TypedBuffer<float2>& getLinearFlowBuffer() { return linearBuffers_.linearFlowBuffer; }
+    cudau::TypedBuffer<float4>& getLinearDenoisedBeautyBuffer() { return linearBuffers_.linearDenoisedBeautyBuffer; }
 
     // RNG buffer access
     const cudau::Array& getRngBuffer() const { return rngBuffer_; }

@@ -77,6 +77,15 @@ void ShockerEngine::initialize (RenderContext* ctx)
     // Create and setup pipelines
     setupPipelines();
 
+    // Initialize SBT for empty scene (must be done after pipeline setup)
+    // This ensures the SBT is properly set even when no geometry has been added yet
+    auto pipelineHandler = renderContext_->getHandlers().pipelineHandler;
+    if (pipelineHandler)
+    {
+        pipelineHandler->updateSceneSBT();
+        LOG (INFO) << "Initial SBT setup for empty scene completed";
+    }
+
     // Create render handler
     renderHandler_ = ShockerRenderHandler::create (renderContext);
     initializeHandlerWithDimensions (renderHandler_, "RenderHandler");
