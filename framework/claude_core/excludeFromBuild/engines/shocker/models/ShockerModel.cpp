@@ -1,6 +1,5 @@
 #include "../../../model/ModelUtilities.h"
 #include "ShockerModel.h"
-#include "../handlers/ShockerMaterialHandler.h"
 
 using Eigen::Vector2f;
 using sabi::CgModel;

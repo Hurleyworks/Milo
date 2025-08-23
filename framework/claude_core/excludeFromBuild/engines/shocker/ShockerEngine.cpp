@@ -1,7 +1,6 @@
 #include "ShockerEngine.h"
 #include "../../RenderContext.h"
 #include "handlers/ShockerSceneHandler.h"
-#include "handlers/ShockerMaterialHandler.h"
 #include "handlers/ShockerModelHandler.h"
 #include "models/ShockerModel.h"
 
@@ -47,10 +46,6 @@ void ShockerEngine::initialize (RenderContext* ctx)
     // Create handlers
     RenderContextPtr renderContext = ctx->shared_from_this();
 
-    // Create material handler first
-    materialHandler_ = ShockerMaterialHandler::create (renderContext);
-    materialHandler_->initialize();
-
     // Create scene handler and give it the scene
     sceneHandler_ = ShockerSceneHandler::create (renderContext);
     sceneHandler_->setScene (renderContext->getScene());
@@ -58,7 +53,7 @@ void ShockerEngine::initialize (RenderContext* ctx)
     // Create model handler and connect it to other handlers
     modelHandler_ = ShockerModelHandler::create (renderContext);
     modelHandler_->initialize();
-    modelHandler_->setHandlers (materialHandler_, sceneHandler_);
+    modelHandler_->setSceneHandler (sceneHandler_);
     modelHandler_->setEngine (this);
 
     // Also give model handler to scene handler
@@ -250,11 +245,7 @@ void ShockerEngine::cleanup()
         sceneHandler_.reset();
     }
 
-    if (materialHandler_)
-    {
-        materialHandler_->finalize();
-        materialHandler_.reset();
-    }
+    // MaterialHandler is now managed by Handlers and cleaned up there
 
     // Clean up RNG buffer
     if (rngBuffer_.isInitialized())
@@ -700,10 +691,11 @@ void ShockerEngine::updateLaunchParameters (const mace::InputEvent& input)
     static_plp_.GBuffer1[0] = gbuffers_.gBuffer1[0].getSurfaceObject (0);
     static_plp_.GBuffer1[1] = gbuffers_.gBuffer1[1].getSurfaceObject (0);
 
-    // Set material data buffer from material handler
-    if (materialHandler_ && materialHandler_->getMaterialDataBuffer())
+    // Set material data buffer from the generic material handler in Handlers
+    auto materialHandler = renderContext_->getHandlers().materialHandler;
+    if (materialHandler && materialHandler->getMaterialDataBuffer())
     {
-        static_plp_.materialDataBuffer = materialHandler_->getMaterialDataBuffer()->getROBuffer<shared::enableBufferOobCheck>();
+        static_plp_.materialDataBuffer = materialHandler->getMaterialDataBuffer()->getROBuffer<shared::enableBufferOobCheck>();
     }
     else
     {

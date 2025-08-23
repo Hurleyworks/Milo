@@ -64,7 +64,6 @@ private:
     
     // Scene management
     std::shared_ptr<class ShockerSceneHandler> sceneHandler_;
-    std::shared_ptr<class ShockerMaterialHandler> materialHandler_;
     std::shared_ptr<class ShockerModelHandler> modelHandler_;
     
      // Pipeline parameter structures

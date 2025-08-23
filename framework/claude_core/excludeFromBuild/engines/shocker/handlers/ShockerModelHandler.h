@@ -11,7 +11,6 @@ using sabi::RenderableWeakRef;
 using sabi::WeakRenderableList;
 
 using ShockerModelHandlerPtr = std::shared_ptr<class ShockerModelHandler>;
-class ShockerMaterialHandler;
 class ShockerSceneHandler;
 class ShockerEngine;
 
@@ -92,11 +91,9 @@ public:
     // Finalize and clean up all resources
     void finalize();
 
-    // Set the material and scene handlers (must be called before adding models)
-    void setHandlers(std::shared_ptr<ShockerMaterialHandler> materialHandler,
-                     std::shared_ptr<ShockerSceneHandler> sceneHandler)
+    // Set the scene handler (must be called before adding models)
+    void setSceneHandler(std::shared_ptr<ShockerSceneHandler> sceneHandler)
     {
-        materialHandler_ = materialHandler;
         sceneHandler_ = sceneHandler;
     }
     
@@ -170,7 +167,6 @@ private:
     ShockerModelManager modelMgr;        // Model manager that stores and retrieves models
     
     // Handler references (not owned)
-    std::shared_ptr<ShockerMaterialHandler> materialHandler_;
     std::shared_ptr<ShockerSceneHandler> sceneHandler_;
     ShockerEngine* engine_ = nullptr;  // Engine for accessing compute kernels
 
