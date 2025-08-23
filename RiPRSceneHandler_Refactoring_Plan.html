@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RiPRSceneHandler Refactoring Plan</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 10px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #764ba2;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+        }
+        h2 {
+            color: #667eea;
+            margin-top: 30px;
+            border-left: 4px solid #764ba2;
+            padding-left: 10px;
+        }
+        h3 {
+            color: #764ba2;
+            margin-top: 20px;
+        }
+        .section {
+            margin-bottom: 30px;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        .analysis {
+            background: #e8f4f8;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .refactor-item {
+            background: #fff3cd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border-left: 4px solid #ffc107;
+        }
+        .benefit {
+            background: #d4edda;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 3px;
+            border-left: 3px solid #28a745;
+        }
+        .challenge {
+            background: #f8d7da;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 3px;
+            border-left: 3px solid #dc3545;
+        }
+        .step {
+            background: white;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            counter-increment: step-counter;
+            position: relative;
+            padding-left: 50px;
+        }
+        .step::before {
+            content: counter(step-counter);
+            position: absolute;
+            left: 10px;
+            top: 15px;
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #d63384;
+            font-family: 'Courier New', monospace;
+        }
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        ul li {
+            padding-left: 25px;
+            position: relative;
+            margin: 5px 0;
+        }
+        ul li::before {
+            content: "▸";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+        }
+        .timeline {
+            background: #f0f8ff;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .phase {
+            padding: 15px;
+            margin: 10px 0;
+            background: white;
+            border-radius: 5px;
+            border-left: 4px solid #667eea;
+        }
+        .testing-item {
+            background: #e7f3ff;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 RiPRSceneHandler Refactoring Plan</h1>
+        <p><strong>Objective:</strong> Refactor RiPRSceneHandler to use the generic SceneHandler for IAS management while maintaining RiPR-specific functionality.</p>
+        
+        <h2>📊 Current State Analysis</h2>
+        <div class="section">
+            <h3>What RiPRSceneHandler Currently Does</h3>
+            <div class="analysis">
+                <ul>
+                    <li><strong>IAS Management:</strong> Creates and manages <code>optixu::InstanceAccelerationStructure</code></li>
+                    <li><strong>Instance Creation:</strong> Creates instances from RenderableNode objects</li>
+                    <li><strong>Buffer Management:</strong> Manages instance buffers, IAS memory, and scratch buffers</li>
+                    <li><strong>Node Tracking:</strong> Maintains <code>NodeMap</code> to track instances by index</li>
+                    <li><strong>Selection System:</strong> Handles material selection/deselection</li>
+                    <li><strong>Motion Updates:</strong> Updates transforms for animated objects</li>
+                    <li><strong>Instance Data:</strong> Manages per-instance data buffers</li>
+                    <li><strong>Expired Node Cleanup:</strong> Removes expired weak references</li>
+                    <li><strong>Light Distribution:</strong> Manages emissive instances for lighting</li>
+                    <li><strong>Deformation:</strong> Handles vertex deformation for animated meshes</li>
+                </ul>
+            </div>
+        </div>
+
+        <h2>🎯 Refactoring Strategy</h2>
+        <div class="section">
+            <h3>Core Principle: Separation of Concerns</h3>
+            <p>Delegate generic IAS operations to SceneHandler while keeping RiPR-specific logic in RiPRSceneHandler.</p>
+            
+            <h3>What Moves to Generic SceneHandler</h3>
+            <div class="refactor-item">
+                <ul>
+                    <li>IAS creation and configuration</li>
+                    <li>Instance add/remove operations</li>
+                    <li>IAS rebuild/update logic</li>
+                    <li>Traversable handle management</li>
+                    <li>Buffer allocation for IAS operations</li>
+                    <li>Dirty state tracking</li>
+                    <li>Basic instance transform updates</li>
+                </ul>
+            </div>
+            
+            <h3>What Stays in RiPRSceneHandler</h3>
+            <div class="refactor-item">
+                <ul>
+                    <li>RenderableNode to Instance conversion</li>
+                    <li>NodeMap management (instance index to node mapping)</li>
+                    <li>Selection material system</li>
+                    <li>Instance data buffer management</li>
+                    <li>Emissive instance tracking</li>
+                    <li>Light distribution building</li>
+                    <li>Deformation operations</li>
+                    <li>Physics phantom handling</li>
+                    <li>Expired node cleanup logic</li>
+                    <li>Batch instance creation optimization</li>
+                </ul>
+            </div>
+        </div>
+
+        <h2>🔄 Implementation Steps</h2>
+        <div class="section" style="counter-reset: step-counter;">
+            <div class="step">
+                <h3>Add SceneHandler Member</h3>
+                <p>Add a <code>SceneHandlerPtr sceneHandler_;</code> member to RiPRSceneHandler and initialize it in the constructor.</p>
+                <pre>
+class RiPRSceneHandler {
+private:
+    SceneHandlerPtr sceneHandler_;  // Generic scene handler
+    // ... existing members ...
+};</pre>
+            </div>
+            
+            <div class="step">
+                <h3>Update Constructor</h3>
+                <p>Initialize SceneHandler and configure it for RiPR's needs (fast build, allow updates).</p>
+                <pre>
+RiPRSceneHandler::RiPRSceneHandler(RenderContextPtr ctx) : ctx(ctx) {
+    sceneHandler_ = ctx->getHandlers().sceneHandler;
+    sceneHandler_->setConfiguration(
+        optixu::ASTradeoff::PreferFastBuild,
+        true,   // allowUpdate
+        false   // allowCompaction
+    );
+}</pre>
+            </div>
+            
+            <div class="step">
+                <h3>Refactor createInstance Methods</h3>
+                <p>Modify instance creation to use SceneHandler while maintaining node tracking.</p>
+                <pre>
+void RiPRSceneHandler::createInstance(RenderableWeakRef& weakNode) {
+    // Create optixu::Instance from node
+    optixu::Instance instance = convertNodeToInstance(weakNode);
+    
+    // Add to generic handler
+    sceneHandler_->addInstance(instance);
+    
+    // Track in nodeMap
+    uint32_t index = sceneHandler_->getInstanceCount() - 1;
+    nodeMap[index] = weakNode;
+}</pre>
+            </div>
+            
+            <div class="step">
+                <h3>Refactor IAS Operations</h3>
+                <p>Replace direct IAS operations with SceneHandler calls.</p>
+                <pre>
+// Old: ias.rebuild(...)
+// New:
+void RiPRSceneHandler::rebuildIAS() {
+    sceneHandler_->buildIAS();
+    travHandle = sceneHandler_->getTraversableHandle();
+}
+
+void RiPRSceneHandler::updateIAS() {
+    sceneHandler_->updateIAS();
+    travHandle = sceneHandler_->getTraversableHandle();
+}</pre>
+            </div>
+            
+            <div class="step">
+                <h3>Update removeExpiredNodes</h3>
+                <p>Integrate with SceneHandler's remove operations.</p>
+                <pre>
+uint32_t RiPRSceneHandler::removeExpiredNodes() {
+    std::vector&lt;uint32_t&gt; expiredIndices;
+    // Find expired nodes...
+    
+    // Remove from SceneHandler in reverse order
+    for (auto it = expiredIndices.rbegin(); it != expiredIndices.rend(); ++it) {
+        sceneHandler_->removeInstanceAt(*it);
+    }
+    
+    // Rebuild nodeMap...
+    return expiredIndices.size();
+}</pre>
+            </div>
+            
+            <div class="step">
+                <h3>Handle Motion Updates</h3>
+                <p>Use SceneHandler's transform update capabilities.</p>
+                <pre>
+bool RiPRSceneHandler::updateMotion() {
+    bool updated = false;
+    for (const auto& [index, weakRef] : nodeMap) {
+        if (auto node = weakRef.lock()) {
+            if (node->hasMotion()) {
+                float transform[12];
+                node->getTransform(transform);
+                sceneHandler_->updateInstanceTransform(index, transform);
+                updated = true;
+            }
+        }
+    }
+    if (updated) {
+        sceneHandler_->buildOrUpdateIAS();
+    }
+    return updated;
+}</pre>
+            </div>
+            
+            <div class="step">
+                <h3>Clean Up Redundant Code</h3>
+                <p>Remove IAS-related member variables and methods that are now handled by SceneHandler.</p>
+                <ul>
+                    <li>Remove: <code>optixu::InstanceAccelerationStructure ias;</code></li>
+                    <li>Remove: <code>cudau::Buffer iasMem;</code></li>
+                    <li>Remove: <code>cudau::TypedBuffer&lt;OptixInstance&gt; instanceBuffer;</code></li>
+                    <li>Keep: <code>NodeMap nodeMap;</code> for RiPR-specific tracking</li>
+                </ul>
+            </div>
+            
+            <div class="step">
+                <h3>Update Getter Methods</h3>
+                <p>Proxy appropriate calls to SceneHandler.</p>
+                <pre>
+OptixTraversableHandle RiPRSceneHandler::getHandle() {
+    return sceneHandler_->getTraversableHandle();
+}
+
+size_t RiPRSceneHandler::getInstanceCount() {
+    return sceneHandler_->getInstanceCount();
+}</pre>
+            </div>
+        </div>
+
+        <h2>✅ Benefits</h2>
+        <div class="section">
+            <div class="benefit">
+                <strong>Code Reusability:</strong> Eliminates duplicate IAS management code across engines
+            </div>
+            <div class="benefit">
+                <strong>Maintainability:</strong> Centralized IAS logic makes updates easier
+            </div>
+            <div class="benefit">
+                <strong>Performance:</strong> Leverages optimized update vs rebuild logic
+            </div>
+            <div class="benefit">
+                <strong>Consistency:</strong> All engines use the same IAS management approach
+            </div>
+            <div class="benefit">
+                <strong>Separation of Concerns:</strong> Clear distinction between generic and engine-specific code
+            </div>
+        </div>
+
+        <h2>⚠️ Challenges & Solutions</h2>
+        <div class="section">
+            <div class="challenge">
+                <strong>Challenge:</strong> Maintaining NodeMap synchronization with SceneHandler's instance list
+                <p><strong>Solution:</strong> Always update NodeMap immediately after SceneHandler operations. Consider adding callbacks or observer pattern if needed.</p>
+            </div>
+            
+            <div class="challenge">
+                <strong>Challenge:</strong> Instance index management when removing instances
+                <p><strong>Solution:</strong> Rebuild NodeMap after bulk removals to ensure correct index mapping.</p>
+            </div>
+            
+            <div class="challenge">
+                <strong>Challenge:</strong> Batch operations optimization
+                <p><strong>Solution:</strong> Add batch methods to SceneHandler if needed, or use existing methods with deferred rebuild.</p>
+            </div>
+            
+            <div class="challenge">
+                <strong>Challenge:</strong> Access to internal IAS for RiPR-specific operations
+                <p><strong>Solution:</strong> Add accessor methods to SceneHandler if absolutely necessary, but prefer using public API.</p>
+            </div>
+        </div>
+
+        <h2>📋 Testing Plan</h2>
+        <div class="section">
+            <div class="testing-item">
+                <strong>Unit Tests:</strong>
+                <ul>
+                    <li>Test instance creation and removal</li>
+                    <li>Verify NodeMap stays synchronized</li>
+                    <li>Test expired node cleanup</li>
+                    <li>Verify motion updates work correctly</li>
+                </ul>
+            </div>
+            
+            <div class="testing-item">
+                <strong>Integration Tests:</strong>
+                <ul>
+                    <li>Test full scene building with RiPREngine</li>
+                    <li>Verify rendering produces same results</li>
+                    <li>Test interactive scene editing</li>
+                    <li>Performance comparison (update vs rebuild)</li>
+                </ul>
+            </div>
+            
+            <div class="testing-item">
+                <strong>Regression Tests:</strong>
+                <ul>
+                    <li>Ensure selection system still works</li>
+                    <li>Verify light distribution is correctly built</li>
+                    <li>Test deformation operations</li>
+                    <li>Check physics phantom handling</li>
+                </ul>
+            </div>
+        </div>
+
+        <h2>📅 Implementation Timeline</h2>
+        <div class="timeline">
+            <div class="phase">
+                <h3>Phase 1: Preparation (1-2 hours)</h3>
+                <ul>
+                    <li>Add SceneHandler integration</li>
+                    <li>Update constructor and initialization</li>
+                    <li>Create adapter methods</li>
+                </ul>
+            </div>
+            
+            <div class="phase">
+                <h3>Phase 2: Core Refactoring (2-3 hours)</h3>
+                <ul>
+                    <li>Replace IAS operations</li>
+                    <li>Update instance management</li>
+                    <li>Refactor motion updates</li>
+                </ul>
+            </div>
+            
+            <div class="phase">
+                <h3>Phase 3: Cleanup (1 hour)</h3>
+                <ul>
+                    <li>Remove redundant code</li>
+                    <li>Update documentation</li>
+                    <li>Code review and formatting</li>
+                </ul>
+            </div>
+            
+            <div class="phase">
+                <h3>Phase 4: Testing (2 hours)</h3>
+                <ul>
+                    <li>Run unit tests</li>
+                    <li>Integration testing</li>
+                    <li>Performance validation</li>
+                </ul>
+            </div>
+        </div>
+
+        <h2>🎯 Success Criteria</h2>
+        <div class="section">
+            <ul>
+                <li>✓ All existing RiPR functionality preserved</li>
+                <li>✓ No performance regression</li>
+                <li>✓ Cleaner, more maintainable code</li>
+                <li>✓ Reduced code duplication</li>
+                <li>✓ All tests passing</li>
+                <li>✓ Update vs rebuild logic working correctly</li>
+                <li>✓ NodeMap stays synchronized with instances</li>
+            </ul>
+        </div>
+
+        <h2>📝 Notes</h2>
+        <div class="section">
+            <p><strong>Key Insight:</strong> The refactoring should be transparent to users of RiPRSceneHandler. The public API should remain unchanged or minimally changed.</p>
+            <p><strong>Future Consideration:</strong> Once refactored, similar patterns can be applied to ShockerSceneHandler and other engine-specific scene handlers.</p>
+            <p><strong>Documentation:</strong> Update inline comments and documentation to reflect the new architecture and delegation pattern.</p>
+        </div>
+    </div>
+</body>
+</html>

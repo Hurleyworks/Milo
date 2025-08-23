@@ -12,6 +12,7 @@
 #include "DenoiserHandler.h"
 #include "ScreenBufferHandler.h"
 #include "MaterialHandler.h"
+#include "SceneHandler.h"
 
 // #include "ModelHandler.h"  // Not used in engine-only mode
 
@@ -30,6 +31,11 @@ struct Handlers
     {
         // Initialize ScreenBufferHandler (fundamental buffer management)
         screenBufferHandler = ScreenBufferHandler::create (renderContext);
+
+        // Initialize SceneHandler (manages IAS)
+        sceneHandler = SceneHandler::create (renderContext);
+        if (sceneHandler)
+            sceneHandler->initialize();
 
         // Initialize SkyDomeHandler
         skyDomeHandler = SkyDomeHandler::create (renderContext);
@@ -73,6 +79,13 @@ struct Handlers
             materialHandler.reset();
         }
 
+        // Cleanup SceneHandler
+        if (sceneHandler)
+        {
+            sceneHandler->finalize();
+            sceneHandler.reset();
+        }
+
         // Cleanup SkyDomeHandler
         if (skyDomeHandler)
         {
@@ -97,6 +110,7 @@ struct Handlers
 
     // Handler members
     ScreenBufferHandlerPtr screenBufferHandler;
+    SceneHandlerPtr sceneHandler;
     SkyDomeHandlerPtr skyDomeHandler;
     TextureHandlerPtr textureHandler;
     MaterialHandlerPtr materialHandler;
