@@ -57,7 +57,6 @@ private:
     void initializeLightProbabilityKernels();  // Initialize CUDA kernels for light probability computation
     
     // GBuffer rendering
-    void renderGBuffer(CUstream stream);
     void outputGBufferDebugInfo(CUstream stream);
     void setGBufferDebugEnabled(bool enabled) { enableGBufferDebug_ = enabled; }
     bool isGBufferDebugEnabled() const { return enableGBufferDebug_; }
@@ -75,11 +74,6 @@ private:
     std::shared_ptr<class ShockerMaterialHandler> materialHandler_;
     std::shared_ptr<class ShockerModelHandler> modelHandler_;
     
-    
-    // Launch parameters
-   // shocker_shared::PipelineLaunchParameters plp_;
-   // CUdeviceptr plpOnDevice_ = 0;
-
      // Pipeline parameter structures
     shocker_shared::StaticPipelineLaunchParameters static_plp_;
     shocker_shared::PerFramePipelineLaunchParameters per_frame_plp_;

@@ -638,3 +638,81 @@ bool DenoiserInputBuffers::validate(const DenoiserConfig& config) const
     
     return true;
 }
+
+// High-level denoising that automatically handles buffer setup from ScreenBufferHandler
+void DenoiserHandler::denoiseFrame(CUstream stream, bool isFirstFrame, float blendFactor)
+{
+    if (!initialized_)
+    {
+        LOG(WARNING) << "DenoiserHandler not initialized";
+        return;
+    }
+    
+    if (!renderContext_)
+    {
+        LOG(WARNING) << "RenderContext not available";
+        return;
+    }
+    
+    // Get the ScreenBufferHandler from the centralized handlers
+    auto& handlers = renderContext_->getHandlers();
+    if (!handlers.screenBufferHandler)
+    {
+        LOG(WARNING) << "ScreenBufferHandler not available";
+        return;
+    }
+    
+    auto screenBufferHandler = handlers.screenBufferHandler;
+    if (!screenBufferHandler->isInitialized())
+    {
+        LOG(WARNING) << "ScreenBufferHandler not initialized";
+        return;
+    }
+    
+    // Set up input buffers based on denoiser configuration
+    DenoiserInputBuffers inputs;
+    inputs.noisyBeauty = &screenBufferHandler->getLinearBeautyBuffer();
+    inputs.beautyFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
+    
+    // Add guide layers based on configuration
+    if (config_.useAlbedo)
+    {
+        inputs.albedo = &screenBufferHandler->getLinearAlbedoBuffer();
+        inputs.albedoFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
+    }
+    
+    if (config_.useNormal)
+    {
+        inputs.normal = &screenBufferHandler->getLinearNormalBuffer();
+        inputs.normalFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
+    }
+    
+    // Handle temporal/flow based on model type
+    if (isTemporalModel(config_.model) && config_.useFlow)
+    {
+        // For temporal models, flow vectors would be set here if available
+        // inputs.flow = &screenBufferHandler->getFlowBuffer();
+        // inputs.flowFormat = OPTIX_PIXEL_FORMAT_FLOAT2;
+        
+        // For now, temporal models without flow will fallback to spatial
+        inputs.flow = nullptr;
+        inputs.previousDenoisedBeauty = nullptr;
+        
+        LOG(DBUG) << "Temporal model configured but flow vectors not available, using spatial denoising";
+    }
+    
+    // Set up output buffer
+    DenoiserOutputBuffers outputs;
+    outputs.denoisedBeauty = &screenBufferHandler->getLinearDenoisedBeautyBuffer();
+    
+    // AOV outputs for kernel prediction modes (if configured)
+    if (config_.useKernelPrediction)
+    {
+        // These would be set if we had separate denoised AOV buffers
+        outputs.denoisedAlbedo = nullptr;
+        outputs.denoisedNormal = nullptr;
+    }
+    
+    // Execute combined normalizer computation and denoising
+    computeAndDenoise(stream, inputs, outputs, isFirstFrame, blendFactor);
+}

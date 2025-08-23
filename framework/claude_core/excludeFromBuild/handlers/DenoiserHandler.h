@@ -164,6 +164,13 @@ public:
         bool isFirstFrame = false,
         float blendFactor = 0.0f);
     
+    // High-level denoising that automatically handles buffer setup from ScreenBufferHandler
+    // This method internally accesses ScreenBufferHandler through the Handlers system
+    void denoiseFrame(
+        CUstream stream,
+        bool isFirstFrame = false,
+        float blendFactor = 0.0f);
+    
     // Tiled denoising for large framebuffers
     void denoiseTiled(
         CUstream stream,

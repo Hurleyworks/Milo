@@ -90,14 +90,14 @@ void ShockerEngine::initialize (RenderContext* ctx)
     {
         if (!screenBufferHandler->isInitialized())
         {
-            if (!screenBufferHandler->initialize(renderWidth_, renderHeight_))
+            if (!screenBufferHandler->initialize (renderWidth_, renderHeight_))
             {
-                LOG(WARNING) << "Failed to initialize ScreenBufferHandler";
+                LOG (WARNING) << "Failed to initialize ScreenBufferHandler";
             }
             else
             {
-                LOG(INFO) << "ScreenBufferHandler initialized with dimensions " 
-                          << renderWidth_ << "x" << renderHeight_;
+                LOG (INFO) << "ScreenBufferHandler initialized with dimensions "
+                           << renderWidth_ << "x" << renderHeight_;
             }
         }
     }
@@ -110,21 +110,19 @@ void ShockerEngine::initialize (RenderContext* ctx)
         {
             // Configure denoiser for HDR mode (spatial only, no temporal)
             DenoiserConfig config;
-            config.model = DenoiserConfig::Model::HDR;  // Basic HDR denoiser
+            config.model = DenoiserConfig::Model::HDR; // Basic HDR denoiser
             config.useAlbedo = true;
             config.useNormal = true;
-            config.useFlow = false;  // HDR model doesn't use motion vectors
+            config.useFlow = false; // HDR model doesn't use motion vectors
             config.alphaMode = OPTIX_DENOISER_ALPHA_MODE_COPY;
-            config.useTiling = false;  // Can enable for very large framebuffers
-            
-            if (!denoiserHandler->initialize(renderWidth_, renderHeight_, config))
+            config.useTiling = false; // Can enable for very large framebuffers
+
+            if (!denoiserHandler->initialize (renderWidth_, renderHeight_, config))
             {
-                LOG(WARNING) << "Failed to initialize DenoiserHandler";
+                LOG (WARNING) << "Failed to initialize DenoiserHandler";
             }
         }
     }
-
-   
 
     // Allocate launch parameters on device
     allocateLaunchParameters();
@@ -258,8 +256,6 @@ void ShockerEngine::cleanup()
         materialHandler_.reset();
     }
 
-   
-
     // Clean up RNG buffer
     if (rngBuffer_.isInitialized())
     {
@@ -354,7 +350,7 @@ void ShockerEngine::render (const mace::InputEvent& input, bool updateMotion, ui
     auto timer = getCurrentTimer();
     timer->frame.start (stream);
 
-      // Get camera from render context
+    // Get camera from render context
     auto camera = renderContext_->getCamera();
 
     // Update camera only if dirty
@@ -408,50 +404,24 @@ void ShockerEngine::render (const mace::InputEvent& input, bool updateMotion, ui
     if (handlers.screenBufferHandler && handlers.screenBufferHandler->isInitialized())
     {
         handlers.screenBufferHandler->copyAccumToLinearBuffers (stream);
-        
+
         // Apply denoising if handler is available
         if (handlers.denoiserHandler && handlers.denoiserHandler->isInitialized())
         {
             // Start denoise timer
-            timer->denoise.start(stream);
-            
-            // Set up input buffers from ScreenBufferHandler
-            DenoiserInputBuffers inputs;
-            inputs.noisyBeauty = &handlers.screenBufferHandler->getLinearBeautyBuffer();
-            inputs.albedo = &handlers.screenBufferHandler->getLinearAlbedoBuffer();
-            inputs.normal = &handlers.screenBufferHandler->getLinearNormalBuffer();
-            // HDR model doesn't use flow/motion vectors
-            inputs.flow = nullptr;
-            inputs.previousDenoisedBeauty = nullptr;  // HDR model doesn't use temporal data
-            
-            // Set pixel formats
-            inputs.beautyFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
-            inputs.albedoFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
-            inputs.normalFormat = OPTIX_PIXEL_FORMAT_FLOAT4;
-            
-            // Set up output buffer
-            DenoiserOutputBuffers outputs;
-            outputs.denoisedBeauty = &handlers.screenBufferHandler->getLinearDenoisedBeautyBuffer();
-            outputs.denoisedAlbedo = nullptr;  // Not using AOV outputs
-            outputs.denoisedNormal = nullptr;
-            
-            // Execute denoising (compute normalizer and denoise in one call)
+            timer->denoise.start (stream);
+
+            // Use the simplified denoising interface that handles all buffer setup internally
             bool isFirstFrame = (numAccumFrames_ <= 1);
-            float blendFactor = 0.0f;  // 0 = full denoise, 1 = full noisy
-            
-            handlers.denoiserHandler->computeAndDenoise(
-                stream,
-                inputs,
-                outputs,
-                isFirstFrame,
-                blendFactor
-            );
-            
+            float blendFactor = 0.0f; // 0 = full denoise, 1 = full noisy
+
+            handlers.denoiserHandler->denoiseFrame (stream, isFirstFrame, blendFactor);
+
             // Synchronize to ensure denoising completes
-            CUDADRV_CHECK(cuStreamSynchronize(stream));
-            
+            CUDADRV_CHECK (cuStreamSynchronize (stream));
+
             // Stop denoise timer
-            timer->denoise.stop(stream);
+            timer->denoise.stop (stream);
         }
     }
 
@@ -468,191 +438,6 @@ void ShockerEngine::render (const mace::InputEvent& input, bool updateMotion, ui
     streamChain_->swap();
 }
 
-#if 0
-void ShockerEngine::render (const mace::InputEvent& input, bool updateMotion, uint32_t frameNumber)
-{
-    if (!isInitialized_)
-    {
-        LOG (WARNING) << "ShockerEngine not initialized";
-        return;
-    }
-
-    if (!renderContext_)
-    {
-        LOG (WARNING) << "No render context available";
-        return;
-    }
-
-    // Get path tracing pipeline from PipelineHandler
-    auto pipelineHandler = renderContext_->getHandlers().pipelineHandler;
-    if (!pipelineHandler)
-    {
-        LOG (WARNING) << "PipelineHandler not available";
-        return;
-    }
-    
-    // Check if path tracing pipeline is ready
-    if (!pipelineHandler->isReady(EntryPointType::PathTrace))
-    {
-        auto pathTracePipeline = pipelineHandler->getPipeline(EntryPointType::PathTrace);
-        LOG (WARNING) << "Path tracing pipeline not ready. Pipeline exists: " 
-                      << (pathTracePipeline ? "YES" : "NO")
-                      << ", isInitialized: " << (pathTracePipeline ? (pathTracePipeline->isInitialized() ? "YES" : "NO") : "N/A")
-                      << ", state: " << (pathTracePipeline ? std::to_string(static_cast<int>(pathTracePipeline->state)) : "N/A");
-        return;
-    }
-
-    // Get the CUDA stream from StreamChain for better GPU/CPU overlap
-    CUstream stream = streamChain_->waitAvailableAndGetCurrentStream();
-
-    // Get current timer
-    auto timer = getCurrentTimer();
-    if (!timer)
-    {
-        LOG (WARNING) << "GPU timer not available for " << getName();
-        return;
-    }
-
-    // Start frame timer
-    timer->frame.start (stream);
-
-    // Update camera if needed
-    updateCameraBody (input);
-
-    // Handle motion updates if requested
-    if (updateMotion && sceneHandler_)
-    {
-        bool motionUpdated = sceneHandler_->updateMotion();
-        if (motionUpdated) restartRender_ = true;
-    }
-
-    // Update scene if needed
-    if (sceneHandler_)
-    {
-        // TODO: Update IAS when scene handler supports it
-        // sceneHandler_->updateIAS();
-    }
-
-    // Reset accumulation if needed
-    if (restartRender_)
-    {
-        numAccumFrames_ = 0;
-        restartRender_ = false;
-        LOG (DBUG) << "Restarting accumulation";
-    }
-
-    // Update launch parameters with current state
-    updateLaunchParameters (input);
-
-    // Render GBuffer first (for temporal reprojection and other effects)
-    renderGBuffer (stream);
-
-    // Synchronize after GBuffer launch to ensure pick info is ready
-    CUDADRV_CHECK (cuStreamSynchronize (stream));
-
-    // Output debug info for GBuffer (if enabled)
-    // if (enableGBufferDebug_)
-    if (true)
-    {
-        outputGBufferDebugInfo (stream);
-    }
-
-    // Launch path tracing kernel - it will handle empty scenes and render the environment
-    timer->pathTrace.start (stream);
-    {
-        // Log launch parameters for debugging
-        /* LOG(DBUG) << "Launching OptiX pipeline:"
-                   << " dimensions=" << renderWidth_ << "x" << renderHeight_
-                   << " numAccumFrames=" << numAccumFrames_
-                   << " IAS handle=" << static_plp_.travHandle;*/
-
-        // Launch the path tracing pipeline with exact render dimensions
-        try
-        {
-            // Use PipelineHandler's launch method which includes safety checks
-            pipelineHandler->launch(
-                EntryPointType::PathTrace,
-                stream,
-                plp_on_device_,
-                renderWidth_,  // Use exact width, not rounded
-                renderHeight_ // Use exact height, not rounded
-            );
-        }
-        catch (const std::exception& e)
-        {
-            LOG (WARNING) << "OptiX launch failed: " << e.what();
-            timer->frame.stop (stream);
-            return;
-        }
-    }
-    timer->pathTrace.stop (stream);
-
-    // TODO: Run temporal resampling
-    // TODO: Run spatial resampling
-
-    // Update accumulation counter
-    numAccumFrames_++;
-
-    // Copy accumulation buffers to linear buffers for display
-    auto screenBufferHandler2 = renderContext_->getHandlers().screenBufferHandler;
-    if (screenBufferHandler2 && screenBufferHandler2->isInitialized())
-    {
-        // Copy accumulation buffers to linear buffers
-        screenBufferHandler2->copyAccumToLinearBuffers (stream);
-
-        // Denoise if denoiser is available
-        bool isNewSequence = (numAccumFrames_ == 1);
-        if (denoiserHandler_ && denoiserHandler_->isInitialized())
-        {
-            if (timer) timer->denoise.start(stream);
-            
-            // Setup denoiser input buffers from ScreenBufferHandler
-            optixu::DenoiserInputBuffers inputBuffers = {};
-            inputBuffers.noisyBeauty = screenBufferHandler2->getLinearBeautyBuffer();
-            inputBuffers.albedo = screenBufferHandler2->getLinearAlbedoBuffer();
-            inputBuffers.normal = screenBufferHandler2->getLinearNormalBuffer();
-            inputBuffers.flow = screenBufferHandler2->getLinearFlowBuffer();
-            
-            // Compute HDR normalizer
-            float hdrNormalizer = 1.0f;
-            denoiserHandler_->getDenoiser().computeNormalizer(
-                stream,
-                screenBufferHandler2->getLinearBeautyBuffer(), OPTIX_PIXEL_FORMAT_FLOAT4,
-                denoiserHandler_->getScratchBuffer(), hdrNormalizer);
-            
-            // Denoise (output goes back to beauty buffer)
-            const auto& denoisingTasks = denoiserHandler_->getTasks();
-            for (int i = 0; i < denoisingTasks.size(); ++i)
-            {
-                denoiserHandler_->getDenoiser().invoke(
-                    stream, denoisingTasks[i],
-                    inputBuffers, optixu::IsFirstFrame(isNewSequence),
-                    hdrNormalizer, 0.0f,
-                    screenBufferHandler2->getLinearBeautyBuffer(),  // Output to beauty buffer
-                    nullptr, optixu::BufferView()); // no AOV outputs, no internal guide layer
-            }
-            
-            if (timer) timer->denoise.stop(stream);
-        }
-    }
-
-    // Update camera sensor with rendered image
-    updateCameraSensor();
-
-    // Stop frame timer
-    timer->frame.stop (stream);
-
-    // Increment frame counter and report timings periodically
-    frameCounter_++;
-    reportTimings (frameCounter_);
-
-    // Switch to next timer buffer for next frame
-    switchTimerBuffer();
-
-    // Swap StreamChain buffers for next frame
-    streamChain_->swap();
-}
-#endif
 void ShockerEngine::onEnvironmentChanged()
 {
     LOG (INFO) << "ShockerEngine::onEnvironmentChanged()";
@@ -693,56 +478,55 @@ void ShockerEngine::setupPipelines()
     // Setup path tracing pipeline using PipelineHandler
     PipelineData pathTraceData;
     pathTraceData.entryPoint = EntryPointType::PathTrace;
-    pathTraceData.rayGenName = RT_RG_NAME_STR("pathTraceBaseline");
-    pathTraceData.missName = RT_MS_NAME_STR("pathTraceBaseline");
-    pathTraceData.closestHitName = RT_CH_NAME_STR("pathTraceBaseline");
-    pathTraceData.anyHitName = RT_AH_NAME_STR("visibility");
+    pathTraceData.rayGenName = RT_RG_NAME_STR ("pathTraceBaseline");
+    pathTraceData.missName = RT_MS_NAME_STR ("pathTraceBaseline");
+    pathTraceData.closestHitName = RT_CH_NAME_STR ("pathTraceBaseline");
+    pathTraceData.anyHitName = RT_AH_NAME_STR ("visibility");
     pathTraceData.numRayTypes = shocker_shared::PathTracingRayType::NumTypes;
     pathTraceData.searchRayIndex = shocker_shared::PathTracingRayType::Closest;
     pathTraceData.visibilityRayIndex = shocker_shared::PathTracingRayType::Visibility;
-    
+
     // Configure pipeline options
     pathTraceData.config.maxTraceDepth = 8;
-    pathTraceData.config.numPayloadDwords = std::max({
-        shocker_shared::PathTraceRayPayloadSignature::numDwords,
-        shocker_shared::VisibilityRayPayloadSignature::numDwords
-    });
+    pathTraceData.config.numPayloadDwords = std::max ({shocker_shared::PathTraceRayPayloadSignature::numDwords,
+                                                       shocker_shared::VisibilityRayPayloadSignature::numDwords});
     pathTraceData.config.numAttributeDwords = optixu::calcSumDwords<float2>();
     pathTraceData.config.launchParamsName = "shocker_plp";
-    pathTraceData.config.launchParamsSize = sizeof(shocker_shared::PipelineLaunchParameters);
+    pathTraceData.config.launchParamsSize = sizeof (shocker_shared::PipelineLaunchParameters);
     pathTraceData.config.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
     pathTraceData.config.exceptionFlags = OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH;
     pathTraceData.config.primitiveTypeFlags = OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE;
 
     // Setup path tracing pipeline
-    pipelineHandler->setupPipeline(pathTraceData, std::string("optix_shocker_kernels"));
+    pipelineHandler->setupPipeline (pathTraceData, std::string ("optix_shocker_kernels"));
 
     // Setup GBuffer pipeline using PipelineHandler
     PipelineData gbufferData;
     gbufferData.entryPoint = EntryPointType::GBuffer;
-    gbufferData.rayGenName = RT_RG_NAME_STR("setupGBuffers");
-    gbufferData.missName = RT_MS_NAME_STR("setupGBuffers");
-    gbufferData.closestHitName = RT_CH_NAME_STR("setupGBuffers");
+    gbufferData.rayGenName = RT_RG_NAME_STR ("setupGBuffers");
+    gbufferData.missName = RT_MS_NAME_STR ("setupGBuffers");
+    gbufferData.closestHitName = RT_CH_NAME_STR ("setupGBuffers");
     gbufferData.numRayTypes = shocker_shared::GBufferRayType::NumTypes;
     gbufferData.searchRayIndex = shocker_shared::GBufferRayType::Primary;
-    
+
     // Configure GBuffer pipeline options
     gbufferData.config.maxTraceDepth = 2;
     gbufferData.config.numPayloadDwords = shocker_shared::PrimaryRayPayloadSignature::numDwords;
     gbufferData.config.numAttributeDwords = optixu::calcSumDwords<float2>();
     gbufferData.config.launchParamsName = "shocker_plp";
-    gbufferData.config.launchParamsSize = sizeof(shocker_shared::PipelineLaunchParameters);
+    gbufferData.config.launchParamsSize = sizeof (shocker_shared::PipelineLaunchParameters);
     gbufferData.config.traversableGraphFlags = OPTIX_TRAVERSABLE_GRAPH_FLAG_ALLOW_SINGLE_LEVEL_INSTANCING;
     gbufferData.config.exceptionFlags = OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW | OPTIX_EXCEPTION_FLAG_TRACE_DEPTH;
     gbufferData.config.primitiveTypeFlags = OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE;
 
     // Setup GBuffer pipeline
-    pipelineHandler->setupPipeline(gbufferData, std::string("optix_shocker_gbuffer"));
-    
+    pipelineHandler->setupPipeline (gbufferData, std::string ("optix_shocker_gbuffer"));
+
     // Ensure scene is set on all pipelines after setup
-    if (renderContext_ && renderContext_->getScene()) {
-        pipelineHandler->setScene(renderContext_->getScene());
-        LOG(INFO) << "Scene set on PipelineHandler after pipeline setup";
+    if (renderContext_ && renderContext_->getScene())
+    {
+        pipelineHandler->setScene (renderContext_->getScene());
+        LOG (INFO) << "Scene set on PipelineHandler after pipeline setup";
     }
 
     // Initialize light probability computation kernels (still needed)
@@ -837,84 +621,43 @@ void ShockerEngine::updateMaterialHitGroups (ShockerModelPtr model)
     // Get the PipelineHandler from render context
     if (!renderContext_)
     {
-        LOG(WARNING) << "No render context available for setting hit groups";
+        LOG (WARNING) << "No render context available for setting hit groups";
         return;
     }
-    
+
     auto pipelineHandler = renderContext_->getHandlers().pipelineHandler;
     if (!pipelineHandler)
     {
-        LOG(WARNING) << "No pipeline handler available for setting hit groups";
+        LOG (WARNING) << "No pipeline handler available for setting hit groups";
         return;
     }
-    
+
     // Define hit group configuration for Shocker pipelines
     std::map<EntryPointType, std::vector<std::pair<uint32_t, std::string>>> hitGroupConfig;
-    
+
     // Path tracing pipeline configuration
     hitGroupConfig[EntryPointType::PathTrace] = {
-        {shocker_shared::PathTracingRayType::Closest, RT_CH_NAME_STR("pathTraceBaseline")},  // Ray type 0: shading
-        {shocker_shared::PathTracingRayType::Visibility, RT_AH_NAME_STR("visibility")}       // Ray type 1: shadow rays
+        {shocker_shared::PathTracingRayType::Closest, RT_CH_NAME_STR ("pathTraceBaseline")}, // Ray type 0: shading
+        {shocker_shared::PathTracingRayType::Visibility, RT_AH_NAME_STR ("visibility")}      // Ray type 1: shadow rays
     };
-    
+
     // GBuffer pipeline configuration
     hitGroupConfig[EntryPointType::GBuffer] = {
-        {shocker_shared::GBufferRayType::Primary, RT_CH_NAME_STR("setupGBuffers")}  // Ray type 0: primary rays
+        {shocker_shared::GBufferRayType::Primary, RT_CH_NAME_STR ("setupGBuffers")} // Ray type 0: primary rays
     };
-    
+
     // Add empty hit groups for unused ray types in GBuffer (optional)
-    for (uint32_t rayType = shocker_shared::GBufferRayType::NumTypes; 
+    for (uint32_t rayType = shocker_shared::GBufferRayType::NumTypes;
          rayType < shocker_shared::maxNumRayTypes; ++rayType)
     {
-        hitGroupConfig[EntryPointType::GBuffer].push_back({rayType, "emptyHitGroup"});
+        hitGroupConfig[EntryPointType::GBuffer].push_back ({rayType, "emptyHitGroup"});
     }
-    
+
     // Use PipelineHandler's generic method to configure all hit groups
-    pipelineHandler->configureMaterialHitGroups(geomInst, hitGroupConfig);
-    
-    // Update scene SBT after geometry changes (setScene is redundant here as scene is already set)
-    pipelineHandler->updateSceneSBT();
-}
+    pipelineHandler->configureMaterialHitGroups (geomInst, hitGroupConfig);
 
-
-
-void ShockerEngine::renderGBuffer (CUstream stream)
-{
-    // Get GBuffer pipeline from PipelineHandler
-    auto pipelineHandler = renderContext_->getHandlers().pipelineHandler;
-    if (!pipelineHandler)
-    {
-        LOG (WARNING) << "PipelineHandler not available for GBuffer";
-        return;
-    }
-    
-    // Check if GBuffer pipeline is ready
-    if (!pipelineHandler->isReady(EntryPointType::GBuffer))
-    {
-        auto gbufferPipeline = pipelineHandler->getPipeline(EntryPointType::GBuffer);
-        LOG (WARNING) << "GBuffer pipeline not ready. Pipeline exists: " 
-                      << (gbufferPipeline ? "YES" : "NO")
-                      << ", isInitialized: " << (gbufferPipeline ? (gbufferPipeline->isInitialized() ? "YES" : "NO") : "N/A")
-                      << ", state: " << (gbufferPipeline ? std::to_string(static_cast<int>(gbufferPipeline->state)) : "N/A");
-        return;
-    }
-
-    // Launch the GBuffer generation kernel
-    try
-    {
-        // Use PipelineHandler's launch method which includes safety checks
-        pipelineHandler->launch(
-            EntryPointType::GBuffer,
-            stream,
-            plp_on_device_,
-            renderWidth_,
-            renderHeight_
-        );
-    }
-    catch (const std::exception& e)
-    {
-        LOG (WARNING) << "GBuffer OptiX launch failed: " << e.what();
-    }
+    // Note: updateSceneSBT() is called by addGeometry() after this function returns,
+    // so we don't need to call it here - that would cause duplicate SBT updates
 }
 
 void ShockerEngine::allocateLaunchParameters()
@@ -941,22 +684,22 @@ void ShockerEngine::updateLaunchParameters (const mace::InputEvent& input)
 
     // ===== UPDATE STATIC PARAMETERS =====
     // These parameters rarely change during rendering
-    
+
     // Set image size
     static_plp_.imageSize = make_int2 (renderWidth_, renderHeight_);
-    
+
     // Set RNG buffer
     if (rngBuffer_.isInitialized())
     {
         static_plp_.rngBuffer = rngBuffer_.getBlockBuffer2D();
     }
-    
+
     // Set GBuffers
     static_plp_.GBuffer0[0] = gbuffers_.gBuffer0[0].getSurfaceObject (0);
     static_plp_.GBuffer0[1] = gbuffers_.gBuffer0[1].getSurfaceObject (0);
     static_plp_.GBuffer1[0] = gbuffers_.gBuffer1[0].getSurfaceObject (0);
     static_plp_.GBuffer1[1] = gbuffers_.gBuffer1[1].getSurfaceObject (0);
-    
+
     // Set material data buffer from material handler
     if (materialHandler_ && materialHandler_->getMaterialDataBuffer())
     {
@@ -966,7 +709,7 @@ void ShockerEngine::updateLaunchParameters (const mace::InputEvent& input)
     {
         static_plp_.materialDataBuffer = shared::ROBuffer<shared::DisneyData>();
     }
-    
+
     // Set instance data buffer array
     if (sceneHandler_)
     {
@@ -979,7 +722,7 @@ void ShockerEngine::updateLaunchParameters (const mace::InputEvent& input)
             }
         }
     }
-    
+
     // Set geometry instance data buffer from model handler
     if (modelHandler_ && modelHandler_->getGeometryInstanceDataBuffer())
     {
@@ -989,14 +732,14 @@ void ShockerEngine::updateLaunchParameters (const mace::InputEvent& input)
     {
         static_plp_.geometryInstanceDataBuffer = shared::ROBuffer<shared::GeometryInstanceData>();
     }
-    
+
     // Set light distribution from scene handler
     if (sceneHandler_)
     {
         // Update emissive instances and build light distribution
         sceneHandler_->updateEmissiveInstances();
         sceneHandler_->buildLightInstanceDistribution();
-        
+
         // Get the device representation of the light distribution
         sceneHandler_->getLightInstDistribution().getDeviceType (&static_plp_.lightInstDist);
     }
@@ -1004,7 +747,7 @@ void ShockerEngine::updateLaunchParameters (const mace::InputEvent& input)
     {
         static_plp_.lightInstDist = shared::LightDistribution();
     }
-    
+
     // Set environment light importance map and texture
     if (renderContext_)
     {
@@ -1020,7 +763,7 @@ void ShockerEngine::updateLaunchParameters (const mace::InputEvent& input)
             static_plp_.envLightImportanceMap = shared::RegularConstantContinuousDistribution2D();
         }
     }
-    
+
     // Set accumulation buffer pointers from ScreenBufferHandler
     auto screenBufferHandler = renderContext_->getHandlers().screenBufferHandler;
     if (screenBufferHandler && screenBufferHandler->isInitialized())
@@ -1029,7 +772,7 @@ void ShockerEngine::updateLaunchParameters (const mace::InputEvent& input)
         static_plp_.albedoAccumBuffer = screenBufferHandler->getAlbedoAccumSurfaceObject();
         static_plp_.normalAccumBuffer = screenBufferHandler->getNormalAccumSurfaceObject();
         static_plp_.flowAccumBuffer = screenBufferHandler->getFlowAccumSurfaceObject();
-        
+
         // Set pick info buffer pointers
         for (int i = 0; i < 2; ++i)
         {
@@ -1037,17 +780,17 @@ void ShockerEngine::updateLaunchParameters (const mace::InputEvent& input)
                 screenBufferHandler->getPickInfoPointer (i));
         }
     }
-    
+
     // Set experimental glass parameters (default values)
     static_plp_.makeAllGlass = 0;
     static_plp_.globalGlassType = 0;
     static_plp_.globalGlassIOR = 1.5f;
     static_plp_.globalTransmittanceDist = 10.0f;
-    
+
     // Set background parameters
     static_plp_.useSolidBackground = 0;
-    static_plp_.backgroundColor = make_float3(0.05f, 0.05f, 0.05f);
-    
+    static_plp_.backgroundColor = make_float3 (0.05f, 0.05f, 0.05f);
+
     // Set area light parameters
     if (sceneHandler_)
     {
@@ -1060,41 +803,41 @@ void ShockerEngine::updateLaunchParameters (const mace::InputEvent& input)
         static_plp_.enableAreaLights = 0;
     }
     static_plp_.areaLightPowerCoeff = 1.0f;
-    
+
     // Set firefly reduction parameter
     static_plp_.maxRadiance = 10.0f;
 
     // ===== UPDATE PER-FRAME PARAMETERS =====
     // These parameters change every frame
-    
+
     // Set traversable handle
     per_frame_plp_.travHandle = 0; // Default to 0
     if (sceneHandler_)
     {
         per_frame_plp_.travHandle = sceneHandler_->getHandle();
     }
-    
+
     // Frame counters
     per_frame_plp_.numAccumFrames = numAccumFrames_;
     per_frame_plp_.frameIndex = frameCounter_;
 
-    //LOG (DBUG) << per_frame_plp_.numAccumFrames;
-    
+    // LOG (DBUG) << per_frame_plp_.numAccumFrames;
+
     // Camera parameters
     per_frame_plp_.camera = lastCamera_;
     per_frame_plp_.prevCamera = prevCamera_;
-    
+
     // Environment light parameters from property system
     const PropertyService& properties = renderContext_->getPropertyService();
     if (properties.renderProps)
     {
         // EnviroIntensity is already a coefficient (0-2 range)
-        per_frame_plp_.envLightPowerCoeff = static_cast<float>(properties.renderProps->getValOr<double> (RenderKey::EnviroIntensity, DEFAULT_ENVIRO_INTENSITY_PERCENT));
-        
+        per_frame_plp_.envLightPowerCoeff = static_cast<float> (properties.renderProps->getValOr<double> (RenderKey::EnviroIntensity, DEFAULT_ENVIRO_INTENSITY_PERCENT));
+
         // EnviroRotation is in degrees, convert to radians for the shader
-        float envRotationDegrees = static_cast<float>(properties.renderProps->getValOr<double> (RenderKey::EnviroRotation, DEFAULT_ENVIRO_ROTATION));
+        float envRotationDegrees = static_cast<float> (properties.renderProps->getValOr<double> (RenderKey::EnviroRotation, DEFAULT_ENVIRO_ROTATION));
         per_frame_plp_.envLightRotation = envRotationDegrees * (M_PI / 180.0f);
-        
+
         // Check if environment rendering is enabled
         per_frame_plp_.enableEnvLight = properties.renderProps->getValOr<bool> (RenderKey::RenderEnviro, DEFAULT_RENDER_ENVIRO) ? 1 : 0;
     }
@@ -1104,38 +847,38 @@ void ShockerEngine::updateLaunchParameters (const mace::InputEvent& input)
         per_frame_plp_.envLightRotation = DEFAULT_ENVIRO_ROTATION * (M_PI / 180.0f);
         per_frame_plp_.enableEnvLight = DEFAULT_RENDER_ENVIRO ? 1 : 0;
     }
-    
+
     // Mouse position for picking
     per_frame_plp_.mousePosition = int2 (static_cast<int32_t> (input.getX()), static_cast<int32_t> (input.getY()));
-    
+
     // Rendering control flags
-    per_frame_plp_.maxPathLength = 4; // Maximum path length for path tracing
-    per_frame_plp_.bufferIndex = frameCounter_ & 1; // Alternating buffer index
+    per_frame_plp_.maxPathLength = 4;                                // Maximum path length for path tracing
+    per_frame_plp_.bufferIndex = frameCounter_ & 1;                  // Alternating buffer index
     per_frame_plp_.resetFlowBuffer = (numAccumFrames_ == 0) ? 1 : 0; // Reset flow on first frame
-    per_frame_plp_.enableJittering = 1; // Enable anti-aliasing jitter
-    per_frame_plp_.enableBumpMapping = 1; // Enable bump/normal mapping
-    per_frame_plp_.enableDebugPrint = 0; // Disable debug output by default
-    
+    per_frame_plp_.enableJittering = 1;                              // Enable anti-aliasing jitter
+    per_frame_plp_.enableBumpMapping = 1;                            // Enable bump/normal mapping
+    per_frame_plp_.enableDebugPrint = 0;                             // Disable debug output by default
+
     // Debug switches (initially all off)
     per_frame_plp_.debugSwitches = 0;
 
     // Copy parameters to device
     CUstream stream = renderContext_->getCudaStream();
-    
+
     // Copy static parameters
     CUDADRV_CHECK (cuMemcpyHtoDAsync (
         static_plp_on_device_,
         &static_plp_,
         sizeof (shocker_shared::StaticPipelineLaunchParameters),
         stream));
-    
+
     // Copy per-frame parameters
     CUDADRV_CHECK (cuMemcpyHtoDAsync (
         per_frame_plp_on_device_,
         &per_frame_plp_,
         sizeof (shocker_shared::PerFramePipelineLaunchParameters),
         stream));
-    
+
     // Copy main pipeline parameter structure (just the pointers)
     CUDADRV_CHECK (cuMemcpyHtoDAsync (
         plp_on_device_,
@@ -1209,8 +952,8 @@ void ShockerEngine::updateCameraBody (const mace::InputEvent& input)
         const PropertyService& properties = renderContext_->getPropertyService();
         if (properties.renderProps)
         {
-            lastCamera_.lensSize = static_cast<float>(properties.renderProps->getValOr<double> (RenderKey::Aperture, 0.0));
-            lastCamera_.focusDistance = static_cast<float>(properties.renderProps->getValOr<double> (RenderKey::FocalLength, 5.0));
+            lastCamera_.lensSize = static_cast<float> (properties.renderProps->getValOr<double> (RenderKey::Aperture, 0.0));
+            lastCamera_.focusDistance = static_cast<float> (properties.renderProps->getValOr<double> (RenderKey::FocalLength, 5.0));
         }
         else
         {
@@ -1250,7 +993,7 @@ void ShockerEngine::updateCameraSensor()
 
     // Choose which buffer to display: denoised if available, otherwise linear beauty
     cudau::TypedBuffer<float4>* displayBuffer = nullptr;
-    
+
     if (handlers.denoiserHandler && handlers.denoiserHandler->isInitialized())
     {
         // Use denoised buffer when denoiser is available
@@ -1293,7 +1036,7 @@ void ShockerEngine::outputGBufferDebugInfo (CUstream stream)
 
     // Read pick info - exactly like Shocker code
     shocker_shared::PickInfo pickInfoOnHost;
-    screenBufferHandler->getPickInfoBuffer(bufferIndex).read (&pickInfoOnHost, 1, stream);
+    screenBufferHandler->getPickInfoBuffer (bufferIndex).read (&pickInfoOnHost, 1, stream);
 
     // Only output debug information if geometry was hit (not environment/background)
     if (pickInfoOnHost.hit && pickInfoOnHost.matSlot != 0xFFFFFFFF)

@@ -121,7 +121,7 @@ class Application : public Jahley::App
         std::string ground = "E:/common_content/models/static_gound/static_ground.gltf";
         //  model.loadGLTF (ground);
       //   model.loadGLTF (helmet);
-       model.loadGLTF (testModel);
+      // model.loadGLTF (testModel);
      model.loadGLTF (box);
        // model.loadGLTF (cash);
         // model.loadGLTF (phone);
