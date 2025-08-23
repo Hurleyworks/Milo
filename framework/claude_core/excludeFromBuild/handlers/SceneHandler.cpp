@@ -34,6 +34,10 @@ void SceneHandler::initialize()
     // Create an empty IAS
     ias_ = scene_.createInstanceAccelerationStructure();
     
+    // Generate initial scene SBT layout to prevent "SBT layout generation has not been done" error
+    size_t dummySize;
+    scene_.generateShaderBindingTableLayout(&dummySize);
+    
     // Configure the IAS with default settings (fast trace, no update)
     setConfiguration(optixu::ASTradeoff::PreferFastTrace, false, false);
     
@@ -153,6 +157,10 @@ void SceneHandler::buildIAS()
             1);
     }
     
+    // Regenerate SBT layout BEFORE rebuild - this is required by OptiX!
+    size_t hitGroupSbtSize;
+    scene_.generateShaderBindingTableLayout(&hitGroupSbtSize);
+    
     // Build the acceleration structure
     traversableHandle_ = ias_.rebuild(
         renderContext_->getCudaStream(),
@@ -206,6 +214,8 @@ void SceneHandler::updateIAS()
     
     // Update the acceleration structure
     ias_.update(renderContext_->getCudaStream(), scratchBuffer_);
+    
+    // Note: SBT layout should remain valid after update (only transforms changed)
     
     // Note: traversableHandle remains the same after update
     isDirty_ = false;
@@ -299,9 +309,11 @@ bool SceneHandler::isReady() const
 
 OptixTraversableHandle SceneHandler::getTraversableHandle() const
 {
-    if (isDirty_)
+    // A traversable handle of 0 is valid for an empty scene
+    // Only warn if we have instances but haven't built yet
+    if (isDirty_ && !instances_.empty())
     {
-        LOG(WARNING) << "SceneHandler::getTraversableHandle() called with dirty scene. Call buildIAS() first.";
+        LOG(WARNING) << "SceneHandler::getTraversableHandle() called with dirty scene containing instances. Call buildIAS() first.";
     }
     return traversableHandle_;
 }
