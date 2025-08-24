@@ -23,7 +23,6 @@
 // commmon handlers
 #include "excludeFromBuild/handlers/SkyDomeHandler.cpp"
 #include "excludeFromBuild/handlers/TextureHandler.cpp"
-#include "excludeFromBuild/handlers/AreaLightHandler.cpp"
 #include "excludeFromBuild/handlers/DisneyMaterialHandler.cpp"
 #include "excludeFromBuild/handlers/PipelineHandler.cpp"
 #include "excludeFromBuild/handlers/DenoiserHandler.cpp"
