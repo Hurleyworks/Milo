@@ -12,11 +12,11 @@ ShockerSceneHandler::ShockerSceneHandler (RenderContextPtr ctx) :
     LOG (DBUG) << _FN_;
     
     // Initialize the generic scene handler and configure it for Shocker's needs
-    sceneHandler_ = ctx->getHandlers().sceneHandler;
-    if (sceneHandler_)
+    instanceHandler_ = ctx->getHandlers().intanceHandler;
+    if (instanceHandler_)
     {
         // Configure for fast build with update capability (Shocker needs frequent updates)
-        sceneHandler_->setConfiguration(
+        instanceHandler_->setConfiguration(
             optixu::ASTradeoff::PreferFastBuild,
             true,   // allowUpdate - Shocker needs to update transforms
             false   // allowCompaction - not needed for Shocker
@@ -41,9 +41,9 @@ void ShockerSceneHandler::finalize()
         }
 
         // SceneHandler manages IAS cleanup - just finalize it
-        if (sceneHandler_)
+        if (instanceHandler_)
         {
-            sceneHandler_->finalize();
+            instanceHandler_->finalize();
         }
 
         // Release instance data buffers
@@ -96,14 +96,14 @@ void ShockerSceneHandler::init()
     LOG (DBUG) << _FN_;
     
     // Initialize SceneHandler if needed
-    if (!sceneHandler_)
+    if (!instanceHandler_)
     {
-        sceneHandler_ = ctx->getHandlers().sceneHandler;
-        if (sceneHandler_)
+        instanceHandler_ = ctx->getHandlers().intanceHandler;
+        if (instanceHandler_)
         {
-            sceneHandler_->initialize();
+            instanceHandler_->initialize();
             // Configure for fast build with update capability (Shocker needs frequent updates)
-            sceneHandler_->setConfiguration(
+            instanceHandler_->setConfiguration(
                 optixu::ASTradeoff::PreferFastBuild,
                 true,   // allowUpdate - Shocker needs to update transforms
                 false   // allowCompaction - not needed for Shocker
@@ -413,13 +413,13 @@ void ShockerSceneHandler::removeNodesByIDs (const std::vector<BodyID>& bodyIDs)
     // Step 3: Remove from IAS in descending order (no index shifts affect remaining removals)
     for (uint32_t index : indicesToRemove)
     {
-        if (sceneHandler_ && index < sceneHandler_->getInstanceCount())
+        if (instanceHandler_ && index < instanceHandler_->getInstanceCount())
         {
-            sceneHandler_->removeInstanceAt(index);
+            instanceHandler_->removeInstanceAt(index);
         }
         else
         {
-            LOG (WARNING) << "Invalid index " << index << " (max: " << (sceneHandler_ ? sceneHandler_->getInstanceCount() - 1 : 0) << ")";
+            LOG (WARNING) << "Invalid index " << index << " (max: " << (instanceHandler_ ? instanceHandler_->getInstanceCount() - 1 : 0) << ")";
         }
     }
 
@@ -455,7 +455,7 @@ void ShockerSceneHandler::createInstance (RenderableWeakRef& weakNode)
 
     RenderableNode node = weakNode.lock();
 
-    if (!sceneHandler_ || sceneHandler_->getTraversableHandle() == 0)
+    if (!instanceHandler_ || instanceHandler_->getTraversableHandle() == 0)
         init();
 
     // Create a new OptiX instance
@@ -475,15 +475,15 @@ void ShockerSceneHandler::createInstance (RenderableWeakRef& weakNode)
     instance.setTransform (t.data());
 
     // Add the instance to the scene using SceneHandler
-    if (sceneHandler_)
+    if (instanceHandler_)
     {
-        sceneHandler_->addInstance(instance);
+        instanceHandler_->addInstance(instance);
     }
 
     node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
 
     // Track the instance in nodeMap using the current count as index
-    uint32_t index = sceneHandler_ ? static_cast<uint32_t>(sceneHandler_->getInstanceCount() - 1) : 0;
+    uint32_t index = instanceHandler_ ? static_cast<uint32_t>(instanceHandler_->getInstanceCount() - 1) : 0;
     nodeMap[index] = weakNode;
     
     // Set instance ID BEFORE rebuilding - this is critical!
@@ -609,16 +609,16 @@ void ShockerSceneHandler::createGeometryInstance (RenderableWeakRef& weakNode)
     instance.setTransform (t.data());
 
     // Add the instance to the scene using SceneHandler
-    if (sceneHandler_)
+    if (instanceHandler_)
     {
-        sceneHandler_->addInstance(instance);
+        instanceHandler_->addInstance(instance);
     }
 
     // Set the flag to indicate this node is stored in ShockerSceneHandler
     node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
 
     // Track the instance in nodeMap using the current count as index
-    uint32_t index = sceneHandler_ ? static_cast<uint32_t>(sceneHandler_->getInstanceCount() - 1) : 0;
+    uint32_t index = instanceHandler_ ? static_cast<uint32_t>(instanceHandler_->getInstanceCount() - 1) : 0;
     nodeMap[index] = weakNode;
 
 
@@ -661,16 +661,16 @@ void ShockerSceneHandler::createPhysicsPhantom (RenderableWeakRef& weakNode)
         instance.setTransform (t.data());
 
         // Add the instance to the scene using SceneHandler
-        if (sceneHandler_)
+        if (instanceHandler_)
         {
-            sceneHandler_->addInstance(instance);
+            instanceHandler_->addInstance(instance);
         }
 
         // Set the flag to indicate this node is stored in ShockerSceneHandler
         node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
 
         // Track the instance in nodeMap using the current count as index
-        uint32_t index = sceneHandler_ ? static_cast<uint32_t>(sceneHandler_->getInstanceCount() - 1) : 0;
+        uint32_t index = instanceHandler_ ? static_cast<uint32_t>(instanceHandler_->getInstanceCount() - 1) : 0;
         nodeMap[index] = weakNode;
 
     
@@ -687,7 +687,7 @@ void ShockerSceneHandler::createPhysicsPhantom (RenderableWeakRef& weakNode)
 
 void ShockerSceneHandler::createInstanceList (const WeakRenderableList& weakNodeList)
 {
-    if (!sceneHandler_ || sceneHandler_->getTraversableHandle() == 0)
+    if (!instanceHandler_ || instanceHandler_->getTraversableHandle() == 0)
         init();
 
     for (const auto& weakNode : weakNodeList)
@@ -718,16 +718,16 @@ void ShockerSceneHandler::createInstanceList (const WeakRenderableList& weakNode
             instance.setTransform (t.data());
 
             // Add the instance to the scene using SceneHandler
-            if (sceneHandler_)
+            if (instanceHandler_)
             {
-                sceneHandler_->addInstance(instance);
+                instanceHandler_->addInstance(instance);
             }
 
             // Set the flag to indicate this node is stored in ShockerSceneHandler
             node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
 
             // Track the instance in nodeMap using the current count as index
-        uint32_t index = sceneHandler_ ? static_cast<uint32_t>(sceneHandler_->getInstanceCount() - 1) : 0;
+        uint32_t index = instanceHandler_ ? static_cast<uint32_t>(instanceHandler_->getInstanceCount() - 1) : 0;
             nodeMap[index] = weakNode;
 
             // Store index for later instance data population
@@ -757,16 +757,16 @@ void ShockerSceneHandler::createInstanceList (const WeakRenderableList& weakNode
             instance.setTransform (t.data());
 
             // Add the instance to the scene using SceneHandler
-            if (sceneHandler_)
+            if (instanceHandler_)
             {
-                sceneHandler_->addInstance(instance);
+                instanceHandler_->addInstance(instance);
             }
 
             // Set the flag to indicate this node is stored in ShockerSceneHandler
             node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
 
             // Track the instance in nodeMap using the current count as index
-        uint32_t index = sceneHandler_ ? static_cast<uint32_t>(sceneHandler_->getInstanceCount() - 1) : 0;
+        uint32_t index = instanceHandler_ ? static_cast<uint32_t>(instanceHandler_->getInstanceCount() - 1) : 0;
             nodeMap[index] = weakNode;
 
             GAS* gasData = optiXModel->getGAS();
@@ -820,7 +820,7 @@ bool ShockerSceneHandler::updateMotion()
             updateDeformedNode (node);
         }
 
-        optixu::Instance instance = sceneHandler_ ? sceneHandler_->getInstance(it.first) : optixu::Instance();
+        optixu::Instance instance = instanceHandler_ ? instanceHandler_->getInstance(it.first) : optixu::Instance();
         const SpaceTime& st = node->getSpaceTime();
         MatrixRowMajor34f t;
 
@@ -839,9 +839,9 @@ bool ShockerSceneHandler::updateMotion()
     }
     if (bodiesSleeping < bodyCount)
     {
-        if (sceneHandler_)
+        if (instanceHandler_)
         {
-            sceneHandler_->buildOrUpdateIAS();
+            instanceHandler_->buildOrUpdateIAS();
         }
         restartRender = true;
     }
@@ -871,9 +871,9 @@ void ShockerSceneHandler::toggleSelectionMaterial (RenderableNode& node)
     }
 
     // apparently no need to resize SceneDependentSBT
-    if (sceneHandler_)
+    if (instanceHandler_)
     {
-        sceneHandler_->buildOrUpdateIAS();
+        instanceHandler_->buildOrUpdateIAS();
     }
 }
 
@@ -908,9 +908,9 @@ void ShockerSceneHandler::selectAll()
     }
 
     // apparently no need to resize SceneDependentSBT
-    if (sceneHandler_)
+    if (instanceHandler_)
     {
-        sceneHandler_->buildOrUpdateIAS();
+        instanceHandler_->buildOrUpdateIAS();
     }
 }
 
@@ -949,9 +949,9 @@ void ShockerSceneHandler::deselectAll()
     }
 
     // apparently no need to resize SceneDependentSBT
-    if (sceneHandler_)
+    if (instanceHandler_)
     {
-        sceneHandler_->buildOrUpdateIAS();
+        instanceHandler_->buildOrUpdateIAS();
     }
 }
 
@@ -960,9 +960,9 @@ void ShockerSceneHandler::rebuild()
     resizeSceneDependentSBT();
     
     // Rebuild the IAS using SceneHandler
-    if (sceneHandler_)
+    if (instanceHandler_)
     {
-        sceneHandler_->buildOrUpdateIAS();
+        instanceHandler_->buildOrUpdateIAS();
     }
 }
 

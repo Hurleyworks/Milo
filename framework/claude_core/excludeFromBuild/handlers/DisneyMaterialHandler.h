@@ -1,6 +1,6 @@
 #pragma once
 
-// MaterialHandler.h
+// DisneyMaterialHandler.h
 // Manages material creation, updating, and texture processing for the OptiX rendering system
 // Implements physically-based materials and specialized visualization materials
 
@@ -9,24 +9,24 @@
 #include "../material/HostDisneyMaterial.h"
 #include "../material/DeviceDisneyMaterial.h"
 
-using MaterialHandlerPtr = std::shared_ptr<class MaterialHandler>;
+using DisneyMaterialHandlerPtr = std::shared_ptr<class DisneyMaterialHandler>;
 using sabi::CgModelPtr;
 using sabi::CgTextureInfo;
 
-class MaterialHandler
+class DisneyMaterialHandler
 {
  public:
-    // Factory method to create a new MaterialHandler instance
-    static MaterialHandlerPtr create (RenderContextPtr ctx)
+    // Factory method to create a new DisneyMaterialHandler instance
+    static DisneyMaterialHandlerPtr create (RenderContextPtr ctx)
     {
-        return std::make_shared<MaterialHandler> (ctx);
+        return std::make_shared<DisneyMaterialHandler> (ctx);
     }
 
     // Constructor initializes the handler with texture samplers and context
-    MaterialHandler (RenderContextPtr ctx);
+    DisneyMaterialHandler (RenderContextPtr ctx);
 
     // Destructor cleans up materials and texture resources
-    ~MaterialHandler();
+    ~DisneyMaterialHandler();
 
     // Initialize the material handler with buffer allocation
     void initialize();

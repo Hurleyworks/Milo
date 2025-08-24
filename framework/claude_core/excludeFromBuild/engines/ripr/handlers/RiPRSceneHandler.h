@@ -5,7 +5,7 @@
 // selection state, and traversal for ray tracing
 
 #include "../../../RenderContext.h"
-#include "../../../handlers/SceneHandler.h"
+#include "../../../handlers/InstanceHandler.h"
 
 using sabi::RenderableNode;
 using sabi::RenderableWeakRef;
@@ -69,7 +69,7 @@ class RiPRSceneHandler
     void deselectAll();
 
     // Get traversable handle for the scene - used for ray traversal (inline delegation for zero overhead)
-    OptixTraversableHandle getHandle() { return sceneHandler_ ? sceneHandler_->getTraversableHandle() : 0; }
+    OptixTraversableHandle getHandle() { return instanceHandler_ ? instanceHandler_->getTraversableHandle() : 0; }
 
     // Rebuilds the entire scene (resizes SBT and rebuilds IAS)
     void rebuild();
@@ -78,7 +78,7 @@ class RiPRSceneHandler
     void finalize();
 
     // Get instance count (inline delegation for zero overhead)
-    size_t getInstanceCount() const { return sceneHandler_ ? sceneHandler_->getInstanceCount() : 0; }
+    size_t getInstanceCount() const { return instanceHandler_ ? instanceHandler_->getInstanceCount() : 0; }
     
     // Acceleration structure scratch memory access (now uses shared buffer from RenderContext)
     cudau::Buffer& getASBuildScratchMem() { return ctx->getASScratchBuffer(); }
@@ -132,9 +132,9 @@ class RiPRSceneHandler
         // Step 3: Remove from SceneHandler in descending order
         for (uint32_t index : expiredIndices)
         {
-            if (sceneHandler_ && index < sceneHandler_->getInstanceCount())
+            if (instanceHandler_ && index < instanceHandler_->getInstanceCount())
             {
-                sceneHandler_->removeInstanceAt(index);
+                instanceHandler_->removeInstanceAt(index);
             }
         }
 
@@ -175,7 +175,7 @@ class RiPRSceneHandler
     RenderContextPtr ctx = nullptr;
 
     // Generic scene handler for IAS management
-    SceneHandlerPtr sceneHandler_;
+    InstanceHandlerPtr instanceHandler_;
 
     // Model handler for managing RiPR models
     RiPRModelHandlerPtr modelHandler_;

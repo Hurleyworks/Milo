@@ -24,11 +24,11 @@
 #include "excludeFromBuild/handlers/SkyDomeHandler.cpp"
 #include "excludeFromBuild/handlers/TextureHandler.cpp"
 #include "excludeFromBuild/handlers/AreaLightHandler.cpp"
-#include "excludeFromBuild/handlers/MaterialHandler.cpp"
+#include "excludeFromBuild/handlers/DisneyMaterialHandler.cpp"
 #include "excludeFromBuild/handlers/PipelineHandler.cpp"
 #include "excludeFromBuild/handlers/DenoiserHandler.cpp"
 #include "excludeFromBuild/handlers/ScreenBufferHandler.cpp"
-#include "excludeFromBuild/handlers/SceneHandler.cpp"
+#include "excludeFromBuild/handlers/InstanceHandler.cpp"
 
 // shocker handlers
 #include "excludeFromBuild/engines/shocker/handlers/ShockerModelHandler.cpp"

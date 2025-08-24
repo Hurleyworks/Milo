@@ -658,7 +658,7 @@ void RiPREngine::updateLaunchParameters (const mace::InputEvent& input)
     }
 
     // Set material data buffer from the generic material handler in Handlers
-    auto materialHandler = renderContext_->getHandlers().materialHandler;
+    auto materialHandler = renderContext_->getHandlers().disneyMaterialHandler;
     if (materialHandler && materialHandler->getMaterialDataBuffer())
     {
         static_plp_.materialDataBuffer = materialHandler->getMaterialDataBuffer()->getROBuffer<shared::enableBufferOobCheck>();

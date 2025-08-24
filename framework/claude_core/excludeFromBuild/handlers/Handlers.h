@@ -11,8 +11,8 @@
 #include "PipelineHandler.h"
 #include "DenoiserHandler.h"
 #include "ScreenBufferHandler.h"
-#include "MaterialHandler.h"
-#include "SceneHandler.h"
+#include "DisneyMaterialHandler.h"
+#include "InstanceHandler.h"
 
 // #include "ModelHandler.h"  // Not used in engine-only mode
 
@@ -32,9 +32,9 @@ struct Handlers
         // Initialize ScreenBufferHandler (fundamental buffer management)
         screenBufferHandler = ScreenBufferHandler::create (renderContext);
 
-        // Create SceneHandler (manages IAS) - uses lazy initialization
+        // Create InstanceHandler (manages IAS) - uses lazy initialization
         // Will only initialize when first instance is added
-        sceneHandler = SceneHandler::create (renderContext);
+        intanceHandler = InstanceHandler::create (renderContext);
 
         // Initialize SkyDomeHandler
         skyDomeHandler = SkyDomeHandler::create (renderContext);
@@ -42,10 +42,10 @@ struct Handlers
         // Initialize TextureHandler
         textureHandler = TextureHandler::create (renderContext);
 
-        // Initialize MaterialHandler
-        materialHandler = MaterialHandler::create (renderContext);
-        if (materialHandler)
-            materialHandler->initialize();
+        // Initialize DisneyMaterialHandler
+        disneyMaterialHandler = DisneyMaterialHandler::create (renderContext);
+        if (disneyMaterialHandler)
+            disneyMaterialHandler->initialize();
 
         // Initialize PipelineHandler
         pipelineHandler = PipelineHandler::create (renderContext);
@@ -71,18 +71,18 @@ struct Handlers
             pipelineHandler.reset();
         }
 
-        // Cleanup MaterialHandler
-        if (materialHandler)
+        // Cleanup DisneyMaterialHandler
+        if (disneyMaterialHandler)
         {
-            materialHandler->finalize();
-            materialHandler.reset();
+            disneyMaterialHandler->finalize();
+            disneyMaterialHandler.reset();
         }
 
-        // Cleanup SceneHandler
-        if (sceneHandler)
+        // Cleanup InstanceHandler
+        if (intanceHandler)
         {
-            sceneHandler->finalize();
-            sceneHandler.reset();
+            intanceHandler->finalize();
+            intanceHandler.reset();
         }
 
         // Cleanup SkyDomeHandler
@@ -109,10 +109,10 @@ struct Handlers
 
     // Handler members
     ScreenBufferHandlerPtr screenBufferHandler;
-    SceneHandlerPtr sceneHandler;
+    InstanceHandlerPtr intanceHandler;
     SkyDomeHandlerPtr skyDomeHandler;
     TextureHandlerPtr textureHandler;
-    MaterialHandlerPtr materialHandler;
+    DisneyMaterialHandlerPtr disneyMaterialHandler;
     PipelineHandlerPtr pipelineHandler;
     DenoiserHandlerPtr denoiserHandler;
 };

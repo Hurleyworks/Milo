@@ -3,21 +3,21 @@
 #include "../RenderContext.h"
 
 
-using SceneHandlerPtr = std::shared_ptr<class SceneHandler>;
+using InstanceHandlerPtr = std::shared_ptr<class InstanceHandler>;
 
-// SceneHandler manages the Instance Acceleration Structure (IAS) for OptiX rendering
+// InstanceHandler manages the Instance Acceleration Structure (IAS) for OptiX rendering
 // It provides scene graph management and traversable handle generation
-class SceneHandler
+class InstanceHandler
 {
 public:
-    // Factory method to create a shared SceneHandler instance
-    static SceneHandlerPtr create(RenderContextPtr ctx)
+    // Factory method to create a shared InstanceHandler instance
+    static InstanceHandlerPtr create(RenderContextPtr ctx)
     {
-        return std::make_shared<SceneHandler>(ctx);
+        return std::make_shared<InstanceHandler>(ctx);
     }
 
-    SceneHandler(RenderContextPtr ctx);
-    ~SceneHandler();
+    InstanceHandler(RenderContextPtr ctx);
+    ~InstanceHandler();
 
     // Initialize the scene handler
     void initialize();

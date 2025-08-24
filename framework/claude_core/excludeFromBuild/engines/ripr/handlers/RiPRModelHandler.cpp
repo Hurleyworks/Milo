@@ -106,7 +106,7 @@ void RiPRModelHandler::addCgModel(RenderableWeakRef weakNode)
                << ", instancedFrom clientID: " << (node->getInstancedFrom() ? node->getInstancedFrom()->getClientID() : 0);
 
     // Verify handlers are set
-    if (!ctx_->getHandlers().materialHandler || !sceneHandler_)
+    if (!ctx_->getHandlers().disneyMaterialHandler || !sceneHandler_)
     {
         LOG(WARNING) << "Material or scene handler not set - cannot process model";
         return;
@@ -208,7 +208,7 @@ void RiPRModelHandler::addCgModel(RenderableWeakRef weakNode)
             {
                 for (int i = 0; i < materialCount; ++i)
                 {
-                    optixu::Material mat = ctx_->getHandlers().materialHandler->createDisneyMaterial(
+                    optixu::Material mat = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
                         model->S[i].cgMaterial, contentFolder, model);
                     triangleModel->getGeometryInstance()->setMaterial(0, i, mat);
                     
@@ -221,7 +221,7 @@ void RiPRModelHandler::addCgModel(RenderableWeakRef weakNode)
             }
             else
             {
-                optixu::Material mat = ctx_->getHandlers().materialHandler->createDisneyMaterial(
+                optixu::Material mat = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
                     model->S[0].cgMaterial, contentFolder, model);
                 triangleModel->getGeometryInstance()->setMaterial(0, 0, mat);
                 
@@ -267,7 +267,7 @@ void RiPRModelHandler::addCgModelList(const WeakRenderableList& weakNodeList)
     ScopedStopWatch sw("Processing model list in RiPR");
 
     // Verify handlers are set
-    if (!ctx_->getHandlers().materialHandler || !sceneHandler_)
+    if (!ctx_->getHandlers().disneyMaterialHandler || !sceneHandler_)
     {
         LOG(WARNING) << "Material or scene handler not set - cannot process models";
         return;
@@ -354,14 +354,14 @@ void RiPRModelHandler::addCgModelList(const WeakRenderableList& weakNodeList)
                 {
                     for (int i = 0; i < materialCount; ++i)
                     {
-                        optixu::Material mat = ctx_->getHandlers().materialHandler->createDisneyMaterial(
+                        optixu::Material mat = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
                             model->S[i].cgMaterial, contentFolder, model);
                         triangleModel->getGeometryInstance()->setMaterial(0, i, mat);
                     }
                 }
                 else
                 {
-                    optixu::Material mat = ctx_->getHandlers().materialHandler->createDisneyMaterial(
+                    optixu::Material mat = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
                         model->S[0].cgMaterial, contentFolder, model);
                     triangleModel->getGeometryInstance()->setMaterial(0, 0, mat);
                 }

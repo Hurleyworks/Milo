@@ -1,32 +1,32 @@
-#include "SceneHandler.h"
+#include "InstanceHandler.h"
 
-SceneHandler::SceneHandler(RenderContextPtr ctx)
+InstanceHandler::InstanceHandler(RenderContextPtr ctx)
     : renderContext_(ctx)
 {
     // Scene will be initialized in initialize() method
 }
 
-SceneHandler::~SceneHandler()
+InstanceHandler::~InstanceHandler()
 {
     finalize();
 }
 
-void SceneHandler::initialize()
+void InstanceHandler::initialize()
 {
     if (!renderContext_)
     {
-        LOG(WARNING) << "SceneHandler::initialize() called with null RenderContext";
+        LOG(WARNING) << "InstanceHandler::initialize() called with null RenderContext";
         return;
     }
 
     // Check if already initialized
     if (ias_)
     {
-        LOG(DBUG) << "SceneHandler already initialized";
+        LOG(DBUG) << "InstanceHandler already initialized";
         return;
     }
 
-    LOG(DBUG) << "SceneHandler lazy initialization triggered";
+    LOG(DBUG) << "InstanceHandler lazy initialization triggered";
     
     // Initialize the OptiX scene
     scene_ = renderContext_->getScene();
@@ -47,7 +47,7 @@ void SceneHandler::initialize()
     traversableHandle_ = 0;
 }
 
-void SceneHandler::finalize()
+void InstanceHandler::finalize()
 {
     // Clear instances from IAS
     if (ias_)
@@ -77,14 +77,14 @@ void SceneHandler::finalize()
     }
 }
 
-void SceneHandler::setConfiguration(
+void InstanceHandler::setConfiguration(
     optixu::ASTradeoff tradeoff,
     bool allowUpdate,
     bool allowCompaction)
 {
     if (!ias_)
     {
-        LOG(WARNING) << "SceneHandler::setConfiguration() called with null IAS";
+        LOG(WARNING) << "InstanceHandler::setConfiguration() called with null IAS";
         return;
     }
     
@@ -101,7 +101,7 @@ void SceneHandler::setConfiguration(
     needsRebuild_ = true;
 }
 
-void SceneHandler::buildIAS()
+void InstanceHandler::buildIAS()
 {
     if (!isDirty_)
     {
@@ -174,18 +174,18 @@ void SceneHandler::buildIAS()
     hasBeenBuilt_ = true;
 }
 
-void SceneHandler::updateIAS()
+void InstanceHandler::updateIAS()
 {
     if (!allowUpdate_)
     {
-        LOG(WARNING) << "SceneHandler::updateIAS() called but updates are not enabled. Call setConfiguration with allowUpdate=true first.";
+        LOG(WARNING) << "InstanceHandler::updateIAS() called but updates are not enabled. Call setConfiguration with allowUpdate=true first.";
         buildIAS();  // Fall back to rebuild
         return;
     }
     
     if (!hasBeenBuilt_)
     {
-        LOG(WARNING) << "SceneHandler::updateIAS() called but IAS has never been built. Building now.";
+        LOG(WARNING) << "InstanceHandler::updateIAS() called but IAS has never been built. Building now.";
         buildIAS();
         return;
     }
@@ -225,7 +225,7 @@ void SceneHandler::updateIAS()
     needsRebuild_ = false;
 }
 
-void SceneHandler::buildOrUpdateIAS()
+void InstanceHandler::buildOrUpdateIAS()
 {
     if (!isDirty_)
     {
@@ -244,7 +244,7 @@ void SceneHandler::buildOrUpdateIAS()
     }
 }
 
-void SceneHandler::addInstance(const optixu::Instance& instance)
+void InstanceHandler::addInstance(const optixu::Instance& instance)
 {
     // Lazy initialization - only initialize when first instance is added
     if (!ias_)
@@ -258,11 +258,11 @@ void SceneHandler::addInstance(const optixu::Instance& instance)
     needsRebuild_ = true;  // Adding instances requires rebuild
 }
 
-void SceneHandler::removeInstanceAt(uint32_t index)
+void InstanceHandler::removeInstanceAt(uint32_t index)
 {
     if (index >= instances_.size())
     {
-        LOG(WARNING) << "SceneHandler::removeInstanceAt() called with invalid index: " << index;
+        LOG(WARNING) << "InstanceHandler::removeInstanceAt() called with invalid index: " << index;
         return;
     }
     
@@ -272,7 +272,7 @@ void SceneHandler::removeInstanceAt(uint32_t index)
     needsRebuild_ = true;  // Removing instances requires rebuild
 }
 
-void SceneHandler::clearInstances()
+void InstanceHandler::clearInstances()
 {
     instances_.clear();
     if (ias_)
@@ -284,11 +284,11 @@ void SceneHandler::clearInstances()
     traversableHandle_ = 0;
 }
 
-void SceneHandler::updateInstanceTransform(uint32_t index, const float transform[12])
+void InstanceHandler::updateInstanceTransform(uint32_t index, const float transform[12])
 {
     if (index >= instances_.size())
     {
-        LOG(WARNING) << "SceneHandler::updateInstanceTransform() called with invalid index: " << index;
+        LOG(WARNING) << "InstanceHandler::updateInstanceTransform() called with invalid index: " << index;
         return;
     }
     
@@ -298,45 +298,45 @@ void SceneHandler::updateInstanceTransform(uint32_t index, const float transform
     // needsRebuild_ stays as is (not set to true)
 }
 
-void SceneHandler::markDirty()
+void InstanceHandler::markDirty()
 {
     isDirty_ = true;
     if (ias_)
         ias_.markDirty();
 }
 
-bool SceneHandler::isReady() const
+bool InstanceHandler::isReady() const
 {
     return !isDirty_ && ias_.isReady();
 }
 
-OptixTraversableHandle SceneHandler::getTraversableHandle() const
+OptixTraversableHandle InstanceHandler::getTraversableHandle() const
 {
     // A traversable handle of 0 is valid for an empty scene
     // Only warn if we have instances but haven't built yet
     if (isDirty_ && !instances_.empty())
     {
-        LOG(WARNING) << "SceneHandler::getTraversableHandle() called with dirty scene containing instances. Call buildIAS() first.";
+        LOG(WARNING) << "InstanceHandler::getTraversableHandle() called with dirty scene containing instances. Call buildIAS() first.";
     }
     return traversableHandle_;
 }
 
-size_t SceneHandler::getInstanceCount() const
+size_t InstanceHandler::getInstanceCount() const
 {
     return instances_.size();
 }
 
-optixu::Instance SceneHandler::getInstance(uint32_t index) const
+optixu::Instance InstanceHandler::getInstance(uint32_t index) const
 {
     if (index >= instances_.size())
     {
-        LOG(WARNING) << "SceneHandler::getInstance() called with invalid index: " << index;
+        LOG(WARNING) << "InstanceHandler::getInstance() called with invalid index: " << index;
         return optixu::Instance();
     }
     return instances_[index];
 }
 
-uint32_t SceneHandler::findInstanceIndex(const optixu::Instance& instance) const
+uint32_t InstanceHandler::findInstanceIndex(const optixu::Instance& instance) const
 {
     return ias_.findChildIndex(instance);
 }

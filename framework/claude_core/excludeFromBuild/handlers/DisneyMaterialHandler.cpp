@@ -1,4 +1,4 @@
-#include "MaterialHandler.h"
+#include "DisneyMaterialHandler.h"
 #include "Handlers.h"
 
 using sabi::Image;
@@ -10,7 +10,7 @@ using sabi::CgTexture;
 using sabi::CgTextureInfo;
 
 // Constructor initializes texture samplers with appropriate filtering and wrapping modes
-MaterialHandler::MaterialHandler (RenderContextPtr ctx) :
+DisneyMaterialHandler::DisneyMaterialHandler (RenderContextPtr ctx) :
     ctx (ctx)
 {
     LOG (DBUG) << _FN_;
@@ -38,22 +38,22 @@ MaterialHandler::MaterialHandler (RenderContextPtr ctx) :
 }
 
 // Destructor logs cleanup and materials are cleaned up through smart pointers
-MaterialHandler::~MaterialHandler()
+DisneyMaterialHandler::~DisneyMaterialHandler()
 {
     LOG (DBUG) << _FN_;
     finalize();
 }
 
 // Initialize the material handler with buffer allocation
-void MaterialHandler::initialize()
+void DisneyMaterialHandler::initialize()
 {
     if (isInitialized_)
     {
-        LOG(WARNING) << "MaterialHandler already initialized";
+        LOG(WARNING) << "DisneyMaterialHandler already initialized";
         return;
     }
     
-    LOG(INFO) << "Initializing MaterialHandler";
+    LOG(INFO) << "Initializing DisneyMaterialHandler";
     
     if (!ctx)
     {
@@ -77,16 +77,16 @@ void MaterialHandler::initialize()
     LOG(INFO) << "Initialized material data buffer";
     
     isInitialized_ = true;
-    LOG(INFO) << "MaterialHandler initialized successfully";
+    LOG(INFO) << "DisneyMaterialHandler initialized successfully";
 }
 
 // Safely releases all texture and material resources
-void MaterialHandler::finalize()
+void DisneyMaterialHandler::finalize()
 {
     if (!isInitialized_)
         return;
         
-    LOG(INFO) << "Finalizing MaterialHandler";
+    LOG(INFO) << "Finalizing DisneyMaterialHandler";
     
     try
     {
@@ -107,7 +107,7 @@ void MaterialHandler::finalize()
         materialSlotFinder_.finalize();
         
         isInitialized_ = false;
-        LOG (INFO) << "MaterialHandler finalized";
+        LOG (INFO) << "DisneyMaterialHandler finalized";
     }
     catch (const std::exception& e)
     {
@@ -116,7 +116,7 @@ void MaterialHandler::finalize()
 }
 
 // Calculates texture dimension information including power-of-two and BC compression status
-shared::TexDimInfo MaterialHandler::calcDimInfo (
+shared::TexDimInfo DisneyMaterialHandler::calcDimInfo (
     const cudau::Array* cuArray,
     bool isLeftHanded)
 {
@@ -171,18 +171,18 @@ shared::TexDimInfo MaterialHandler::calcDimInfo (
 }
 
 // Creates base OptiX material and configures hit groups for ray types
-optixu::Material MaterialHandler::createOptixMaterial()
+optixu::Material DisneyMaterialHandler::createOptixMaterial()
 {
     optixu::Material mat = ctx->getOptiXContext().createMaterial();
     
     // Hit groups are configured by PipelineHandler::configureMaterial()
-    // after the material is created. This keeps the MaterialHandler generic
+    // after the material is created. This keeps the DisneyMaterialHandler generic
     // and decoupled from specific pipeline configurations.
     
     return mat;
 }
 
-optixu::Material MaterialHandler::createDisneyMaterial (const CgMaterial& material,
+optixu::Material DisneyMaterialHandler::createDisneyMaterial (const CgMaterial& material,
                                                         const std::filesystem::path& materialFolder, CgModelPtr model)
 {
     // Create the OptiX material first
@@ -190,7 +190,7 @@ optixu::Material MaterialHandler::createDisneyMaterial (const CgMaterial& materi
     
     if (!isInitialized_)
     {
-        LOG(WARNING) << "MaterialHandler not initialized - falling back to legacy mode";
+        LOG(WARNING) << "DisneyMaterialHandler not initialized - falling back to legacy mode";
         // Fall back to the old way without buffer
         auto hostDisney = std::make_unique<DisneyMaterial>();
         // ... process textures and set user data as before
@@ -338,7 +338,7 @@ optixu::Material MaterialHandler::createDisneyMaterial (const CgMaterial& materi
 }
 
 // Process texture information to load and configure a texture
-void MaterialHandler::processTextureInfo (
+void DisneyMaterialHandler::processTextureInfo (
     const std::optional<CgTextureInfo>& texInfo,
     DisneyMaterial* hostDisney,
     const cudau::Array** targetArray,
@@ -473,7 +473,7 @@ void MaterialHandler::processTextureInfo (
 }
 
 // Updates an existing material with new properties
-void MaterialHandler::updateMaterial (
+void DisneyMaterialHandler::updateMaterial (
     const Material& sabiMaterial,
     optixu::Material& material,
     const std::filesystem::path& materialFolder,
