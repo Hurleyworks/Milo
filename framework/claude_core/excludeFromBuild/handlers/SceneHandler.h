@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../RenderContext.h"
-#include <optix_types.h>
+
 
 using SceneHandlerPtr = std::shared_ptr<class SceneHandler>;
 

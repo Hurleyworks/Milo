@@ -71,13 +71,7 @@ class RiPRSceneHandler
     // Get traversable handle for the scene - used for ray traversal (inline delegation for zero overhead)
     OptixTraversableHandle getHandle() { return sceneHandler_ ? sceneHandler_->getTraversableHandle() : 0; }
 
-    // Completely rebuilds the Instance Acceleration Structure
-    void rebuildIAS();
-
-    // Updates the Instance Acceleration Structure without full rebuild
-    void updateIAS();
-
-    // Rebuilds the entire scene
+    // Rebuilds the entire scene (resizes SBT and rebuilds IAS)
     void rebuild();
 
     // Finalizes scene setup before rendering
@@ -165,7 +159,7 @@ class RiPRSceneHandler
 
         // Step 5: Rebuild IAS and update SBT
         LOG (DBUG) << "Removed " << expiredIndices.size() << " expired nodes from the OptiX scene";
-        prepareForBuild();
+        ensureGASScratchBuffer();
         rebuild();
 
         return expiredIndices.size();
@@ -205,8 +199,8 @@ class RiPRSceneHandler
     // Initialize the scene structures
     void init();
 
-    // Prepare for IAS build (minimal now that SceneHandler handles most of it)
-    void prepareForBuild();
+    // Ensure GAS scratch buffer is allocated for geometry acceleration structure operations
+    void ensureGASScratchBuffer();
 
     // Helper method to convert RenderableNode to optixu::Instance
     optixu::Instance convertNodeToInstance(const RenderableWeakRef& weakNode);

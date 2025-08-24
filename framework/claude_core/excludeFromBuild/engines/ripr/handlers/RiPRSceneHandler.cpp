@@ -179,14 +179,13 @@ void RiPRSceneHandler::init()
     asBuildScratchMem_.initialize (ctx->getCudaContext(), cudau::BufferType::Device, 1024 * 1024, 1);
 }
 
-// Prepare for building the IAS
-void RiPRSceneHandler::prepareForBuild()
+// Ensure GAS scratch buffer is allocated for geometry acceleration structure operations
+void RiPRSceneHandler::ensureGASScratchBuffer()
 {
-    // Most IAS preparation is now handled by SceneHandler
-    // Just ensure scratch memory is sufficient for GAS operations if needed
+    // Initialize scratch memory for GAS (Geometry Acceleration Structure) operations if needed
     if (!asBuildScratchMem_.isInitialized())
     {
-        size_t scratchSize = 1024 * 1024 * 32; // 32MB default
+        size_t scratchSize = 1024 * 1024 * 32; // 32MB default for GAS operations
         asBuildScratchMem_.initialize(ctx->getCudaContext(), cudau::BufferType::Device, scratchSize, 1);
     }
 }
@@ -460,7 +459,7 @@ void RiPRSceneHandler::removeNodesByIDs (const std::vector<BodyID>& bodyIDs)
 
     // Step 5: Rebuild IAS and update SBT
     LOG (DBUG) << "Rebuilding IAS after removing " << indicesToRemove.size() << " instances";
-    prepareForBuild();
+    ensureGASScratchBuffer();
     
     // Rebuild using SceneHandler
     if (sceneHandler_)
@@ -662,7 +661,7 @@ void RiPRSceneHandler::createGeometryInstance (RenderableWeakRef& weakNode)
         uint32_t index = static_cast<uint32_t>(sceneHandler_->getInstanceCount() - 1);
         nodeMap[index] = weakNode;
 
-        prepareForBuild();
+        ensureGASScratchBuffer();
 
         // Rebuild the IAS using SceneHandler
         sceneHandler_->buildOrUpdateIAS();
@@ -716,7 +715,7 @@ void RiPRSceneHandler::createPhysicsPhantom (RenderableWeakRef& weakNode)
             uint32_t index = static_cast<uint32_t>(sceneHandler_->getInstanceCount() - 1);
             nodeMap[index] = weakNode;
 
-            prepareForBuild();
+            ensureGASScratchBuffer();
 
             // Rebuild the IAS using SceneHandler
             sceneHandler_->buildOrUpdateIAS();
@@ -823,7 +822,7 @@ void RiPRSceneHandler::createInstanceList (const WeakRenderableList& weakNodeLis
         }
     }
 
-    prepareForBuild();
+    ensureGASScratchBuffer();
 
     // Rebuild the IAS using SceneHandler
     if (sceneHandler_)
@@ -931,7 +930,11 @@ void RiPRSceneHandler::toggleSelectionMaterial (RenderableNode& node)
     }
 
     // apparently no need to resize SceneDependentSBT
-    rebuildIAS();
+    if (sceneHandler_)
+    {
+        sceneHandler_->buildIAS();
+        CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
+    }
 }
 
 void RiPRSceneHandler::selectAll()
@@ -965,7 +968,11 @@ void RiPRSceneHandler::selectAll()
     }
 
     // apparently no need to resize SceneDependentSBT
-    rebuildIAS();
+    if (sceneHandler_)
+    {
+        sceneHandler_->buildIAS();
+        CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
+    }
 }
 
 // FIXME lot of duplicate code here
@@ -1003,13 +1010,20 @@ void RiPRSceneHandler::deselectAll()
     }
 
     // apparently no need to resize SceneDependentSBT
-    rebuildIAS();
+    if (sceneHandler_)
+    {
+        sceneHandler_->buildIAS();
+        CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
+    }
 }
 
-// Rebuild the IAS after any updates to the instances
-void RiPRSceneHandler::rebuildIAS()
+// Removed rebuildIAS() and updateIAS() - now using direct SceneHandler calls
+
+void RiPRSceneHandler::rebuild()
 {
-    // Delegate IAS rebuild to SceneHandler
+    resizeSceneDependentSBT();
+    
+    // Rebuild IAS using SceneHandler
     if (sceneHandler_)
     {
         sceneHandler_->buildIAS();
@@ -1017,24 +1031,6 @@ void RiPRSceneHandler::rebuildIAS()
         // Synchronize the CUDA stream to ensure completion
         CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
     }
-}
-
-void RiPRSceneHandler::updateIAS()
-{
-    // Delegate IAS update to SceneHandler
-    if (sceneHandler_)
-    {
-        sceneHandler_->updateIAS();
-        
-        // Synchronize the CUDA stream to ensure completion
-        CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
-    }
-}
-
-void RiPRSceneHandler::rebuild()
-{
-    resizeSceneDependentSBT();
-    rebuildIAS();
 }
 
 // Area light support implementation
