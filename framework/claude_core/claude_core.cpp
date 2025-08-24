@@ -5,7 +5,6 @@
 #include "excludeFromBuild/ActiveRender.cpp"
 #include "excludeFromBuild/Renderer.cpp"
 #include "excludeFromBuild/GPUContext.cpp"
-#include "excludeFromBuild/RenderContext.cpp"
 
 // tools
 #include "excludeFromBuild/tools/PTXManager.cpp"
@@ -37,9 +36,6 @@
 #include "excludeFromBuild/engines/ripr/handlers/RiPRModelHandler.cpp"
 #include "excludeFromBuild/engines/ripr/handlers/RiPRSceneHandler.cpp"
 
-// ripr models
-#include "excludeFromBuild/engines/ripr/models/RiPRModel.cpp"
-
 // engines
 #include "excludeFromBuild/engines/base/BaseRenderingEngine.cpp"
 #include "excludeFromBuild/engines/RenderEngineManager.cpp"
@@ -47,6 +43,5 @@
 #include "excludeFromBuild/engines/ripr/RiPREngine.cpp"
 
 // models
-
 #include "excludeFromBuild/engines/shocker/models/ShockerModel.cpp"
-//#include "excludeFromBuild/engines/ripr/models/RiPRModel.cpp"
+#include "excludeFromBuild/engines/ripr/models/RiPRModel.cpp"

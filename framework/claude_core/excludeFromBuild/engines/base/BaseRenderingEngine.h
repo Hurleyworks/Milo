@@ -6,7 +6,6 @@
 
 #include "IRenderingEngine.h"
 #include "../../tools/GPUTimerManager.h"
-#include "EngineEntryPoints.h"
 #include "../../common/common_host.h"
 
 

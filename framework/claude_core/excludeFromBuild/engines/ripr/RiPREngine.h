@@ -1,7 +1,6 @@
 #pragma once
 
 #include "../base/BaseRenderingEngine.h"
-#include "../base/EngineEntryPoints.h"
 #include "ripr_shared.h"
 
 // Forward declarations
