@@ -47,6 +47,17 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
             defaultMaterial_ = ctx.getOptiXContext().createMaterial();
         }
 
+        // Initialize shared AS scratch buffer with initial size (will resize as needed)
+        // Following scene_edit pattern - start with 32MB
+        if (!asScratchBuffer_.isInitialized())
+        {
+            asScratchBuffer_.initialize(
+                ctx.getCudaContext(),
+                cudau::BufferType::Device,
+                32 * 1024 * 1024,  // 32MB initial size
+                1);
+        }
+
         handlers.initialize (shared_from_this());
         return true;
     }
@@ -69,6 +80,17 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
             defaultMaterial_ = ctx.getOptiXContext().createMaterial();
         }
 
+        // Initialize shared AS scratch buffer with initial size (will resize as needed)
+        // Following scene_edit pattern - start with 32MB
+        if (!asScratchBuffer_.isInitialized())
+        {
+            asScratchBuffer_.initialize(
+                ctx.getCudaContext(),
+                cudau::BufferType::Device,
+                32 * 1024 * 1024,  // 32MB initial size
+                1);
+        }
+
         // Store system resources
         camera_ = camera;
         imageCache_ = imageCache;
@@ -81,6 +103,12 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
     void cleanup()
     {
         handlers.cleanup();
+
+        // Clean up shared scratch buffer
+        if (asScratchBuffer_.isInitialized())
+        {
+            asScratchBuffer_.finalize();
+        }
 
         scene_.destroy();
         defaultMaterial_.destroy();
@@ -105,6 +133,9 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
     // Handlers access
     Handlers& getHandlers() { return handlers; }
     const Handlers& getHandlers() const { return handlers; }
+    
+    // Access to shared AS scratch buffer - dynamically resized as needed for GAS/IAS operations
+    cudau::Buffer& getASScratchBuffer() { return asScratchBuffer_; }
 
     // System resources access
     CameraHandle getCamera() const { return camera_; }
@@ -130,6 +161,7 @@ class RenderContext : public std::enable_shared_from_this<RenderContext>
     optixu::Scene scene_;
     optixu::Material defaultMaterial_;
 
-    // Acceleration structure scratch memory
-    // cudau::Buffer asBuildScratchMem_;
+    // Shared acceleration structure scratch memory for all AS operations (GAS and IAS)
+    // Following the pattern from scene_edit example - one scratch buffer dynamically resized as needed
+    cudau::Buffer asScratchBuffer_;
 };

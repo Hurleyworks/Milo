@@ -5,6 +5,7 @@
 // selection state, and traversal for ray tracing
 
 #include "../../../RenderContext.h"
+#include "../../../handlers/SceneHandler.h"
 
 using sabi::RenderableNode;
 using sabi::RenderableWeakRef;
@@ -67,14 +68,11 @@ class ShockerSceneHandler
     // Deselect all nodes in the scene
     void deselectAll();
 
-    // Get traversable handle for the scene - used for ray traversal
-    OptixTraversableHandle getHandle() { return travHandle; }
+    // Get traversable handle for the scene - used for ray traversal (inline delegation for zero overhead)
+    OptixTraversableHandle getHandle() { return sceneHandler_ ? sceneHandler_->getTraversableHandle() : 0; }
 
-    // Completely rebuilds the Instance Acceleration Structure
-    void rebuildIAS();
-
-    // Updates the Instance Acceleration Structure without full rebuild
-    void updateIAS();
+    // Get instance count (inline delegation for zero overhead)
+    size_t getInstanceCount() const { return sceneHandler_ ? sceneHandler_->getInstanceCount() : 0; }
 
     // Rebuilds the entire scene
     void rebuild();
@@ -82,8 +80,8 @@ class ShockerSceneHandler
     // Finalizes scene setup before rendering
     void finalize();
 
-    // Acceleration structure scratch memory access
-    cudau::Buffer& getASBuildScratchMem() { return asBuildScratchMem_; }
+    // Acceleration structure scratch memory access (now uses shared buffer from RenderContext)
+    cudau::Buffer& getASBuildScratchMem() { return ctx->getASScratchBuffer(); }
 
     // Initialize Scene Dependent Shader Binding Table (SBT)
     // void initializeSceneDependentSBT (EntryPointType type);  // TODO: Implement with new entry point system
@@ -134,9 +132,9 @@ class ShockerSceneHandler
         // Step 3: Remove from IAS in descending order
         for (uint32_t index : expiredIndices)
         {
-            if (index < ias.getNumChildren())
+            if (sceneHandler_ && index < sceneHandler_->getInstanceCount())
             {
-                ias.removeChildAt (index);
+                sceneHandler_->removeInstanceAt(index);
             }
         }
 
@@ -161,7 +159,6 @@ class ShockerSceneHandler
 
         // Step 5: Rebuild IAS and update SBT
         LOG (DBUG) << "Removed " << expiredIndices.size() << " expired nodes from the OptiX scene";
-        prepareForBuild();
         rebuild();
 
         return expiredIndices.size();
@@ -177,6 +174,9 @@ class ShockerSceneHandler
     // Reference to the render context for OptiX operations
     RenderContextPtr ctx = nullptr;
 
+    // Generic scene handler for IAS management
+    SceneHandlerPtr sceneHandler_;
+
     // Model handler for managing Shocker models
     ShockerModelHandlerPtr modelHandler_;
 
@@ -186,18 +186,7 @@ class ShockerSceneHandler
     // Maps instance indices to renderable nodes
     NodeMap nodeMap;
 
-    // Instance Acceleration Structure (IAS) for ray traversal optimization
-    optixu::InstanceAccelerationStructure ias;
-
-    // Buffer for IAS memory storage
-    cudau::Buffer iasMem;
-
-    
-    // Acceleration structure scratch memory
-    cudau::Buffer asBuildScratchMem_;
-
-    // Typed buffer for OptixInstance data
-    cudau::TypedBuffer<OptixInstance> instanceBuffer;
+    // Note: IAS and related buffers are now managed by SceneHandler
 
     // Instance data buffers (double buffered for async updates)
     cudau::TypedBuffer<shared::InstanceData> instanceDataBuffer_[2];
@@ -205,14 +194,10 @@ class ShockerSceneHandler
     // Maximum number of instances supported
     static constexpr uint32_t maxNumInstances = 16384;
 
-    // Traversable handle for the scene - entry point for ray traversal
-    OptixTraversableHandle travHandle = 0;
 
     // Initialize the scene structures
     void init();
 
-    // Prepare Instance Acceleration Structure (IAS) for build
-    void prepareForBuild();
 
     // Resize Scene Dependent Shader Binding Table (SBT)
     void resizeSceneDependentSBT();

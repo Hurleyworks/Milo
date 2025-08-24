@@ -82,11 +82,7 @@ void RiPRSceneHandler::finalize()
             moduleDeform = 0;
         }
 
-         // Clean up acceleration structure scratch memory
-        if (asBuildScratchMem_.isInitialized())
-        {
-            asBuildScratchMem_.finalize();
-        }
+        // Note: Scratch buffer is now shared and managed by RenderContext
     }
     catch (const std::exception& e)
     {
@@ -174,21 +170,10 @@ void RiPRSceneHandler::init()
     instanceDataBuffer_[1].initialize (ctx->getCudaContext(), bufferType, maxNumInstances);
     LOG (DBUG) << "Initialized instance data buffers with capacity: " << maxNumInstances;
 
-      // Initialize acceleration structure build scratch memory
-    // Start with 1MB, it will be resized as needed
-    asBuildScratchMem_.initialize (ctx->getCudaContext(), cudau::BufferType::Device, 1024 * 1024, 1);
+    // Note: Scratch buffer is now shared and managed by RenderContext
+    // We'll use ctx->getASScratchBuffer() when needed for GAS operations
 }
 
-// Ensure GAS scratch buffer is allocated for geometry acceleration structure operations
-void RiPRSceneHandler::ensureGASScratchBuffer()
-{
-    // Initialize scratch memory for GAS (Geometry Acceleration Structure) operations if needed
-    if (!asBuildScratchMem_.isInitialized())
-    {
-        size_t scratchSize = 1024 * 1024 * 32; // 32MB default for GAS operations
-        asBuildScratchMem_.initialize(ctx->getCudaContext(), cudau::BufferType::Device, scratchSize, 1);
-    }
-}
 
 // Initialize Scene Dependent Shader Binding Table (SBT)
 // TODO: Implement with new entry point system
@@ -284,7 +269,7 @@ void RiPRSceneHandler::undeformNode (RenderableNode node)
         GAS* gas = triangleModel->getGAS();
         if (gas)
         {
-            gas->gas.rebuild (ctx->getCudaStream(), gas->gasMem, asBuildScratchMem_);
+            gas->gas.rebuild (ctx->getCudaStream(), gas->gasMem, ctx->getASScratchBuffer());
         }
 
         // LOG (DBUG) << "Reset deformation and recomputed normals for " << node->getName();
@@ -379,7 +364,7 @@ void RiPRSceneHandler::updateDeformedNode (RenderableNode node)
         GAS* gas = triangleModel->getGAS();
         if (gas)
         {
-            gas->gas.rebuild (ctx->getCudaStream(), gas->gasMem, asBuildScratchMem_);
+            gas->gas.rebuild (ctx->getCudaStream(), gas->gasMem, ctx->getASScratchBuffer());
         }
     }
     catch (const std::exception& e)
@@ -459,7 +444,6 @@ void RiPRSceneHandler::removeNodesByIDs (const std::vector<BodyID>& bodyIDs)
 
     // Step 5: Rebuild IAS and update SBT
     LOG (DBUG) << "Rebuilding IAS after removing " << indicesToRemove.size() << " instances";
-    ensureGASScratchBuffer();
     
     // Rebuild using SceneHandler
     if (sceneHandler_)
@@ -525,13 +509,9 @@ void RiPRSceneHandler::createInstance (RenderableWeakRef& weakNode)
     RiPRModelPtr optiXModel = modelHandler_->getRiPRModel (node->getClientID());
     GAS* gasData = optiXModel->getGAS();
     
-    // For now, keep scratch memory local (TODO: could be moved to SceneHandler)
-    if (!asBuildScratchMem_.isInitialized())
-    {
-        size_t scratchSize = 1024 * 1024 * 32; // 32MB default
-        asBuildScratchMem_.initialize(ctx->getCudaContext(), cudau::BufferType::Device, scratchSize, 1);
-    }
-    gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, asBuildScratchMem_);
+    // Use shared scratch buffer from RenderContext
+    // The buffer will be resized if needed by the GAS rebuild operation
+    gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, ctx->getASScratchBuffer());
 
     // Rebuild the IAS using SceneHandler
     sceneHandler_->buildOrUpdateIAS();
@@ -661,8 +641,6 @@ void RiPRSceneHandler::createGeometryInstance (RenderableWeakRef& weakNode)
         uint32_t index = static_cast<uint32_t>(sceneHandler_->getInstanceCount() - 1);
         nodeMap[index] = weakNode;
 
-        ensureGASScratchBuffer();
-
         // Rebuild the IAS using SceneHandler
         sceneHandler_->buildOrUpdateIAS();
 
@@ -714,8 +692,6 @@ void RiPRSceneHandler::createPhysicsPhantom (RenderableWeakRef& weakNode)
             // Track in nodeMap - the instance is at the end of the list
             uint32_t index = static_cast<uint32_t>(sceneHandler_->getInstanceCount() - 1);
             nodeMap[index] = weakNode;
-
-            ensureGASScratchBuffer();
 
             // Rebuild the IAS using SceneHandler
             sceneHandler_->buildOrUpdateIAS();
@@ -814,15 +790,13 @@ void RiPRSceneHandler::createInstanceList (const WeakRenderableList& weakNodeLis
                 nodeMap[index] = weakNode;
 
                 GAS* gasData = optiXModel->getGAS();
-                gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, asBuildScratchMem_);
+                gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, ctx->getASScratchBuffer());
 
                 // Populate instance data for GPU access
                 populateInstanceData (index, node);
             }
         }
     }
-
-    ensureGASScratchBuffer();
 
     // Rebuild the IAS using SceneHandler
     if (sceneHandler_)

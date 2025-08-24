@@ -68,8 +68,7 @@ void SceneHandler::finalize()
         optixInstanceBuffer_.finalize();
     if (accelBuffer_.isInitialized())
         accelBuffer_.finalize();
-    if (scratchBuffer_.isInitialized())
-        scratchBuffer_.finalize();
+    // Note: scratch buffer is now shared and managed by RenderContext
     
     // Destroy IAS
     if (ias_)
@@ -146,11 +145,13 @@ void SceneHandler::buildIAS()
             1);
     }
     
-    if (!scratchBuffer_.isInitialized() || scratchBuffer_.sizeInBytes() < memReq.tempSizeInBytes)
+    // Use shared scratch buffer from RenderContext, resize if needed
+    cudau::Buffer& scratchBuffer = renderContext_->getASScratchBuffer();
+    if (!scratchBuffer.isInitialized() || scratchBuffer.sizeInBytes() < memReq.tempSizeInBytes)
     {
-        if (scratchBuffer_.isInitialized())
-            scratchBuffer_.finalize();
-        scratchBuffer_.initialize(
+        if (scratchBuffer.isInitialized())
+            scratchBuffer.finalize();
+        scratchBuffer.initialize(
             renderContext_->getCudaContext(),
             cudau::BufferType::Device,
             memReq.tempSizeInBytes,
@@ -166,7 +167,7 @@ void SceneHandler::buildIAS()
         renderContext_->getCudaStream(),
         optixInstanceBuffer_,
         accelBuffer_,
-        scratchBuffer_);
+        scratchBuffer);
     
     isDirty_ = false;
     needsRebuild_ = false;
@@ -201,11 +202,13 @@ void SceneHandler::updateIAS()
     OptixAccelBufferSizes memReq;
     ias_.prepareForBuild(&memReq);
     
-    if (!scratchBuffer_.isInitialized() || scratchBuffer_.sizeInBytes() < memReq.tempUpdateSizeInBytes)
+    // Use shared scratch buffer from RenderContext, resize if needed
+    cudau::Buffer& scratchBuffer = renderContext_->getASScratchBuffer();
+    if (!scratchBuffer.isInitialized() || scratchBuffer.sizeInBytes() < memReq.tempUpdateSizeInBytes)
     {
-        if (scratchBuffer_.isInitialized())
-            scratchBuffer_.finalize();
-        scratchBuffer_.initialize(
+        if (scratchBuffer.isInitialized())
+            scratchBuffer.finalize();
+        scratchBuffer.initialize(
             renderContext_->getCudaContext(),
             cudau::BufferType::Device,
             memReq.tempUpdateSizeInBytes,
@@ -213,7 +216,7 @@ void SceneHandler::updateIAS()
     }
     
     // Update the acceleration structure
-    ias_.update(renderContext_->getCudaStream(), scratchBuffer_);
+    ias_.update(renderContext_->getCudaStream(), scratchBuffer);
     
     // Note: SBT layout should remain valid after update (only transforms changed)
     

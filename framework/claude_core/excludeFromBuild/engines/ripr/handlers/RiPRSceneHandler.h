@@ -80,8 +80,8 @@ class RiPRSceneHandler
     // Get instance count (inline delegation for zero overhead)
     size_t getInstanceCount() const { return sceneHandler_ ? sceneHandler_->getInstanceCount() : 0; }
     
-    // Acceleration structure scratch memory access (still needed for GAS operations)
-    cudau::Buffer& getASBuildScratchMem() { return asBuildScratchMem_; }
+    // Acceleration structure scratch memory access (now uses shared buffer from RenderContext)
+    cudau::Buffer& getASBuildScratchMem() { return ctx->getASScratchBuffer(); }
 
     // Initialize Scene Dependent Shader Binding Table (SBT)
     // void initializeSceneDependentSBT (EntryPointType type);  // TODO: Implement with new entry point system
@@ -159,7 +159,6 @@ class RiPRSceneHandler
 
         // Step 5: Rebuild IAS and update SBT
         LOG (DBUG) << "Removed " << expiredIndices.size() << " expired nodes from the OptiX scene";
-        ensureGASScratchBuffer();
         rebuild();
 
         return expiredIndices.size();
@@ -187,8 +186,7 @@ class RiPRSceneHandler
     // Maps instance indices to renderable nodes
     NodeMap nodeMap;
 
-    // Acceleration structure scratch memory (still needed for GAS rebuilds)
-    cudau::Buffer asBuildScratchMem_;
+    // Note: Scratch buffer is now shared and managed by RenderContext
 
     // Instance data buffers (double buffered for async updates)
     cudau::TypedBuffer<shared::InstanceData> instanceDataBuffer_[2];
@@ -198,9 +196,6 @@ class RiPRSceneHandler
 
     // Initialize the scene structures
     void init();
-
-    // Ensure GAS scratch buffer is allocated for geometry acceleration structure operations
-    void ensureGASScratchBuffer();
 
     // Helper method to convert RenderableNode to optixu::Instance
     optixu::Instance convertNodeToInstance(const RenderableWeakRef& weakNode);

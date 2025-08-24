@@ -10,6 +10,18 @@ ShockerSceneHandler::ShockerSceneHandler (RenderContextPtr ctx) :
     ctx (ctx)
 {
     LOG (DBUG) << _FN_;
+    
+    // Initialize the generic scene handler and configure it for Shocker's needs
+    sceneHandler_ = ctx->getHandlers().sceneHandler;
+    if (sceneHandler_)
+    {
+        // Configure for fast build with update capability (Shocker needs frequent updates)
+        sceneHandler_->setConfiguration(
+            optixu::ASTradeoff::PreferFastBuild,
+            true,   // allowUpdate - Shocker needs to update transforms
+            false   // allowCompaction - not needed for Shocker
+        );
+    }
 }
 
 // Cleans up displacement and CUDA module resources
@@ -28,22 +40,10 @@ void ShockerSceneHandler::finalize()
             CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
         }
 
-        // Destroy IAS first before releasing its memory
-        if (ias)
+        // SceneHandler manages IAS cleanup - just finalize it
+        if (sceneHandler_)
         {
-            ias.destroy();
-        }
-
-        // Release IAS memory
-        if (iasMem.isInitialized())
-        {
-            iasMem.finalize();
-        }
-
-        // Release instance buffer
-        if (instanceBuffer.isInitialized())
-        {
-            instanceBuffer.finalize();
+            sceneHandler_->finalize();
         }
 
         // Release instance data buffers
@@ -64,8 +64,6 @@ void ShockerSceneHandler::finalize()
         // Clear node map to release references
         nodeMap.clear();
 
-        // Reset traversable handle
-        travHandle = 0;
 
         // Only unload module if we have a valid context
         if (moduleDeform)
@@ -85,11 +83,7 @@ void ShockerSceneHandler::finalize()
             moduleDeform = 0;
         }
 
-         // Clean up acceleration structure scratch memory
-        if (asBuildScratchMem_.isInitialized())
-        {
-            asBuildScratchMem_.finalize();
-        }
+        // Note: Scratch buffer is now shared and managed by RenderContext
     }
     catch (const std::exception& e)
     {
@@ -100,18 +94,28 @@ void ShockerSceneHandler::finalize()
 void ShockerSceneHandler::init()
 {
     LOG (DBUG) << _FN_;
-    // Create Instance Acceleration Structure (IAS)
+    
+    // Initialize SceneHandler if needed
+    if (!sceneHandler_)
+    {
+        sceneHandler_ = ctx->getHandlers().sceneHandler;
+        if (sceneHandler_)
+        {
+            sceneHandler_->initialize();
+            // Configure for fast build with update capability (Shocker needs frequent updates)
+            sceneHandler_->setConfiguration(
+                optixu::ASTradeoff::PreferFastBuild,
+                true,   // allowUpdate - Shocker needs to update transforms
+                false   // allowCompaction - not needed for Shocker
+            );
+        }
+    }
+    
     if (!scene_)
     {
-        LOG (WARNING) << "Scene not set - cannot create IAS";
+        LOG (WARNING) << "Scene not set - cannot initialize";
         return;
     }
-    ias = scene_.createInstanceAccelerationStructure();
-
-    // Set the trade-off for the IAS to prefer fast trace
-    ias.setConfiguration (
-        optixu::ASTradeoff::PreferFastBuild,
-        optixu::AllowUpdate::Yes);
 
     // Generate initial scene SBT layout before any IAS operations
     // This prevents the "Shader binding table layout generation has not been done" error
@@ -168,55 +172,11 @@ void ShockerSceneHandler::init()
     LOG (DBUG) << "Initialized instance data buffers with capacity: " << maxNumInstances;
 
       // Initialize acceleration structure build scratch memory
-    // Start with 1MB, it will be resized as needed
-    asBuildScratchMem_.initialize (ctx->getCudaContext(), cudau::BufferType::Device, 1024 * 1024, 1);
+    // Note: Scratch buffer is now shared and managed by RenderContext
+    // We'll use ctx->getASScratchBuffer() when needed for GAS operations
 }
 
 // Prepare for building the IAS
-void ShockerSceneHandler::prepareForBuild()
-{
-    // Prepare the IAS for build and get memory requirements
-    OptixAccelBufferSizes bufferSizes;
-    ias.prepareForBuild (&bufferSizes);
-
-    if (bufferSizes.tempSizeInBytes > asBuildScratchMem_.sizeInBytes())
-        asBuildScratchMem_.resize (bufferSizes.tempSizeInBytes, 1, ctx->getCudaStream());
-
-    if (iasMem.isInitialized())
-    {
-        CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
-        iasMem.resize (bufferSizes.outputSizeInBytes, 1, ctx->getCudaStream());
-
-        if (ias.getNumChildren())
-        {
-            // Check if instance buffer is initialized before resizing
-            if (instanceBuffer.isInitialized())
-            {
-                instanceBuffer.resize (ias.getNumChildren());
-            }
-            else
-            {
-                // Initialize if not already initialized
-                instanceBuffer.initialize (ctx->getCudaContext(), cudau::BufferType::Device, ias.getNumChildren());
-            }
-        }
-    }
-    else
-    {
-        // Initialize memory buffers based on requirements
-        CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
-        iasMem.initialize (ctx->getCudaContext(), cudau::BufferType::Device, bufferSizes.outputSizeInBytes, 1);
-
-        // Only initialize instance buffer if we have children
-        if (ias.getNumChildren() > 0)
-        {
-            instanceBuffer.initialize (ctx->getCudaContext(), cudau::BufferType::Device, ias.getNumChildren());
-        }
-
-        // Instance data buffers are now initialized in init() to ensure they're ready
-        // when geometry is added to an empty scene
-    }
-}
 
 // Initialize Scene Dependent Shader Binding Table (SBT)
 // TODO: Implement with new entry point system
@@ -312,7 +272,7 @@ void ShockerSceneHandler::undeformNode (RenderableNode node)
         GAS* gas = triangleModel->getGAS();
         if (gas)
         {
-            gas->gas.rebuild (ctx->getCudaStream(), gas->gasMem, asBuildScratchMem_);
+            gas->gas.rebuild (ctx->getCudaStream(), gas->gasMem, ctx->getASScratchBuffer());
         }
 
         // LOG (DBUG) << "Reset deformation and recomputed normals for " << node->getName();
@@ -407,7 +367,7 @@ void ShockerSceneHandler::updateDeformedNode (RenderableNode node)
         GAS* gas = triangleModel->getGAS();
         if (gas)
         {
-            gas->gas.rebuild (ctx->getCudaStream(), gas->gasMem, asBuildScratchMem_);
+            gas->gas.rebuild (ctx->getCudaStream(), gas->gasMem, ctx->getASScratchBuffer());
         }
     }
     catch (const std::exception& e)
@@ -453,13 +413,13 @@ void ShockerSceneHandler::removeNodesByIDs (const std::vector<BodyID>& bodyIDs)
     // Step 3: Remove from IAS in descending order (no index shifts affect remaining removals)
     for (uint32_t index : indicesToRemove)
     {
-        if (index < ias.getNumChildren())
+        if (sceneHandler_ && index < sceneHandler_->getInstanceCount())
         {
-            ias.removeChildAt (index);
+            sceneHandler_->removeInstanceAt(index);
         }
         else
         {
-            LOG (WARNING) << "Invalid index " << index << " (max: " << ias.getNumChildren() - 1 << ")";
+            LOG (WARNING) << "Invalid index " << index << " (max: " << (sceneHandler_ ? sceneHandler_->getInstanceCount() - 1 : 0) << ")";
         }
     }
 
@@ -484,7 +444,6 @@ void ShockerSceneHandler::removeNodesByIDs (const std::vector<BodyID>& bodyIDs)
 
     // Step 5: Rebuild IAS and update SBT
     LOG (DBUG) << "Rebuilding IAS after removing " << indicesToRemove.size() << " instances";
-    prepareForBuild();
     rebuild();
 }
 
@@ -496,7 +455,7 @@ void ShockerSceneHandler::createInstance (RenderableWeakRef& weakNode)
 
     RenderableNode node = weakNode.lock();
 
-    if (travHandle == 0)
+    if (!sceneHandler_ || sceneHandler_->getTraversableHandle() == 0)
         init();
 
     // Create a new OptiX instance
@@ -515,21 +474,24 @@ void ShockerSceneHandler::createInstance (RenderableWeakRef& weakNode)
     getWorldTransform (t, st);
     instance.setTransform (t.data());
 
-    // Add the instance to the IAS
-    ias.addChild (instance);
+    // Add the instance to the scene using SceneHandler
+    if (sceneHandler_)
+    {
+        sceneHandler_->addInstance(instance);
+    }
 
     node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
 
-    uint32_t index = ias.findChildIndex (instance);
+    // Track the instance in nodeMap using the current count as index
+    uint32_t index = sceneHandler_ ? static_cast<uint32_t>(sceneHandler_->getInstanceCount() - 1) : 0;
     nodeMap[index] = weakNode;
     
     // Set instance ID BEFORE rebuilding - this is critical!
     instance.setID (index);
 
     GAS* gasData = optiXModel->getGAS();
-    gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, asBuildScratchMem_);
+    gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, ctx->getASScratchBuffer());
 
-    prepareForBuild();
 
     rebuild();
 
@@ -646,16 +608,19 @@ void ShockerSceneHandler::createGeometryInstance (RenderableWeakRef& weakNode)
     MatrixRowMajor34f t = m.block<3, 4> (0, 0);
     instance.setTransform (t.data());
 
-    // Add the instance to the IAS
-    ias.addChild (instance);
+    // Add the instance to the scene using SceneHandler
+    if (sceneHandler_)
+    {
+        sceneHandler_->addInstance(instance);
+    }
 
     // Set the flag to indicate this node is stored in ShockerSceneHandler
     node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
 
-    uint32_t index = ias.findChildIndex (instance);
+    // Track the instance in nodeMap using the current count as index
+    uint32_t index = sceneHandler_ ? static_cast<uint32_t>(sceneHandler_->getInstanceCount() - 1) : 0;
     nodeMap[index] = weakNode;
 
-    prepareForBuild();
 
     rebuild();
 
@@ -695,17 +660,20 @@ void ShockerSceneHandler::createPhysicsPhantom (RenderableWeakRef& weakNode)
         MatrixRowMajor34f t = m.block<3, 4> (0, 0);
         instance.setTransform (t.data());
 
-        // Add the instance to the IAS
-        ias.addChild (instance);
+        // Add the instance to the scene using SceneHandler
+        if (sceneHandler_)
+        {
+            sceneHandler_->addInstance(instance);
+        }
 
         // Set the flag to indicate this node is stored in ShockerSceneHandler
         node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
 
-        uint32_t index = ias.findChildIndex (instance);
+        // Track the instance in nodeMap using the current count as index
+        uint32_t index = sceneHandler_ ? static_cast<uint32_t>(sceneHandler_->getInstanceCount() - 1) : 0;
         nodeMap[index] = weakNode;
 
-        prepareForBuild();
-
+    
         rebuild();
 
         // Populate instance data for GPU access
@@ -719,7 +687,7 @@ void ShockerSceneHandler::createPhysicsPhantom (RenderableWeakRef& weakNode)
 
 void ShockerSceneHandler::createInstanceList (const WeakRenderableList& weakNodeList)
 {
-    if (travHandle == 0)
+    if (!sceneHandler_ || sceneHandler_->getTraversableHandle() == 0)
         init();
 
     for (const auto& weakNode : weakNodeList)
@@ -749,13 +717,17 @@ void ShockerSceneHandler::createInstanceList (const WeakRenderableList& weakNode
             MatrixRowMajor34f t = m.block<3, 4> (0, 0);
             instance.setTransform (t.data());
 
-            // Add the instance to the IAS
-            ias.addChild (instance);
+            // Add the instance to the scene using SceneHandler
+            if (sceneHandler_)
+            {
+                sceneHandler_->addInstance(instance);
+            }
 
             // Set the flag to indicate this node is stored in ShockerSceneHandler
             node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
 
-            uint32_t index = ias.findChildIndex (instance);
+            // Track the instance in nodeMap using the current count as index
+        uint32_t index = sceneHandler_ ? static_cast<uint32_t>(sceneHandler_->getInstanceCount() - 1) : 0;
             nodeMap[index] = weakNode;
 
             // Store index for later instance data population
@@ -784,24 +756,27 @@ void ShockerSceneHandler::createInstanceList (const WeakRenderableList& weakNode
             MatrixRowMajor34f t = m.block<3, 4> (0, 0);
             instance.setTransform (t.data());
 
-            // Add the instance to the IAS
-            ias.addChild (instance);
+            // Add the instance to the scene using SceneHandler
+            if (sceneHandler_)
+            {
+                sceneHandler_->addInstance(instance);
+            }
 
             // Set the flag to indicate this node is stored in ShockerSceneHandler
             node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
 
-            uint32_t index = ias.findChildIndex (instance);
+            // Track the instance in nodeMap using the current count as index
+        uint32_t index = sceneHandler_ ? static_cast<uint32_t>(sceneHandler_->getInstanceCount() - 1) : 0;
             nodeMap[index] = weakNode;
 
             GAS* gasData = optiXModel->getGAS();
-            gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, asBuildScratchMem_);
+            gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, ctx->getASScratchBuffer());
 
             // Populate instance data for GPU access
             populateInstanceData (index, node);
         }
     }
 
-    prepareForBuild();
 
     rebuild();
 }
@@ -845,7 +820,7 @@ bool ShockerSceneHandler::updateMotion()
             updateDeformedNode (node);
         }
 
-        optixu::Instance instance = ias.getChild (it.first);
+        optixu::Instance instance = sceneHandler_ ? sceneHandler_->getInstance(it.first) : optixu::Instance();
         const SpaceTime& st = node->getSpaceTime();
         MatrixRowMajor34f t;
 
@@ -864,7 +839,10 @@ bool ShockerSceneHandler::updateMotion()
     }
     if (bodiesSleeping < bodyCount)
     {
-        rebuildIAS();
+        if (sceneHandler_)
+        {
+            sceneHandler_->buildOrUpdateIAS();
+        }
         restartRender = true;
     }
     return restartRender;
@@ -893,7 +871,10 @@ void ShockerSceneHandler::toggleSelectionMaterial (RenderableNode& node)
     }
 
     // apparently no need to resize SceneDependentSBT
-    rebuildIAS();
+    if (sceneHandler_)
+    {
+        sceneHandler_->buildOrUpdateIAS();
+    }
 }
 
 void ShockerSceneHandler::selectAll()
@@ -927,7 +908,10 @@ void ShockerSceneHandler::selectAll()
     }
 
     // apparently no need to resize SceneDependentSBT
-    rebuildIAS();
+    if (sceneHandler_)
+    {
+        sceneHandler_->buildOrUpdateIAS();
+    }
 }
 
 // FIXME lot of duplicate code here
@@ -965,32 +949,21 @@ void ShockerSceneHandler::deselectAll()
     }
 
     // apparently no need to resize SceneDependentSBT
-    rebuildIAS();
-}
-
-// Rebuild the IAS after any updates to the instances
-void ShockerSceneHandler::rebuildIAS()
-{
-    // Perform the IAS rebuild
-    travHandle = ias.rebuild (ctx->getCudaStream(), instanceBuffer, iasMem, asBuildScratchMem_);
-
-    // Synchronize the CUDA stream to ensure completion
-    CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
-}
-
-void ShockerSceneHandler::updateIAS()
-{
-    // just update the IAS
-    ias.update (ctx->getCudaStream(), asBuildScratchMem_);
-
-    // Synchronize the CUDA stream to ensure completion
-    CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
+    if (sceneHandler_)
+    {
+        sceneHandler_->buildOrUpdateIAS();
+    }
 }
 
 void ShockerSceneHandler::rebuild()
 {
     resizeSceneDependentSBT();
-    rebuildIAS();
+    
+    // Rebuild the IAS using SceneHandler
+    if (sceneHandler_)
+    {
+        sceneHandler_->buildOrUpdateIAS();
+    }
 }
 
 // Area light support implementation
