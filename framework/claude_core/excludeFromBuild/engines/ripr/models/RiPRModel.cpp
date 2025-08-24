@@ -80,10 +80,10 @@ void RiPRTriangleModel::createGeometry(RenderContextPtr ctx, RenderableNode& nod
     if (materialCount > 1)
     {
         materialIndexBuffer.initialize(ctx->getCudaContext(), cudau::BufferType::Device, materialIDs);
-        geomInst.setNumMaterials(materialCount, materialIndexBuffer, optixu::IndexSize::k1Byte);
+        geomInst.setMaterialCount(materialCount, materialIndexBuffer, optixu::IndexSize::k1Byte);
     }
     else
-        geomInst.setNumMaterials(1, optixu::BufferView());
+        geomInst.setMaterialCount(1, optixu::BufferView());
 
     // Set vertex and triangle buffers
     geomInst.setVertexBuffer(vertexBuffer);
@@ -113,9 +113,9 @@ void RiPRTriangleModel::createGAS (RenderContextPtr ctx, optixu::Scene scene, ui
         optixu::AllowUpdate::Yes,            // Changed from No to Yes to allow updates
         optixu::AllowCompaction::No);        // Changed from Yes to No since we'll update frequently
 
-    gasData.gas.setNumMaterialSets(RiPRConstants::MATERIAL_SETS);
+    gasData.gas.setMaterialSetCount(RiPRConstants::MATERIAL_SETS);
     for (int i = 0; i < RiPRConstants::MATERIAL_SETS; ++i)
-        gasData.gas.setNumRayTypes(i, numRayTypes);
+        gasData.gas.setRayTypeCount(i, numRayTypes);
 
     gasData.gas.addChild(geomInst);
     OptixAccelBufferSizes bufferSizes;

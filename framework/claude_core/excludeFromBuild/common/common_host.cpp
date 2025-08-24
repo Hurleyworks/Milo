@@ -1801,7 +1801,7 @@ GeometryInstance* createGeometryInstance (
     geomInst->optixGeomInst = scene->optixScene.createGeometryInstance();
     geomInst->optixGeomInst.setVertexBuffer (geom.vertexBuffer);
     geomInst->optixGeomInst.setTriangleBuffer (geom.triangleBuffer);
-    geomInst->optixGeomInst.setNumMaterials (1, optixu::BufferView());
+    geomInst->optixGeomInst.setMaterialCount (1, optixu::BufferView());
     geomInst->optixGeomInst.setMaterial (0, 0, optixMat);
     geomInst->optixGeomInst.setUserData (geomInst->geomInstSlot);
 
@@ -1848,7 +1848,7 @@ GeometryInstance* createTFDMGeometryInstance (
     geomInstDataOnHost[geomInst->geomInstSlot] = geomInstData;
 
     geomInst->optixGeomInst = scene->optixScene.createGeometryInstance (optixu::GeometryType::CustomPrimitives);
-    geomInst->optixGeomInst.setNumMaterials (1, optixu::BufferView());
+    geomInst->optixGeomInst.setMaterialCount (1, optixu::BufferView());
     geomInst->optixGeomInst.setMaterial (0, 0, optixMat);
     geomInst->optixGeomInst.setUserData (geomInst->geomInstSlot);
 
@@ -1895,7 +1895,7 @@ GeometryInstance* createNRTDSMGeometryInstance (
     geomInstDataOnHost[geomInst->geomInstSlot] = geomInstData;
 
     geomInst->optixGeomInst = scene->optixScene.createGeometryInstance (optixu::GeometryType::CustomPrimitives);
-    geomInst->optixGeomInst.setNumMaterials (1, optixu::BufferView());
+    geomInst->optixGeomInst.setMaterialCount (1, optixu::BufferView());
     geomInst->optixGeomInst.setMaterial (0, 0, optixMat);
     geomInst->optixGeomInst.setUserData (geomInst->geomInstSlot);
 
@@ -1950,6 +1950,7 @@ GeometryInstance* createLinearSegmentsGeometryInstance (
             static_cast<uint32_t> (geom.curveVertexBuffer.stride())));
     geomInst->optixGeomInst.setSegmentIndexBuffer (geom.segmentIndexBuffer);
     geomInst->optixGeomInst.setCurveEndcapFlags (OPTIX_CURVE_ENDCAP_ON);
+    geomInst->optixGeomInst.setMaterialCount (1, optixu::BufferView());
     geomInst->optixGeomInst.setMaterial (0, 0, optixMat);
     geomInst->optixGeomInst.setUserData (geomInst->geomInstSlot);
 
@@ -1997,8 +1998,8 @@ GeometryGroup* createGeometryGroup (
         }
         geomGroup->aabb.unify (geomInst->aabb);
     }
-    geomGroup->optixGas.setNumMaterialSets (1);
-    geomGroup->optixGas.setNumRayTypes (0, scene->numRayTypes);
+    geomGroup->optixGas.setMaterialSetCount (1);
+    geomGroup->optixGas.setRayTypeCount (0, scene->numRayTypes);
     geomGroup->needsReallocation = true;
     geomGroup->needsRebuild = true;
     geomGroup->refittable = geomType == optixu::GeometryType::CustomPrimitives;

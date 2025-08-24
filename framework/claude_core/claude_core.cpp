@@ -27,6 +27,7 @@
 #include "excludeFromBuild/handlers/DenoiserHandler.cpp"
 #include "excludeFromBuild/handlers/ScreenBufferHandler.cpp"
 #include "excludeFromBuild/handlers/InstanceHandler.cpp"
+#include "excludeFromBuild/handlers/TriangleMeshHandler.cpp"
 
 // shocker handlers
 #include "excludeFromBuild/engines/shocker/handlers/ShockerModelHandler.cpp"

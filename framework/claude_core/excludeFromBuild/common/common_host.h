@@ -1111,7 +1111,7 @@ struct Scene
             else
                 iasMem.initialize (cuContext, bufferType, asSizes.outputSizeInBytes, 1);
             asScratchSize = std::max (asSizes.tempSizeInBytes, asScratchSize);
-            iasInstanceBuffer.initialize (cuContext, bufferType, ias.getNumChildren());
+            iasInstanceBuffer.initialize (cuContext, bufferType, insts.size());
 
             for (int bufIdx = 0; bufIdx < 2; ++bufIdx)
             {

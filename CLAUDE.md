@@ -32,17 +32,30 @@ powershell -ExecutionPolicy Bypass -File scripts/claude_build_command.ps1 -Actio
 
 ### Unit Testing
 
-#### Build all unit tests
+#### Compile and run all unit tests (PREFERRED METHOD)
+```batch
+cd unittest
+test
+```
+This command will:
+- Build all unit tests
+- Run all test executables
+- Save results to `unittest/test_results.txt` if tests fail
+- Save build errors to `unittest/build_errors.txt` if compilation fails
+
+#### Compile and run specific test
+```batch
+cd unittest
+test CgModel2Shocker
+```
+
+#### Build only (without running)
 ```batch
 cd unittest
 b
 ```
-Or:
-```batch
-msbuild unittest\builds\VisualStudio2022\UnitTests.sln /p:Configuration=Debug /p:Platform=x64
-```
 
-#### Run specific unit test
+#### Run specific test scripts
 ```batch
 scripts\test_shocker_model.bat
 scripts\test_area_light_handler.bat

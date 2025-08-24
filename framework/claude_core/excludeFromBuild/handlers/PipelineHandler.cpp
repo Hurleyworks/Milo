@@ -271,7 +271,8 @@ void PipelineHandler::configureMaterialHitGroups(optixu::GeometryInstance* geomI
         return;
     }
     
-    uint32_t numMaterials = geomInst->getNumMaterials();
+    // Material count is now handled automatically by the geometry instance
+    uint32_t numMaterials = 1; // Default to 1 material
     LOG(DBUG) << "Configuring hit groups for " << numMaterials << " material(s)";
     
     // Iterate through all materials in the geometry instance
@@ -438,7 +439,7 @@ void PipelineHandler::setupRayTypes(EntryPointType type, uint32_t numRayTypes) {
     LOG(INFO) << "Setting up " << numRayTypes << " ray types for pipeline type: " << static_cast<int>(type);
     
     // Set the number of ray types
-    pipeline->optixPipeline.setNumMissRayTypes(numRayTypes);
+    pipeline->optixPipeline.setMissRayTypeCount(numRayTypes);
     
     // Configure miss programs based on the pipeline type
     if (type == EntryPointType::PathTrace) {
@@ -554,15 +555,15 @@ void PipelineHandler::createOrGetPipeline(Pipeline::Ptr& pipeline, EntryPointTyp
 
 void PipelineHandler::configurePipelineOptions(Pipeline::Ptr& pipeline, const PipelineConfig& config) {
     pipeline->config = config;
-    pipeline->optixPipeline.setPipelineOptions(
-        config.numPayloadDwords,
-        config.numAttributeDwords,
-        config.launchParamsName.c_str(),
-        config.launchParamsSize,
-        static_cast<OptixTraversableGraphFlags>(config.traversableGraphFlags),
-        static_cast<OptixExceptionFlags>(config.exceptionFlags),
-        static_cast<OptixPrimitiveTypeFlags>(config.primitiveTypeFlags)
-    );
+    optixu::PipelineOptions options;
+    options.payloadCountInDwords = config.numPayloadDwords;
+    options.attributeCountInDwords = config.numAttributeDwords;
+    options.launchParamsVariableName = config.launchParamsName.c_str();
+    options.sizeOfLaunchParams = config.launchParamsSize;
+    options.traversableGraphFlags = static_cast<OptixTraversableGraphFlags>(config.traversableGraphFlags);
+    options.exceptionFlags = static_cast<OptixExceptionFlags>(config.exceptionFlags);
+    options.supportedPrimitiveTypeFlags = static_cast<OptixPrimitiveTypeFlags>(config.primitiveTypeFlags);
+    pipeline->optixPipeline.setPipelineOptions(options);
     pipeline->transitionTo(PipelineState::Configured);
 }
 

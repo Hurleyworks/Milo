@@ -319,11 +319,8 @@ void DenoiserHandler::denoise(
         optixInputs.flowFormat = inputs.flowFormat;
         
         // Explicitly set AOV-related fields to nullptr (critical for HDR model)
-        optixInputs.noisyAovs = nullptr;
-        optixInputs.previousDenoisedAovs = nullptr;
-        optixInputs.aovFormats = nullptr;
-        optixInputs.aovTypes = nullptr;
-        optixInputs.numAovs = 0;
+        // AOV handling has been simplified in the new API
+        // AOV-related fields are no longer part of DenoiserInputBuffers
         
         optixInputs.noisyBeauty = *inputs.noisyBeauty;
         

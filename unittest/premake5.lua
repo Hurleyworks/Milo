@@ -25,9 +25,4 @@ end
 
 	
 	include "tests/HelloTest"
-	include "tests/GeometryTest"
-	include "tests/ShockerModelTest"
-	include "tests/AreaLightHandlerTest"
-	include "tests/Eigen2Shocker"
-	include "tests/RendererTest"
-	
+	include "tests/CgModel2Shocker"

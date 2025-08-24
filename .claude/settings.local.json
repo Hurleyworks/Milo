@@ -60,7 +60,10 @@
       "mcp__serena__onboarding",
       "mcp__serena__write_memory",
       "mcp__serena",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Read(//mnt/e/common_content/models/Box/glTF/**)",
+      "Bash(./test.bat CgModel2Shocker)",
+      "Read(//mnt/e/1Shocker/OptiX_Utility/**)"
     ],
     "deny": []
   },

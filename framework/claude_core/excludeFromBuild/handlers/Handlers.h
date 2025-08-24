@@ -13,8 +13,7 @@
 #include "ScreenBufferHandler.h"
 #include "DisneyMaterialHandler.h"
 #include "InstanceHandler.h"
-
-// #include "ModelHandler.h"  // Not used in engine-only mode
+#include "TriangleMeshHandler.h"
 
 // Forward declarations
 class RenderContext;
@@ -52,6 +51,9 @@ struct Handlers
 
         // Initialize DenoiserHandler
         denoiserHandler = DenoiserHandler::create (renderContext);
+
+        // Initialize TriangleMeshHandler
+        triangleMeshHandler = TriangleMeshHandler::create (renderContext);
     }
 
     // Cleanup all handlers
@@ -105,6 +107,13 @@ struct Handlers
             screenBufferHandler->finalize();
             screenBufferHandler.reset();
         }
+
+         // Cleanup TriangleMeshHandler
+        if (triangleMeshHandler)
+        {
+            triangleMeshHandler->finalize();
+            triangleMeshHandler.reset();
+        }
     }
 
     // Handler members
@@ -115,4 +124,5 @@ struct Handlers
     DisneyMaterialHandlerPtr disneyMaterialHandler;
     PipelineHandlerPtr pipelineHandler;
     DenoiserHandlerPtr denoiserHandler;
+    TriangleMeshHandlerPtr triangleMeshHandler;
 };
