@@ -1,168 +1,95 @@
 ﻿=== Unit Test Results ===
-Time: 2025-08-24 18:30:10
+Time: 2025-08-24 20:22:08
 ==================================================
 
 PASSED TESTS (1):
-  [PASS] CgModel2Shocker
+  [PASS] AreaLightTest
 
 
 DETAILED OUTPUT:
 
 ======================================================================
 
-TEST: CgModel2Shocker
+TEST: AreaLightTest
 
 ======================================================================
 
 		LOG format: [hh:mm:ss uuu* LEVEL THREAD_ID FILE->FUNCTION:LINE] message
 		(uuu*: microseconds fractions of the seconds value)
 
-0.000000	INFO [15952 Log.cpp->LogHandler:88]	Logger initialized
+0.000000	INFO [5596 Log.cpp->LogHandler:88]	Logger initialized
 [doctest] doctest version is "2.4.11"
 [doctest] run with "--help" for options
-0.001913	DEBUG [15952 GLTFImporter.cpp->importTextures:772]	Imported 0 textures
-0.001979	DEBUG [15952 GLTFImporter.cpp->importSamplers:822]	Imported 0 samplers
-0.002014	DEBUG [15952 GLTFImporter.cpp->importCgTextures:796]	Imported 0 CG textures
-0.002046	DEBUG [15952 GLTFImporter.cpp->importCgSamplers:848]	Imported 0 CG samplers
-0.002994	DEBUG [15952 GLTFImporter.cpp->importTextures:772]	Imported 0 textures
-0.003023	DEBUG [15952 GLTFImporter.cpp->importSamplers:822]	Imported 0 samplers
-0.003051	DEBUG [15952 GLTFImporter.cpp->importCgTextures:796]	Imported 0 CG textures
-0.003075	DEBUG [15952 GLTFImporter.cpp->importCgSamplers:848]	Imported 0 CG samplers
-0.004163	DEBUG [15952 GLTFImporter.cpp->importTextures:772]	Imported 0 textures
-0.004201	DEBUG [15952 GLTFImporter.cpp->importSamplers:822]	Imported 0 samplers
-0.004224	DEBUG [15952 GLTFImporter.cpp->importCgTextures:796]	Imported 0 CG textures
-0.004247	DEBUG [15952 GLTFImporter.cpp->importCgSamplers:848]	Imported 0 CG samplers
-0.004458	DEBUG [15952 GLTFImporter.cpp->importModel:48]	Failed to load glTF file: E:/non_existent_file.gltf. Error: File does not exist!
-0.004513	WARNING [15952 Application.cpp->loadGLTF:40]	Exception loading E:/non_existent_file.gltf: File does not exist!
-0.004792	DEBUG [15952 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
-0.004833	INFO [15952 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
-0.014847	INFO [15952 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
-0.014923	INFO [15952 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
-0.014952	INFO [15952 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
-0.014989	INFO [15952 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
-0.097077	INFO [15952 GPUContext.cpp->initialize:109]	Initializing OptiX context...
+0.000352	DEBUG [5596 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
+0.000425	INFO [5596 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
+0.010203	INFO [5596 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
+0.010293	INFO [5596 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
+0.010354	INFO [5596 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
+0.010384	INFO [5596 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
+0.082475	INFO [5596 GPUContext.cpp->initialize:109]	Initializing OptiX context...
 [ 4][       KNOBS]: All knobs on default.
 
 [ 4][   DISKCACHE]: Opened database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
 [ 4][   DISKCACHE]:     Cache data size: "896.3 MiB"
-0.215845	INFO [15952 GPUContext.cpp->initialize:115]	OptiX context created successfully
-0.215912	INFO [15952 GPUContext.cpp->initialize:116]	GPU context initialized successfully
-0.216794	DEBUG [15952 GLTFImporter.cpp->importTextures:772]	Imported 0 textures
-0.216847	DEBUG [15952 GLTFImporter.cpp->importSamplers:822]	Imported 0 samplers
-0.216875	DEBUG [15952 GLTFImporter.cpp->importCgTextures:796]	Imported 0 CG textures
-0.216929	DEBUG [15952 GLTFImporter.cpp->importCgSamplers:848]	Imported 0 CG samplers
-0.216989	INFO [15952 Application.cpp->DOCTEST_ANON_FUNC_21:207]	Vertex count: 24
-0.217028	INFO [15952 Application.cpp->DOCTEST_ANON_FUNC_21:208]	Triangle count: 12
-0.217051	INFO [15952 Application.cpp->DOCTEST_ANON_FUNC_21:209]	First vertex position: (-0.5, 0.5, -0.5)
-0.217074	INFO [15952 Application.cpp->DOCTEST_ANON_FUNC_21:210]	First triangle indices: [0, 2, 1]
-0.217758	INFO [15952 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
+0.180516	INFO [5596 GPUContext.cpp->initialize:115]	OptiX context created successfully
+0.180579	INFO [5596 GPUContext.cpp->initialize:116]	GPU context initialized successfully
+0.180884	DEBUG [5596 SkyDomeHandler.cpp->SkyDomeHandler:8]	SkyDomeHandler
+0.180949	DEBUG [5596 DisneyMaterialHandler.cpp->DisneyMaterialHandler:16]	DisneyMaterialHandler
+0.180988	INFO [5596 DisneyMaterialHandler.cpp->initialize:56]	Initializing DisneyMaterialHandler
+0.181012	INFO [5596 DisneyMaterialHandler.cpp->initialize:73]	Initialized material slot finder with capacity: 1024
+0.181126	INFO [5596 DisneyMaterialHandler.cpp->initialize:77]	Initialized material data buffer
+0.181176	INFO [5596 DisneyMaterialHandler.cpp->initialize:80]	DisneyMaterialHandler initialized successfully
+0.182565	DEBUG [5596 DisneyMaterialHandler.cpp->createDisneyMaterial:335]	Created Disney material in slot 0
+0.182717	INFO [5596 Application.cpp->DOCTEST_ANON_FUNC_15:213]	Created GeometryInstance with 2 emitter primitives
+0.182775	INFO [5596 Application.cpp->DOCTEST_ANON_FUNC_15:214]	Light distribution with integral: 120
+0.182816	INFO [5596 Application.cpp->DOCTEST_ANON_FUNC_15:215]	Material slot: 0
+0.182918	INFO [5596 DisneyMaterialHandler.cpp->finalize:89]	Finalizing DisneyMaterialHandler
+0.183237	INFO [5596 DisneyMaterialHandler.cpp->finalize:110]	DisneyMaterialHandler finalized
+0.183300	DEBUG [5596 SkyDomeHandler.cpp->~SkyDomeHandler:14]	~SkyDomeHandler
+0.183513	INFO [5596 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
 [ 4][   DISKCACHE]: Closed database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
 [ 4][   DISKCACHE]:     Cache data size: "896.3 MiB"
-0.240616	INFO [15952 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
-0.240685	DEBUG [15952 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
-0.241973	DEBUG [15952 GLTFImporter.cpp->importTextures:772]	Imported 0 textures
-0.242039	DEBUG [15952 GLTFImporter.cpp->importSamplers:822]	Imported 0 samplers
-0.242068	DEBUG [15952 GLTFImporter.cpp->importCgTextures:796]	Imported 0 CG textures
-0.242092	DEBUG [15952 GLTFImporter.cpp->importCgSamplers:848]	Imported 0 CG samplers
-0.242370	DEBUG [15952 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
-0.242439	INFO [15952 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
-0.242466	INFO [15952 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
-0.242517	INFO [15952 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
-0.242541	INFO [15952 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
-0.242567	INFO [15952 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
-0.298794	INFO [15952 GPUContext.cpp->initialize:109]	Initializing OptiX context...
+0.206043	INFO [5596 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
+0.206104	DEBUG [5596 DisneyMaterialHandler.cpp->~DisneyMaterialHandler:43]	~DisneyMaterialHandler
+0.206131	DEBUG [5596 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
+0.206373	DEBUG [5596 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
+0.206436	INFO [5596 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
+0.206508	INFO [5596 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
+0.206549	INFO [5596 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
+0.206580	INFO [5596 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
+0.206602	INFO [5596 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
+0.264519	INFO [5596 GPUContext.cpp->initialize:109]	Initializing OptiX context...
 [ 4][       KNOBS]: All knobs on default.
 
 [ 4][   DISKCACHE]: Opened database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
 [ 4][   DISKCACHE]:     Cache data size: "896.3 MiB"
-0.350600	INFO [15952 GPUContext.cpp->initialize:115]	OptiX context created successfully
-0.350668	INFO [15952 GPUContext.cpp->initialize:116]	GPU context initialized successfully
-0.351539	DEBUG [15952 GLTFImporter.cpp->importTextures:772]	Imported 0 textures
-0.351596	DEBUG [15952 GLTFImporter.cpp->importSamplers:822]	Imported 0 samplers
-0.351620	DEBUG [15952 GLTFImporter.cpp->importCgTextures:796]	Imported 0 CG textures
-0.351643	DEBUG [15952 GLTFImporter.cpp->importCgSamplers:848]	Imported 0 CG samplers
-0.352099	INFO [15952 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
+0.319284	INFO [5596 GPUContext.cpp->initialize:115]	OptiX context created successfully
+0.319645	INFO [5596 GPUContext.cpp->initialize:116]	GPU context initialized successfully
+0.319705	DEBUG [5596 SkyDomeHandler.cpp->SkyDomeHandler:8]	SkyDomeHandler
+0.319752	DEBUG [5596 DisneyMaterialHandler.cpp->DisneyMaterialHandler:16]	DisneyMaterialHandler
+0.319845	INFO [5596 DisneyMaterialHandler.cpp->initialize:56]	Initializing DisneyMaterialHandler
+0.319873	INFO [5596 DisneyMaterialHandler.cpp->initialize:73]	Initialized material slot finder with capacity: 1024
+0.319959	INFO [5596 DisneyMaterialHandler.cpp->initialize:77]	Initialized material data buffer
+0.320076	INFO [5596 DisneyMaterialHandler.cpp->initialize:80]	DisneyMaterialHandler initialized successfully
+0.321269	DEBUG [5596 DisneyMaterialHandler.cpp->createDisneyMaterial:335]	Created Disney material in slot 0
+0.321674	DEBUG [5596 DisneyMaterialHandler.cpp->createDisneyMaterial:335]	Created Disney material in slot 1
+0.321990	DEBUG [5596 DisneyMaterialHandler.cpp->createDisneyMaterial:335]	Created Disney material in slot 2
+0.322102	INFO [5596 Application.cpp->DOCTEST_ANON_FUNC_15:357]	Created test collection with 3 instances
+0.322152	INFO [5596 Application.cpp->DOCTEST_ANON_FUNC_15:358]	Total emitter primitives: 6
+0.322183	INFO [5596 DisneyMaterialHandler.cpp->finalize:89]	Finalizing DisneyMaterialHandler
+0.322377	INFO [5596 DisneyMaterialHandler.cpp->finalize:110]	DisneyMaterialHandler finalized
+0.322426	DEBUG [5596 SkyDomeHandler.cpp->~SkyDomeHandler:14]	~SkyDomeHandler
+0.322681	INFO [5596 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
 [ 4][   DISKCACHE]: Closed database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
 [ 4][   DISKCACHE]:     Cache data size: "896.3 MiB"
-0.376626	INFO [15952 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
-0.376687	DEBUG [15952 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
-0.376874	DEBUG [15952 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
-0.376938	INFO [15952 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
-0.376995	INFO [15952 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
-0.377033	INFO [15952 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
-0.377057	INFO [15952 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
-0.377080	INFO [15952 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
-0.433049	INFO [15952 GPUContext.cpp->initialize:109]	Initializing OptiX context...
-[ 4][       KNOBS]: All knobs on default.
-
-[ 4][   DISKCACHE]: Opened database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
-[ 4][   DISKCACHE]:     Cache data size: "896.3 MiB"
-0.485689	INFO [15952 GPUContext.cpp->initialize:115]	OptiX context created successfully
-0.485886	INFO [15952 GPUContext.cpp->initialize:116]	GPU context initialized successfully
-0.486151	INFO [15952 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
-[ 4][   DISKCACHE]: Closed database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
-[ 4][   DISKCACHE]:     Cache data size: "896.3 MiB"
-0.508783	INFO [15952 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
-0.508873	DEBUG [15952 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
-0.509035	DEBUG [15952 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
-0.509099	INFO [15952 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
-0.509159	INFO [15952 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
-0.509195	INFO [15952 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
-0.509237	INFO [15952 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
-0.509260	INFO [15952 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
-0.569459	INFO [15952 GPUContext.cpp->initialize:109]	Initializing OptiX context...
-[ 4][       KNOBS]: All knobs on default.
-
-[ 4][   DISKCACHE]: Opened database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
-[ 4][   DISKCACHE]:     Cache data size: "896.3 MiB"
-0.621734	INFO [15952 GPUContext.cpp->initialize:115]	OptiX context created successfully
-0.621805	INFO [15952 GPUContext.cpp->initialize:116]	GPU context initialized successfully
-0.622730	DEBUG [15952 GLTFImporter.cpp->importTextures:772]	Imported 0 textures
-0.622792	DEBUG [15952 GLTFImporter.cpp->importSamplers:822]	Imported 0 samplers
-0.622817	DEBUG [15952 GLTFImporter.cpp->importCgTextures:796]	Imported 0 CG textures
-0.622863	DEBUG [15952 GLTFImporter.cpp->importCgSamplers:848]	Imported 0 CG samplers
-0.623054	INFO [15952 Application.cpp->DOCTEST_ANON_FUNC_29:535]	GeometryInstanceData created successfully
-0.623167	INFO [15952 Application.cpp->DOCTEST_ANON_FUNC_29:536]	  Vertex buffer: 24 vertices
-0.623236	INFO [15952 Application.cpp->DOCTEST_ANON_FUNC_29:537]	  Triangle buffer: 12 triangles
-0.623264	INFO [15952 Application.cpp->DOCTEST_ANON_FUNC_29:538]	  Material slot: 0
-0.623291	INFO [15952 Application.cpp->DOCTEST_ANON_FUNC_29:539]	  Geometry instance slot: 0
-0.623339	INFO [15952 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
-[ 4][   DISKCACHE]: Closed database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
-[ 4][   DISKCACHE]:     Cache data size: "896.3 MiB"
-0.645209	INFO [15952 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
-0.645268	DEBUG [15952 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
-0.645461	DEBUG [15952 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
-0.645524	INFO [15952 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
-0.645576	INFO [15952 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
-0.645611	INFO [15952 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
-0.645635	INFO [15952 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
-0.645658	INFO [15952 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
-0.706948	INFO [15952 GPUContext.cpp->initialize:109]	Initializing OptiX context...
-[ 4][       KNOBS]: All knobs on default.
-
-[ 4][   DISKCACHE]: Opened database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
-[ 4][   DISKCACHE]:     Cache data size: "896.3 MiB"
-0.759265	INFO [15952 GPUContext.cpp->initialize:115]	OptiX context created successfully
-0.759459	INFO [15952 GPUContext.cpp->initialize:116]	GPU context initialized successfully
-0.759566	INFO [15952 Application.cpp->DOCTEST_ANON_FUNC_29:615]	Created 3 GeometryInstanceData structures
-0.759682	INFO [15952 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
-[ 4][   DISKCACHE]: Closed database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
-[ 4][   DISKCACHE]:     Cache data size: "896.3 MiB"
-0.782279	INFO [15952 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
-0.782340	DEBUG [15952 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
-0.783438	DEBUG [15952 GLTFImporter.cpp->importTextures:772]	Imported 0 textures
-0.783502	DEBUG [15952 GLTFImporter.cpp->importSamplers:822]	Imported 0 samplers
-0.783541	DEBUG [15952 GLTFImporter.cpp->importCgTextures:796]	Imported 0 CG textures
-0.783570	DEBUG [15952 GLTFImporter.cpp->importCgSamplers:848]	Imported 0 CG samplers
-0.784565	DEBUG [15952 GLTFImporter.cpp->importTextures:772]	Imported 0 textures
-0.784623	DEBUG [15952 GLTFImporter.cpp->importSamplers:822]	Imported 0 samplers
-0.784664	DEBUG [15952 GLTFImporter.cpp->importCgTextures:796]	Imported 0 CG textures
-0.784691	DEBUG [15952 GLTFImporter.cpp->importCgSamplers:848]	Imported 0 CG samplers
+0.349884	INFO [5596 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
+0.349962	DEBUG [5596 DisneyMaterialHandler.cpp->~DisneyMaterialHandler:43]	~DisneyMaterialHandler
+0.349988	DEBUG [5596 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
 ===============================================================================
-[doctest] test cases:   5 |   5 passed | 0 failed | 0 skipped
-[doctest] assertions: 154 | 154 passed | 0 failed |
+[doctest] test cases:  1 |  1 passed | 0 failed | 0 skipped
+[doctest] assertions: 28 | 28 passed | 0 failed |
 [doctest] Status: SUCCESS!
-CgModel2Shocker.exe : LOGGER NOT INITIALIZED:
+AreaLightTest.exe : LOGGER NOT INITIALIZED:
 At E:\1Milo\Milo\unittest\scripts\claude_test_command.ps1:77 char:23
 +             $Output = & $ExePath 2>&1 | Out-String
 +                       ~~~~~~~~~~~~~~~
@@ -170,6 +97,6 @@ At E:\1Milo\Milo\unittest\scripts\claude_test_command.ps1:77 char:23
     + FullyQualifiedErrorId : NativeCommandError
  
 		
-main took 785 milliseconds
+main took 351 milliseconds
 Press ENTER to continue...
 

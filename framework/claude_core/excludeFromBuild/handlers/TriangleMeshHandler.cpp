@@ -1,331 +1,304 @@
 #include "TriangleMeshHandler.h"
 
-std::unique_ptr<TriangleMeshHandler> TriangleMeshHandler::create (RenderContextPtr ctx)
+TriangleMeshHandler::TriangleMeshHandler(RenderContextPtr ctx)
+    : renderContext_(ctx)
 {
-    // Just create the handler, initialization will be done by RenderContext
-    return std::make_unique<TriangleMeshHandler>();
+    cudaContext_ = ctx->getCudaContext();
 }
 
 TriangleMeshHandler::~TriangleMeshHandler()
 {
-    if (initialized_)
+    finalize();
+}
+
+bool TriangleMeshHandler::initialize()
+{
+    // Initialize geometry instance data buffer (mapped for CPU/GPU access)
+    geomInstDataBuffer_.initialize(
+        cudaContext_, 
+        cudau::BufferType::ZeroCopy,  // ZeroCopy allows CPU/GPU access
+        maxNumGeometryInstances);
+    
+    geomInstSlotFinder_.initialize(maxNumGeometryInstances);
+    
+    return true;
+}
+
+GeometryInstance* TriangleMeshHandler::createGeometryInstance(
+    const sabi::CgModel& model,
+    uint32_t surfaceIndex,
+    uint32_t materialSlot)
+{
+    const auto& surface = model.S[surfaceIndex];
+    const auto& V = model.V;
+    const auto& N = model.N;
+    const auto& UV0 = model.UV0;
+    
+    // Convert vertices
+    std::vector<shared::Vertex> vertices;
+    vertices.reserve(model.vertexCount());
+    
+    for (size_t i = 0; i < model.vertexCount(); ++i)
     {
-        finalize();
+        shared::Vertex vertex;
+        vertex.position = Point3D(V(0, i), V(1, i), V(2, i));
+        vertex.normal = N.cols() > i ? 
+            Normal3D(N(0, i), N(1, i), N(2, i)) : 
+            Normal3D(0, 1, 0);
+        vertex.texCoord = UV0.cols() > i ? 
+            Point2D(UV0(0, i), UV0(1, i)) : 
+            Point2D(0, 0);
+        vertex.texCoord0Dir = Vector3D(1, 0, 0); // Simple tangent
+        vertices.push_back(vertex);
+    }
+    
+    // Convert triangles
+    std::vector<shared::Triangle> triangles;
+    const auto& F = surface.indices();
+    triangles.reserve(F.cols());
+    
+    for (int i = 0; i < F.cols(); ++i)
+    {
+        shared::Triangle triangle;
+        triangle.index0 = F(0, i);
+        triangle.index1 = F(1, i);
+        triangle.index2 = F(2, i);
+        triangles.push_back(triangle);
+    }
+    
+    // Create GeometryInstance
+    GeometryInstance* geomInst = new GeometryInstance();
+    geomInst->geometry = TriangleGeometry();
+    auto& geom = std::get<TriangleGeometry>(geomInst->geometry);
+    
+    // Calculate AABB
+    geomInst->aabb = AABB();
+    for (const auto& vertex : vertices)
+    {
+        geomInst->aabb.unify(vertex.position);
+    }
+    
+    // Initialize GPU buffers
+    geom.vertexBuffer.initialize(cudaContext_, cudau::BufferType::Device, vertices);
+    geom.triangleBuffer.initialize(cudaContext_, cudau::BufferType::Device, triangles);
+    
+    // Handle emissive geometry
+    const auto& material = surface.cgMaterial;
+    if (material.emission.luminous > 0.0f)
+    {
+        // Initialize emitter distribution for light sampling
+        geom.emitterPrimDist.initialize(
+            cudaContext_, 
+            cudau::BufferType::Device,
+            nullptr,
+            static_cast<uint32_t>(triangles.size()));
+    }
+    
+    // Get slot and create OptiX geometry instance
+    geomInst->geomInstSlot = geomInstSlotFinder_.getFirstAvailableSlot();
+    geomInstSlotFinder_.setInUse(geomInst->geomInstSlot);
+    
+    // Create OptiX geometry instance through RenderContext's scene
+    optixu::Scene scene = renderContext_->getScene();
+    geomInst->optixGeomInst = scene.createGeometryInstance();
+    
+    // Setup geometry data in mapped buffer
+    shared::GeometryInstanceData* geomInstDataOnHost = 
+        geomInstDataBuffer_.getMappedPointer();
+    
+    shared::GeometryInstanceData& geomInstData = 
+        geomInstDataOnHost[geomInst->geomInstSlot];
+    
+    geomInstData.vertexBuffer = 
+        geom.vertexBuffer.getROBuffer<shared::enableBufferOobCheck>();
+    geomInstData.triangleBuffer = 
+        geom.triangleBuffer.getROBuffer<shared::enableBufferOobCheck>();
+    geomInstData.materialSlot = materialSlot;
+    geomInstData.geomInstSlot = geomInst->geomInstSlot;
+    
+    if (geom.emitterPrimDist.isInitialized())
+    {
+        geom.emitterPrimDist.getDeviceType(&geomInstData.emitterPrimDist);
+    }
+    
+    // Set up OptiX geometry instance
+    geomInst->optixGeomInst.setVertexBuffer(geom.vertexBuffer);
+    geomInst->optixGeomInst.setTriangleBuffer(geom.triangleBuffer);
+    // Note: setNumMaterials and setMaterial should be called when we have an actual OptiX material
+    // For now, we'll skip material setup - it should be done by the caller who has the material
+    geomInst->optixGeomInst.setUserData(geomInst->geomInstSlot);
+    
+    geometryInstances_.push_back(geomInst);
+    return geomInst;
+}
+
+GeometryGroup* TriangleMeshHandler::createGeometryGroup(
+    const std::set<GeometryInstance*>& instances)
+{
+    GeometryGroup* group = new GeometryGroup();
+    
+    // Copy instance pointers
+    for (auto* inst : instances)
+    {
+        group->geomInsts.insert(inst);
+        group->aabb.unify(inst->aabb);
+        
+        // Count emitter primitives
+        if (std::holds_alternative<TriangleGeometry>(inst->geometry))
+        {
+            const auto& geom = std::get<TriangleGeometry>(inst->geometry);
+            if (geom.emitterPrimDist.isInitialized())
+            {
+                group->numEmitterPrimitives += 
+                    static_cast<uint32_t>(geom.triangleBuffer.numElements());
+            }
+        }
+    }
+    
+    // Create OptiX GAS through RenderContext's scene
+    optixu::Scene scene = renderContext_->getScene();
+    group->optixGas = scene.createGeometryAccelerationStructure(optixu::GeometryType::Triangles);
+    
+    // Add children
+    for (auto* inst : instances)
+    {
+        group->optixGas.addChild(inst->optixGeomInst);
+    }
+    
+    // Configure for build
+    group->optixGas.setConfiguration(
+        optixu::ASTradeoff::PreferFastTrace,
+        optixu::AllowUpdate::No,
+        optixu::AllowCompaction::No,
+        optixu::AllowRandomVertexAccess::No);
+    
+    // Note: setNumMaterialSets and setNumRayTypes should be called by the engine
+    // that knows how many material sets and ray types it uses
+    
+    group->needsReallocation = true;
+    group->needsRebuild = true;
+    group->refittable = false;
+    
+    geometryGroups_.push_back(group);
+    return group;
+}
+
+void TriangleMeshHandler::buildGAS(GeometryGroup* group, CUstream stream)
+{
+    OptixAccelBufferSizes sizes;  // Correct type
+    
+    // Prepare for build
+    if (group->needsReallocation)
+    {
+        group->optixGas.prepareForBuild(&sizes);
+        
+        // Allocate or resize GAS memory
+        if (group->optixGasMem.isInitialized())
+            group->optixGasMem.resize(sizes.outputSizeInBytes, 1);
+        else
+            group->optixGasMem.initialize(
+                cudaContext_, 
+                cudau::BufferType::Device,
+                sizes.outputSizeInBytes, 1);
+        
+        // Get shared scratch buffer from RenderContext and resize if needed
+        cudau::Buffer& asScratchMem = renderContext_->getASScratchBuffer();
+        if (!asScratchMem.isInitialized())
+            asScratchMem.initialize(
+                cudaContext_,
+                cudau::BufferType::Device,
+                sizes.tempSizeInBytes, 1);
+        else if (sizes.tempSizeInBytes > asScratchMem.sizeInBytes())
+            asScratchMem.resize(sizes.tempSizeInBytes, 1);
+        
+        group->needsReallocation = false;
+    }
+    
+    // Build or rebuild GAS
+    if (group->needsRebuild)
+    {
+        cudau::Buffer& asScratchMem = renderContext_->getASScratchBuffer();
+        group->optixGas.rebuild(
+            stream,
+            group->optixGasMem,
+            asScratchMem);
+        
+        group->needsRebuild = false;
     }
 }
 
-bool TriangleMeshHandler::initialize (RenderContextPtr ctx)
+OptixTraversableHandle TriangleMeshHandler::getTraversableHandle(
+    GeometryGroup* group) const
 {
-    if (initialized_)
-    {
-        LOG (WARNING) << "TriangleMeshHandler already initialized";
-        return false;
-    }
+    return group->optixGas.getHandle();
+}
 
-    if (!ctx)
-    {
-        LOG (WARNING) << "Invalid RenderContext provided to TriangleMeshHandler";
-        return false;
-    }
+shared::GeometryInstanceData* TriangleMeshHandler::getGeometryInstanceData(uint32_t slot)
+{
+    if (slot >= maxNumGeometryInstances)
+        return nullptr;
+    
+    shared::GeometryInstanceData* geomInstDataOnHost = 
+        geomInstDataBuffer_.getMappedPointer();
+    
+    return &geomInstDataOnHost[slot];
+}
 
-    ctx_ = ctx;
+void TriangleMeshHandler::destroyGeometryInstance(GeometryInstance* instance)
+{
+    if (!instance)
+        return;
+    
+    // Free the slot
+    geomInstSlotFinder_.setNotInUse(instance->geomInstSlot);
+    
+    // Clean up the instance
+    instance->finalize();
+    
+    // Remove from tracking
+    auto it = std::find(geometryInstances_.begin(), geometryInstances_.end(), instance);
+    if (it != geometryInstances_.end())
+        geometryInstances_.erase(it);
+    
+    delete instance;
+}
 
-    // Initialize material management
-    material_slot_finder_.initialize (maxNumMaterials);
-    LOG (DBUG) << "TriangleMeshHandler material slot finder initialized for " << maxNumMaterials << " materials";
-
-    // Initialize material data buffer
-    CUcontext cuContext = ctx_->getCudaContext();
-    material_data_buffer_.initialize (cuContext, cudau::BufferType::Device, maxNumMaterials);
-    LOG (DBUG) << "TriangleMeshHandler material data buffer initialized for " << maxNumMaterials << " materials";
-
-    initialized_ = true;
-    LOG (INFO) << "TriangleMeshHandler initialized successfully";
-
-    return true;
+void TriangleMeshHandler::destroyGeometryGroup(GeometryGroup* group)
+{
+    if (!group)
+        return;
+    
+    // Clean up OptiX resources
+    group->optixGas.destroy();
+    group->optixGasMem.finalize();
+    
+    // Remove from tracking
+    auto it = std::find(geometryGroups_.begin(), geometryGroups_.end(), group);
+    if (it != geometryGroups_.end())
+        geometryGroups_.erase(it);
+    
+    delete group;
 }
 
 void TriangleMeshHandler::finalize()
 {
-    if (!initialized_)
-        return;
-
-    LOG (DBUG) << "TriangleMeshHandler finalizing...";
-
-    // Clean up geometry cache
-    if (!geometry_cache_.empty())
+    // Clean up geometry instances
+    for (auto* inst : geometryInstances_)
     {
-        LOG (DBUG) << "Clearing " << geometry_cache_.size() << " cached geometries";
-        geometry_cache_.clear();
+        inst->finalize();
+        delete inst;
     }
-
-    // Clean up material buffers
-    material_data_buffer_.finalize();
-    material_slot_finder_.finalize();
-    LOG (DBUG) << "Material management cleaned up";
-
-    initialized_ = false;
-    ctx_.reset();
-
-    LOG (INFO) << "TriangleMeshHandler finalized";
-}
-
-bool TriangleMeshHandler::hasGeometry (size_t hash) const
-{
-    return geometry_cache_.find (hash) != geometry_cache_.end();
-}
-
-TriangleMesh* TriangleMeshHandler::getGeometry (size_t hash)
-{
-    auto it = geometry_cache_.find (hash);
-    return (it != geometry_cache_.end()) ? &it->second : nullptr;
-}
-
-void TriangleMeshHandler::addGeometry (size_t hash, TriangleMesh&& triangleMesh)
-{
-    geometry_cache_[hash] = std::move (triangleMesh);
-    LOG (DBUG) << "Added geometry to cache (hash: " << hash << ", total cached: " << geometry_cache_.size() << ")";
-}
-
-void TriangleMeshHandler::incrementRefCount (size_t hash)
-{
-    auto it = geometry_cache_.find (hash);
-    if (it != geometry_cache_.end())
+    geometryInstances_.clear();
+    
+    // Clean up geometry groups
+    for (auto* group : geometryGroups_)
     {
-        it->second.ref_count++;
-        LOG (DBUG) << "Incremented ref count for geometry " << hash << " to " << it->second.ref_count;
+        group->optixGas.destroy();
+        group->optixGasMem.finalize();
+        delete group;
     }
-}
-
-void TriangleMeshHandler::decrementRefCount (size_t hash)
-{
-    auto it = geometry_cache_.find (hash);
-    if (it != geometry_cache_.end())
-    {
-        if (it->second.ref_count > 0)
-        {
-            it->second.ref_count--;
-            LOG (DBUG) << "Decremented ref count for geometry " << hash << " to " << it->second.ref_count;
-
-            // Clean up if no longer referenced
-            if (it->second.ref_count == 0)
-            {
-                LOG (INFO) << "Removing unreferenced geometry from cache (hash: " << hash << ")";
-                geometry_cache_.erase (it);
-            }
-        }
-    }
-}
-
-uint32_t TriangleMeshHandler::allocateMaterialSlot()
-{
-    uint32_t slot = material_slot_finder_.getFirstAvailableSlot();
-    if (slot >= maxNumMaterials)
-    {
-        LOG (WARNING) << "Material slots exhausted (max: " << maxNumMaterials << ")";
-        return UINT32_MAX;
-    }
-
-    material_slot_finder_.setInUse (slot);
-    LOG (DBUG) << "Allocated material slot " << slot;
-    return slot;
-}
-
-void TriangleMeshHandler::freeMaterialSlot (uint32_t slot)
-{
-    if (slot < maxNumMaterials)
-    {
-        material_slot_finder_.setNotInUse (slot);
-        LOG (DBUG) << "Freed material slot " << slot;
-    }
-}
-
-size_t TriangleMeshHandler::computeGeometryHash (sabi::CgModelPtr cgModel)
-{
-    // Simple hash based on vertex count, triangle count, and a sample of vertex positions
-    std::hash<size_t> hasher;
-    size_t hash = hasher (cgModel->vertexCount());
-    hash ^= hasher (cgModel->triangleCount()) << 1;
-
-    // Sample a few vertices for better uniqueness
-    if (cgModel->V.cols() > 0)
-    {
-        hash ^= hasher (cgModel->V (0, 0)) << 2;
-        if (cgModel->V.cols() > 1)
-            hash ^= hasher (cgModel->V (0, cgModel->V.cols() - 1)) << 3;
-    }
-
-    return hash;
-}
-
-bool TriangleMeshHandler::createTriangleMesh (sabi::CgModelPtr cgModel, size_t hash, TriangleMesh& triangleMesh)
-{
-    if (!cgModel || !cgModel->isValid())
-    {
-        LOG (WARNING) << "Invalid CgModel for geometry creation";
-        return false;
-    }
-
-    try
-    {
-        CUcontext cuContext = ctx_->getCudaContext();
-        optixu::Scene optixScene = ctx_->getScene();
-
-        // Convert CgModel vertices to shared::Vertex format (shared by all surfaces)
-        std::vector<shared::Vertex> vertices;
-        vertices.reserve (cgModel->V.cols());
-
-        for (int i = 0; i < cgModel->V.cols(); ++i)
-        {
-            shared::Vertex v;
-            v.position = Point3D (cgModel->V (0, i), cgModel->V (1, i), cgModel->V (2, i));
-
-            // Use normals if available, otherwise default to up vector
-            if (cgModel->N.cols() > i)
-            {
-                v.normal = Normal3D (cgModel->N (0, i), cgModel->N (1, i), cgModel->N (2, i));
-                v.normal = normalize (v.normal);
-            }
-            else
-            {
-                v.normal = Normal3D (0, 1, 0);
-            }
-
-            // Calculate tangent from normal
-            Vector3D tangent, bitangent;
-            float sign = v.normal.z >= 0 ? 1.0f : -1.0f;
-            const float a = -1 / (sign + v.normal.z);
-            const float b = v.normal.x * v.normal.y * a;
-            tangent = Vector3D (1 + sign * v.normal.x * v.normal.x * a, sign * b, -sign * v.normal.x);
-            v.texCoord0Dir = normalize (tangent);
-
-            // Use texture coordinates if available
-            if (cgModel->UV0.cols() > i)
-            {
-                v.texCoord = Point2D (cgModel->UV0 (0, i), cgModel->UV0 (1, i));
-            }
-            else
-            {
-                v.texCoord = Point2D (0, 0);
-            }
-
-            vertices.push_back (v);
-
-            // Update AABB
-            triangleMesh.aabb.unify (v.position);
-        }
-
-        // Create shared vertex buffer for all surfaces
-        triangleMesh.vertex_buffer.initialize (cuContext, cudau::BufferType::Device, vertices);
-
-        // Create Geometry Acceleration Structure
-        triangleMesh.gas = optixScene.createGeometryAccelerationStructure();
-
-        // Check for emissive materials across all surfaces
-        triangleMesh.is_emissive = false;
-
-        // Create a GeometryInstance for each surface
-        for (size_t surfIdx = 0; surfIdx < cgModel->S.size(); ++surfIdx)
-        {
-            const auto& surface = cgModel->S[surfIdx];
-
-            // Check if this surface has emissive material
-            if (surface.cgMaterial.emission.luminous > 0.0f)
-            {
-                triangleMesh.is_emissive = true;
-            }
-
-            // Convert surface triangles to shared::Triangle format
-            std::vector<shared::Triangle> triangles;
-            triangles.reserve (surface.F.cols());
-
-            for (int i = 0; i < surface.F.cols(); ++i)
-            {
-                shared::Triangle tri;
-                tri.index0 = surface.F (0, i);
-                tri.index1 = surface.F (1, i);
-                tri.index2 = surface.F (2, i);
-                triangles.push_back (tri);
-            }
-
-            if (triangles.empty())
-            {
-                LOG (DBUG) << "Skipping surface " << surfIdx << " - no triangles";
-                continue;
-            }
-
-            // Create per-surface triangleMesh
-            TriangleMeshSurface geomInstRes;
-
-            // Each surface gets its own triangle buffer
-            geomInstRes.triangle_buffer.initialize (cuContext, cudau::BufferType::Device, triangles);
-
-            // Allocate material slot for this surface
-            geomInstRes.material_slot = allocateMaterialSlot();
-            if (geomInstRes.material_slot == UINT32_MAX)
-            {
-                LOG (WARNING) << "Failed to allocate material slot for surface " << surfIdx;
-                geomInstRes.material_slot = 0; // Fallback to default
-            }
-
-            // Create OptiX geometry instance for this surface
-            geomInstRes.optix_geom_inst = optixScene.createGeometryInstance();
-            geomInstRes.optix_geom_inst.setVertexBuffer (triangleMesh.vertex_buffer); // Use shared vertex buffer
-            geomInstRes.optix_geom_inst.setTriangleBuffer (geomInstRes.triangle_buffer);
-            geomInstRes.optix_geom_inst.setMaterialCount (1, optixu::BufferView());
-            geomInstRes.optix_geom_inst.setMaterial (0, 0, ctx_->getDefaultMaterial()); // Set default material
-            geomInstRes.optix_geom_inst.setUserData (surfIdx);                          // Store surface index
-
-            // Add to GAS
-            triangleMesh.gas.addChild (geomInstRes.optix_geom_inst);
-
-            // Store in geometry group
-            triangleMesh.geom_instances.push_back (std::move (geomInstRes));
-
-            LOG (DBUG) << "Created GeometryInstance for surface " << surfIdx
-                       << " (" << triangles.size() << " triangles, material slot "
-                       << triangleMesh.geom_instances.back().material_slot << ")";
-        }
-
-        if (triangleMesh.geom_instances.empty())
-        {
-            LOG (WARNING) << "No valid surfaces found in CgModel";
-            return false;
-        }
-
-        LOG (INFO) << "Creating GeometryGroup with " << triangleMesh.geom_instances.size()
-                   << " surfaces, " << vertices.size() << " vertices total"
-                   << (triangleMesh.is_emissive ? " (EMISSIVE)" : "");
-
-        // Configure and build GAS
-        triangleMesh.gas.setMaterialSetCount (1);
-        triangleMesh.gas.setRayTypeCount (0, 1); // Single ray type for now
-        triangleMesh.gas.setConfiguration (
-            optixu::ASTradeoff::PreferFastBuild,
-            optixu::AllowUpdate::No,
-            optixu::AllowCompaction::No);
-
-        // Prepare and build GAS
-        OptixAccelBufferSizes gasSizes;
-        triangleMesh.gas.prepareForBuild (&gasSizes);
-
-        triangleMesh.gas_mem.initialize (cuContext, cudau::BufferType::Device, gasSizes.outputSizeInBytes, 1);
-
-        cudau::Buffer gasScratch;
-        gasScratch.initialize (cuContext, cudau::BufferType::Device, gasSizes.tempSizeInBytes, 1);
-
-        CUstream stream = ctx_->getCudaStream();
-        triangleMesh.gas.rebuild (stream, triangleMesh.gas_mem, gasScratch);
-
-        gasScratch.finalize();
-
-        LOG (INFO) << "Created GAS with handle: " << triangleMesh.gas.getHandle();
-
-        return true;
-    }
-    catch (const std::exception& ex)
-    {
-        LOG (WARNING) << "Failed to create geometry triangleMesh: " << ex.what();
-        return false;
-    }
+    geometryGroups_.clear();
+    
+    // Clean up buffers
+    geomInstDataBuffer_.finalize();
 }

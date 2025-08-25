@@ -63,7 +63,11 @@
       "Bash(python3:*)",
       "Read(//mnt/e/common_content/models/Box/glTF/**)",
       "Bash(./test.bat CgModel2Shocker)",
-      "Read(//mnt/e/1Shocker/OptiX_Utility/**)"
+      "Read(//mnt/e/1Shocker/OptiX_Utility/**)",
+      "Bash(test.bat CgModel2Shocker)",
+      "Read(//mnt/e/1Shocker/GfxExp/common/**)",
+      "Read(//mnt/e/1Shocker/GfxExp/**)",
+      "Read(//mnt/e/1Shocker/GfxExp/**)"
     ],
     "deny": []
   },
