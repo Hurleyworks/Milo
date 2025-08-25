@@ -67,7 +67,9 @@
       "Bash(test.bat CgModel2Shocker)",
       "Read(//mnt/e/1Shocker/GfxExp/common/**)",
       "Read(//mnt/e/1Shocker/GfxExp/**)",
-      "Read(//mnt/e/1Shocker/GfxExp/**)"
+      "Read(//mnt/e/1Shocker/GfxExp/**)",
+      "Read(//mnt/e/1Shocker/GfxExp/**)",
+      "Bash(xxd:*)"
     ],
     "deny": []
   },

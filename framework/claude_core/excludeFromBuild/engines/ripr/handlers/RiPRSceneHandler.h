@@ -71,15 +71,15 @@ class RiPRSceneHandler
     // Get traversable handle for the scene - used for ray traversal (inline delegation for zero overhead)
     OptixTraversableHandle getHandle() { return instanceHandler_ ? instanceHandler_->getTraversableHandle() : 0; }
 
-    // Rebuilds the entire scene (resizes SBT and rebuilds IAS)
+    // Get instance count (inline delegation for zero overhead)
+    size_t getInstanceCount() const { return instanceHandler_ ? instanceHandler_->getInstanceCount() : 0; }
+
+    // Rebuilds the entire scene
     void rebuild();
 
     // Finalizes scene setup before rendering
     void finalize();
 
-    // Get instance count (inline delegation for zero overhead)
-    size_t getInstanceCount() const { return instanceHandler_ ? instanceHandler_->getInstanceCount() : 0; }
-    
     // Acceleration structure scratch memory access (now uses shared buffer from RenderContext)
     cudau::Buffer& getASBuildScratchMem() { return ctx->getASScratchBuffer(); }
 
@@ -129,7 +129,7 @@ class RiPRSceneHandler
         // Step 2: Sort indices in descending order for stable removal
         std::sort (expiredIndices.rbegin(), expiredIndices.rend());
 
-        // Step 3: Remove from SceneHandler in descending order
+        // Step 3: Remove from IAS in descending order
         for (uint32_t index : expiredIndices)
         {
             if (instanceHandler_ && index < instanceHandler_->getInstanceCount())
@@ -186,7 +186,7 @@ class RiPRSceneHandler
     // Maps instance indices to renderable nodes
     NodeMap nodeMap;
 
-    // Note: Scratch buffer is now shared and managed by RenderContext
+    // Note: IAS and related buffers are now managed by SceneHandler
 
     // Instance data buffers (double buffered for async updates)
     cudau::TypedBuffer<shared::InstanceData> instanceDataBuffer_[2];
@@ -194,11 +194,10 @@ class RiPRSceneHandler
     // Maximum number of instances supported
     static constexpr uint32_t maxNumInstances = 16384;
 
+
     // Initialize the scene structures
     void init();
 
-    // Helper method to convert RenderableNode to optixu::Instance
-    optixu::Instance convertNodeToInstance(const RenderableWeakRef& weakNode);
 
     // Resize Scene Dependent Shader Binding Table (SBT)
     void resizeSceneDependentSBT();

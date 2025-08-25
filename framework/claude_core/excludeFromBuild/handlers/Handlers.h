@@ -54,6 +54,8 @@ struct Handlers
 
         // Initialize TriangleMeshHandler
         triangleMeshHandler = TriangleMeshHandler::create (renderContext);
+        if (triangleMeshHandler)
+            triangleMeshHandler->initialize();
     }
 
     // Cleanup all handlers
@@ -92,6 +94,13 @@ struct Handlers
         {
             skyDomeHandler->finalize();
             skyDomeHandler.reset();
+        }
+
+        // Cleanup TriangleMeshHandler
+        if (triangleMeshHandler)
+        {
+            triangleMeshHandler->finalize();
+            triangleMeshHandler.reset();
         }
 
         // Cleanup TextureHandler

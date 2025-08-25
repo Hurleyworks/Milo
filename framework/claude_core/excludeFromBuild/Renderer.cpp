@@ -146,7 +146,7 @@ void Renderer::initializeEngine (CameraHandle camera, ImageCacheHandlerPtr image
         // 5. Application will then use the embedded PTX files
 
         bool compileCuda = false;
-        std::string engineFilter = "all";  // Can be "all", "milo", or "shocker"
+        std::string engineFilter = "all"; // Can be "all", "milo", or "shocker"
 
         if (compileCuda || (!softwareReleaseMode && !embeddedPTX))
         {
@@ -196,7 +196,7 @@ void Renderer::initializeEngine (CameraHandle camera, ImageCacheHandlerPtr image
             nvcc.compile (resourceFolder, repoFolder, targetArchitectures, engineFilter);
         }
 
-        if(compileCuda)
+        if (compileCuda)
             return;
 
         // Step 1: Initialize Render Context with system resources
@@ -225,32 +225,33 @@ void Renderer::initializeEngine (CameraHandle camera, ImageCacheHandlerPtr image
 
         // Step 6: Initialize Rendering Engine Manager
         engineManager_ = std::make_unique<RenderEngineManager>();
-        engineManager_->initialize(renderContext_.get());
-        
+        engineManager_->initialize (renderContext_.get());
+
         // Pass GPU timer manager to engine manager
         if (gpuTimerManager_)
         {
-            engineManager_->setGPUTimerManager(gpuTimerManager_.get());
+            engineManager_->setGPUTimerManager (gpuTimerManager_.get());
         }
-        
+
         // Register all built-in engines
-        registerBuiltInEngines(*engineManager_);
-        
+        registerBuiltInEngines (*engineManager_);
+
         // Log available engines
         auto engines = engineManager_->getAvailableEngines();
-        LOG(INFO) << "Available rendering engines:";
-        for (const auto& engine : engines) {
-            auto info = engineManager_->getEngineInfo(engine);
-            LOG(INFO) << "  - " << info.name << ": " << info.description;
+        LOG (INFO) << "Available rendering engines:";
+        for (const auto& engine : engines)
+        {
+            auto info = engineManager_->getEngineInfo (engine);
+            LOG (INFO) << "  - " << info.name << ": " << info.description;
         }
-        
+
         // Start with basic path tracer as default
-        engineManager_->switchEngine("shocker");
+        engineManager_->switchEngine ("shocker");
 
         // Step 7: Pipeline Handler is already initialized for geometry support
         // The scene pipeline is active by default for model creation
         // Engines will be used for actual rendering
-        LOG(INFO) << "Using rendering engine system for rendering with pipeline geometry support";
+        LOG (INFO) << "Using rendering engine system for rendering with pipeline geometry support";
 
         initialized_ = true;
         LOG (INFO) << "Milo rendering engine initialized successfully";
@@ -274,12 +275,11 @@ void Renderer::render (const InputEvent& input, bool updateMotion, uint32_t fram
         }
 
         // Use the new engine system if available
-        if (engineManager_ && engineManager_->hasActiveEngine()) {
-            engineManager_->render(input, updateMotion, frameNumber);
+        if (engineManager_ && engineManager_->hasActiveEngine())
+        {
+            engineManager_->render (input, updateMotion, frameNumber);
             return;
         }
-
-
     }
     catch (std::exception& e)
     {
@@ -298,13 +298,11 @@ void Renderer::addSkyDomeHDR (const std::filesystem::path& hdrPath)
         return;
     }
 
-   
-
     if (!std::filesystem::exists (hdrPath))
     {
         LOG (WARNING) << "Environment HDR file not found: " << hdrPath.generic_string();
 
-         OIIO::ImageBuf sky = createSkyWithSun (2048, 1024);
+        OIIO::ImageBuf sky = createSkyWithSun (2048, 1024);
 
         return;
     }
@@ -326,9 +324,9 @@ void Renderer::addSkyDomeHDR (const std::filesystem::path& hdrPath)
                 // Store the HDR path in engine manager for engine switching
                 if (engineManager_)
                 {
-                    engineManager_->setSkyDomeHDR(hdrPath);
+                    engineManager_->setSkyDomeHDR (hdrPath);
                 }
-                
+
                 // Notify the active render engine that the environment has changed
                 if (engineManager_)
                 {
@@ -371,17 +369,15 @@ void Renderer::addRenderableNode (RenderableWeakRef& weakNode)
         return;
     }
 
-
     if (engineManager_ && engineManager_->hasActiveEngine())
     {
-        engineManager_->addGeometry(node);
+        engineManager_->addGeometry (node);
         LOG (INFO) << "Added geometry '" << node->getName() << "' to active engine";
     }
     else
     {
         LOG (WARNING) << "No active engine to add geometry to";
     }
-
 }
 
 void Renderer::finalize()
@@ -394,7 +390,7 @@ void Renderer::finalize()
             engineManager_->cleanup();
             engineManager_.reset();
         }
-        
+
         // Finalize Pipeline Handler
         // Pipeline handler cleanup is handled by RenderContext handlers
 
@@ -414,26 +410,22 @@ void Renderer::finalize()
     }
 }
 
-
-
-
-
 // Engine management methods (new system)
-bool Renderer::setEngine(const std::string& engineName)
+bool Renderer::setEngine (const std::string& engineName)
 {
     if (!engineManager_)
     {
-        LOG(WARNING) << "Cannot set engine: Engine manager not initialized";
+        LOG (WARNING) << "Cannot set engine: Engine manager not initialized";
         return false;
     }
-    
-    auto storedHDRpath = engineManager_->getSkyDomeHDR();  // Store HDR path before switch
-    auto currentEngineName = engineManager_->getCurrentEngineName();  // Store current engine name
-    
+
+    auto storedHDRpath = engineManager_->getSkyDomeHDR();            // Store HDR path before switch
+    auto currentEngineName = engineManager_->getCurrentEngineName(); // Store current engine name
+
     // Clean up the current engine before destroying context
     if (engineManager_->hasActiveEngine())
     {
-        engineManager_->cleanup();  // This properly cleans up the old engine
+        engineManager_->cleanup(); // This properly cleans up the old engine
     }
 
     // Finalize GPU timer manager BEFORE destroying context
@@ -441,18 +433,18 @@ bool Renderer::setEngine(const std::string& engineName)
     {
         gpuTimerManager_->finalize();
     }
-    
+
     // Now clean up and reinitialize RenderContext to get fresh GPU context
     // This cleans up handlers (releasing GPU textures) and destroys CUDA/OptiX contexts
-    LOG(INFO) << "Cleaning up RenderContext after engine cleanup";
+    LOG (INFO) << "Cleaning up RenderContext after engine cleanup";
     renderContext_->cleanup();
-    
+
     // Reinitialize with fresh GPU context using existing member variables
-    LOG(INFO) << "Reinitializing RenderContext with fresh GPU context";
-    
+    LOG (INFO) << "Reinitializing RenderContext with fresh GPU context";
+
     if (!renderContext_->initialize())
     {
-        LOG(WARNING) << "Failed to reinitialize RenderContext";
+        LOG (WARNING) << "Failed to reinitialize RenderContext";
         return false;
     }
 
@@ -463,18 +455,18 @@ bool Renderer::setEngine(const std::string& engineName)
     }
 
     // Reinitialize engine manager with fresh context
-    engineManager_->initialize(renderContext_.get());
-    
+    engineManager_->initialize (renderContext_.get());
+
     // Now switch to the desired engine with the fresh context
     // This creates a new engine instance with all GPU resources using the new context
-    engineManager_->switchEngine(engineName);
-    
+    engineManager_->switchEngine (engineName);
+
     // Re-apply sky dome if one was stored
     if (!storedHDRpath.empty())
     {
-        addSkyDomeHDR(storedHDRpath);
+        addSkyDomeHDR (storedHDRpath);
     }
-    
+
     return true;
 }
 
@@ -495,5 +487,3 @@ std::vector<std::string> Renderer::getAvailableEngines() const
     }
     return {};
 }
-
-

@@ -64,6 +64,7 @@ void RiPRSceneHandler::finalize()
         // Clear node map to release references
         nodeMap.clear();
 
+
         // Only unload module if we have a valid context
         if (moduleDeform)
         {
@@ -170,10 +171,12 @@ void RiPRSceneHandler::init()
     instanceDataBuffer_[1].initialize (ctx->getCudaContext(), bufferType, maxNumInstances);
     LOG (DBUG) << "Initialized instance data buffers with capacity: " << maxNumInstances;
 
+      // Initialize acceleration structure build scratch memory
     // Note: Scratch buffer is now shared and managed by RenderContext
     // We'll use ctx->getASScratchBuffer() when needed for GAS operations
 }
 
+// Prepare for building the IAS
 
 // Initialize Scene Dependent Shader Binding Table (SBT)
 // TODO: Implement with new entry point system
@@ -407,19 +410,16 @@ void RiPRSceneHandler::removeNodesByIDs (const std::vector<BodyID>& bodyIDs)
     // Step 2: Sort indices in descending order for stable removal
     std::sort (indicesToRemove.rbegin(), indicesToRemove.rend());
 
-    // Step 3: Remove from SceneHandler in descending order (no index shifts affect remaining removals)
-    if (instanceHandler_)
+    // Step 3: Remove from IAS in descending order (no index shifts affect remaining removals)
+    for (uint32_t index : indicesToRemove)
     {
-        for (uint32_t index : indicesToRemove)
+        if (instanceHandler_ && index < instanceHandler_->getInstanceCount())
         {
-            if (index < instanceHandler_->getInstanceCount())
-            {
-                instanceHandler_->removeInstanceAt(index);
-            }
-            else
-            {
-                LOG (WARNING) << "Invalid index " << index << " (max: " << instanceHandler_->getInstanceCount() - 1 << ")";
-            }
+            instanceHandler_->removeInstanceAt(index);
+        }
+        else
+        {
+            LOG (WARNING) << "Invalid index " << index << " (max: " << (instanceHandler_ ? instanceHandler_->getInstanceCount() - 1 : 0) << ")";
         }
     }
 
@@ -444,39 +444,7 @@ void RiPRSceneHandler::removeNodesByIDs (const std::vector<BodyID>& bodyIDs)
 
     // Step 5: Rebuild IAS and update SBT
     LOG (DBUG) << "Rebuilding IAS after removing " << indicesToRemove.size() << " instances";
-    
-    // Rebuild using SceneHandler
-    if (instanceHandler_)
-    {
-        instanceHandler_->buildOrUpdateIAS();
-    }
-    resizeSceneDependentSBT();
-}
-
-optixu::Instance RiPRSceneHandler::convertNodeToInstance(const RenderableWeakRef& weakNode)
-{
-    // Create a new OptiX instance
-    optixu::Instance instance = scene_.createInstance();
-    
-    if (!weakNode.expired())
-    {
-        RenderableNode node = weakNode.lock();
-        
-        // Get the RiPR model for this node
-        RiPRModelPtr optiXModel = modelHandler_->getRiPRModel(node->getClientID());
-        optiXModel->setOptiXInstance(instance);
-        
-        // Set the Geometry Acceleration Structure (GAS)
-        instance.setChild(optiXModel->getGAS()->gas);
-        
-        // Set the transform
-        const SpaceTime& st = node->getSpaceTime();
-        MatrixRowMajor34f t;
-        getWorldTransform(t, st);
-        instance.setTransform(t.data());
-    }
-    
-    return instance;
+    rebuild();
 }
 
 void RiPRSceneHandler::createInstance (RenderableWeakRef& weakNode)
@@ -490,31 +458,42 @@ void RiPRSceneHandler::createInstance (RenderableWeakRef& weakNode)
     if (!instanceHandler_ || instanceHandler_->getTraversableHandle() == 0)
         init();
 
-    // Convert node to instance
-    optixu::Instance instance = convertNodeToInstance(weakNode);
+    // Create a new OptiX instance
+    optixu::Instance instance = scene_.createInstance();
 
-    // Add to generic scene handler
-    instanceHandler_->addInstance(instance);
+    // Instances don't have a LWITEMID converted to a ClientID
+    // RiPRModelPtr optiXModel = modelHandler_->getRiPRModel (node->getID());
+    RiPRModelPtr optiXModel = modelHandler_->getRiPRModel (node->getClientID());
+    optiXModel->setOptiXInstance (instance);
+
+    // Set the Geometry Acceleration Structure (GAS)
+    instance.setChild (optiXModel->getGAS()->gas);
+
+    const SpaceTime& st = node->getSpaceTime();
+    MatrixRowMajor34f t;
+    getWorldTransform (t, st);
+    instance.setTransform (t.data());
+
+    // Add the instance to the scene using SceneHandler
+    if (instanceHandler_)
+    {
+        instanceHandler_->addInstance(instance);
+    }
 
     node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
 
-    // Track in nodeMap - the instance is at the end of the list
-    uint32_t index = static_cast<uint32_t>(instanceHandler_->getInstanceCount() - 1);
+    // Track the instance in nodeMap using the current count as index
+    uint32_t index = instanceHandler_ ? static_cast<uint32_t>(instanceHandler_->getInstanceCount() - 1) : 0;
     nodeMap[index] = weakNode;
     
     // Set instance ID BEFORE rebuilding - this is critical!
     instance.setID (index);
 
-    // Get the model and rebuild its GAS
-    RiPRModelPtr optiXModel = modelHandler_->getRiPRModel (node->getClientID());
     GAS* gasData = optiXModel->getGAS();
-    
-    // Use shared scratch buffer from RenderContext
-    // The buffer will be resized if needed by the GAS rebuild operation
     gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, ctx->getASScratchBuffer());
 
-    // Rebuild the IAS using SceneHandler
-    instanceHandler_->buildOrUpdateIAS();
+
+    rebuild();
 
     // Populate instance data for GPU access
     populateInstanceData (index, node);
@@ -629,24 +608,24 @@ void RiPRSceneHandler::createGeometryInstance (RenderableWeakRef& weakNode)
     MatrixRowMajor34f t = m.block<3, 4> (0, 0);
     instance.setTransform (t.data());
 
-    // Add the instance to SceneHandler
+    // Add the instance to the scene using SceneHandler
     if (instanceHandler_)
     {
         instanceHandler_->addInstance(instance);
-        
-        // Set the flag to indicate this node is stored in RiPRSceneHandler
-        node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
-
-        // Track in nodeMap - the instance is at the end of the list
-        uint32_t index = static_cast<uint32_t>(instanceHandler_->getInstanceCount() - 1);
-        nodeMap[index] = weakNode;
-
-        // Rebuild the IAS using SceneHandler
-        instanceHandler_->buildOrUpdateIAS();
-
-        // Populate instance data for GPU access
-        populateInstanceData (index, node);
     }
+
+    // Set the flag to indicate this node is stored in RiPRSceneHandler
+    node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
+
+    // Track the instance in nodeMap using the current count as index
+    uint32_t index = instanceHandler_ ? static_cast<uint32_t>(instanceHandler_->getInstanceCount() - 1) : 0;
+    nodeMap[index] = weakNode;
+
+
+    rebuild();
+
+    // Populate instance data for GPU access
+    populateInstanceData (index, node);
 }
 
 void RiPRSceneHandler::createPhysicsPhantom (RenderableWeakRef& weakNode)
@@ -681,24 +660,24 @@ void RiPRSceneHandler::createPhysicsPhantom (RenderableWeakRef& weakNode)
         MatrixRowMajor34f t = m.block<3, 4> (0, 0);
         instance.setTransform (t.data());
 
-        // Add the instance to SceneHandler
+        // Add the instance to the scene using SceneHandler
         if (instanceHandler_)
         {
             instanceHandler_->addInstance(instance);
-            
-            // Set the flag to indicate this node is stored in RiPRSceneHandler
-            node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
-
-            // Track in nodeMap - the instance is at the end of the list
-            uint32_t index = static_cast<uint32_t>(instanceHandler_->getInstanceCount() - 1);
-            nodeMap[index] = weakNode;
-
-            // Rebuild the IAS using SceneHandler
-            instanceHandler_->buildOrUpdateIAS();
-
-            // Populate instance data for GPU access
-            populateInstanceData (index, node);
         }
+
+        // Set the flag to indicate this node is stored in RiPRSceneHandler
+        node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
+
+        // Track the instance in nodeMap using the current count as index
+        uint32_t index = instanceHandler_ ? static_cast<uint32_t>(instanceHandler_->getInstanceCount() - 1) : 0;
+        nodeMap[index] = weakNode;
+
+    
+        rebuild();
+
+        // Populate instance data for GPU access
+        populateInstanceData (index, node);
     }
     catch (const std::exception& e)
     {
@@ -738,21 +717,21 @@ void RiPRSceneHandler::createInstanceList (const WeakRenderableList& weakNodeLis
             MatrixRowMajor34f t = m.block<3, 4> (0, 0);
             instance.setTransform (t.data());
 
-            // Add the instance to SceneHandler
+            // Add the instance to the scene using SceneHandler
             if (instanceHandler_)
             {
                 instanceHandler_->addInstance(instance);
-                
-                // Set the flag to indicate this node is stored in RiPRSceneHandler
-                node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
-
-                // Track in nodeMap - the instance is at the end of the list
-                uint32_t index = static_cast<uint32_t>(instanceHandler_->getInstanceCount() - 1);
-                nodeMap[index] = weakNode;
-
-                // Store index for later instance data population
-                populateInstanceData (index, node);
             }
+
+            // Set the flag to indicate this node is stored in RiPRSceneHandler
+            node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
+
+            // Track the instance in nodeMap using the current count as index
+        uint32_t index = instanceHandler_ ? static_cast<uint32_t>(instanceHandler_->getInstanceCount() - 1) : 0;
+            nodeMap[index] = weakNode;
+
+            // Store index for later instance data population
+            populateInstanceData (index, node);
         }
         else
         {
@@ -777,32 +756,29 @@ void RiPRSceneHandler::createInstanceList (const WeakRenderableList& weakNodeLis
             MatrixRowMajor34f t = m.block<3, 4> (0, 0);
             instance.setTransform (t.data());
 
-            // Add the instance to SceneHandler
+            // Add the instance to the scene using SceneHandler
             if (instanceHandler_)
             {
                 instanceHandler_->addInstance(instance);
-                
-                // Set the flag to indicate this node is stored in RiPRSceneHandler
-                node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
-
-                // Track in nodeMap - the instance is at the end of the list
-                uint32_t index = static_cast<uint32_t>(instanceHandler_->getInstanceCount() - 1);
-                nodeMap[index] = weakNode;
-
-                GAS* gasData = optiXModel->getGAS();
-                gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, ctx->getASScratchBuffer());
-
-                // Populate instance data for GPU access
-                populateInstanceData (index, node);
             }
+
+            // Set the flag to indicate this node is stored in RiPRSceneHandler
+            node->getState().state |= sabi::PRenderableState::StoredInSceneHandler;
+
+            // Track the instance in nodeMap using the current count as index
+        uint32_t index = instanceHandler_ ? static_cast<uint32_t>(instanceHandler_->getInstanceCount() - 1) : 0;
+            nodeMap[index] = weakNode;
+
+            GAS* gasData = optiXModel->getGAS();
+            gasData->gas.rebuild (ctx->getCudaStream(), gasData->gasMem, ctx->getASScratchBuffer());
+
+            // Populate instance data for GPU access
+            populateInstanceData (index, node);
         }
     }
 
-    // Rebuild the IAS using SceneHandler
-    if (instanceHandler_)
-    {
-        instanceHandler_->buildOrUpdateIAS();
-    }
+
+    rebuild();
 }
 
 bool RiPRSceneHandler::updateMotion()
@@ -844,25 +820,17 @@ bool RiPRSceneHandler::updateMotion()
             updateDeformedNode (node);
         }
 
-        // Get instance from SceneHandler and update its transform
-        if (instanceHandler_ && it.first < instanceHandler_->getInstanceCount())
-        {
-            optixu::Instance instance = instanceHandler_->getInstance(it.first);
-            const SpaceTime& st = node->getSpaceTime();
-            MatrixRowMajor34f t;
+        optixu::Instance instance = instanceHandler_ ? instanceHandler_->getInstance(it.first) : optixu::Instance();
+        const SpaceTime& st = node->getSpaceTime();
+        MatrixRowMajor34f t;
 
-            // deformed meshes are already in world space and have scale applied
-            getWorldTransform (t, isDeformed ? Eigen::Affine3f::Identity() : st.worldTransform, isDeformed ? Eigen::Vector3f::Ones() : st.scale);
-            
-            // Update transform through SceneHandler
-            instanceHandler_->updateInstanceTransform(it.first, t.data());
-            instance.setTransform (t.data());
-            
-            // check visibility state
-            uint32_t visiblityMask = node->getState().isVisible() ? 255 : 0;
-            if (visiblityMask == 0) ++invisibleBodies;
-            instance.setVisibilityMask (visiblityMask);
-        }
+        // deformed meshes are already in world space and have scale applied
+        getWorldTransform (t, isDeformed ? Eigen::Affine3f::Identity() : st.worldTransform, isDeformed ? Eigen::Vector3f::Ones() : st.scale);
+        instance.setTransform (t.data());
+        // check visibility state
+        uint32_t visiblityMask = node->getState().isVisible() ? 255 : 0;
+        if (visiblityMask == 0) ++invisibleBodies;
+        instance.setVisibilityMask (visiblityMask);
         if (node->description().sleepState)
             ++bodiesSleeping;
 
@@ -871,7 +839,6 @@ bool RiPRSceneHandler::updateMotion()
     }
     if (bodiesSleeping < bodyCount)
     {
-        // Use smart build/update from SceneHandler
         if (instanceHandler_)
         {
             instanceHandler_->buildOrUpdateIAS();
@@ -906,8 +873,7 @@ void RiPRSceneHandler::toggleSelectionMaterial (RenderableNode& node)
     // apparently no need to resize SceneDependentSBT
     if (instanceHandler_)
     {
-        instanceHandler_->buildIAS();
-        CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
+        instanceHandler_->buildOrUpdateIAS();
     }
 }
 
@@ -944,8 +910,7 @@ void RiPRSceneHandler::selectAll()
     // apparently no need to resize SceneDependentSBT
     if (instanceHandler_)
     {
-        instanceHandler_->buildIAS();
-        CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
+        instanceHandler_->buildOrUpdateIAS();
     }
 }
 
@@ -986,24 +951,18 @@ void RiPRSceneHandler::deselectAll()
     // apparently no need to resize SceneDependentSBT
     if (instanceHandler_)
     {
-        instanceHandler_->buildIAS();
-        CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
+        instanceHandler_->buildOrUpdateIAS();
     }
 }
-
-// Removed rebuildIAS() and updateIAS() - now using direct SceneHandler calls
 
 void RiPRSceneHandler::rebuild()
 {
     resizeSceneDependentSBT();
     
-    // Rebuild IAS using SceneHandler
+    // Rebuild the IAS using SceneHandler
     if (instanceHandler_)
     {
-        instanceHandler_->buildIAS();
-        
-        // Synchronize the CUDA stream to ensure completion
-        CUDADRV_CHECK (cuStreamSynchronize (ctx->getCudaStream()));
+        instanceHandler_->buildOrUpdateIAS();
     }
 }
 

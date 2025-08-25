@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CUDA Utility Buffer Types - Comprehensive Summary</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-align: center;
+        }
+        
+        h2 {
+            color: #34495e;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: linear-gradient(90deg, #667eea15 0%, transparent 100%);
+            border-left: 4px solid #667eea;
+        }
+        
+        h3 {
+            color: #555;
+            margin-top: 25px;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        
+        .buffer-section {
+            margin: 30px 0;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border: 1px solid #dee2e6;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        
+        .buffer-section:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .code-block {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            overflow-x: auto;
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .feature-card {
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e1e4e8;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        
+        .feature-card h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+        
+        .method-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .method-list li {
+            padding: 8px 12px;
+            margin: 5px 0;
+            background: white;
+            border-left: 3px solid #667eea;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.95em;
+        }
+        
+        .param-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        .param-table th {
+            background: #667eea;
+            color: white;
+            padding: 12px;
+            text-align: left;
+        }
+        
+        .param-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .param-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        
+        .param-table code {
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        
+        .enum-values {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        
+        .enum-value {
+            background: #e7f3ff;
+            color: #0066cc;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            border: 1px solid #b3d9ff;
+        }
+        
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        
+        .warning strong {
+            color: #856404;
+        }
+        
+        .info {
+            background: #d1ecf1;
+            border-left: 4px solid #17a2b8;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        
+        .info strong {
+            color: #0c5460;
+        }
+        
+        .toc {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .toc h3 {
+            margin-top: 0;
+            color: #667eea;
+        }
+        
+        .toc ul {
+            list-style: none;
+            padding-left: 20px;
+        }
+        
+        .toc a {
+            color: #495057;
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+        
+        .toc a:hover {
+            color: #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CUDA Utility Buffer Types - Comprehensive Summary</h1>
+        
+        <div class="toc">
+            <h3>Table of Contents</h3>
+            <ul>
+                <li><a href="#overview">Overview</a></li>
+                <li><a href="#buffer-templates">Buffer Template Classes</a></li>
+                <li><a href="#main-buffer">Main Buffer Class</a></li>
+                <li><a href="#typed-buffer">TypedBuffer Class</a></li>
+                <li><a href="#array-class">Array Class</a></li>
+                <li><a href="#texture-sampler">TextureSampler Class</a></li>
+                <li><a href="#interop-holders">Interop Holders</a></li>
+                <li><a href="#usage-examples">Usage Examples</a></li>
+            </ul>
+        </div>
+
+        <h2 id="overview">Overview</h2>
+        <p>The CUDA Utility library (cuda_util.h) provides a comprehensive set of buffer management classes for efficient GPU memory operations. These classes handle various memory types, provide safety features, and support CUDA/OpenGL interoperability.</p>
+
+        <h2 id="buffer-templates">Buffer Template Classes</h2>
+        
+        <div class="buffer-section">
+            <h3>ROBufferTemplate&lt;T, oobCheck&gt;</h3>
+            <p>Read-only buffer template providing device-side read access with optional out-of-bounds checking.</p>
+            
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>Key Features</h4>
+                    <ul>
+                        <li>Read-only access to device memory</li>
+                        <li>Template parameter for out-of-bounds checking</li>
+                        <li>Lightweight wrapper around device pointer</li>
+                        <li>Friend access to RWBufferTemplate</li>
+                    </ul>
+                </div>
+                
+                <div class="feature-card">
+                    <h4>Template Specializations</h4>
+                    <ul>
+                        <li><strong>oobCheck = false:</strong> No bounds checking, minimal overhead</li>
+                        <li><strong>oobCheck = true:</strong> Runtime bounds checking with assertions</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <h4>Main Methods</h4>
+            <ul class="method-list">
+                <li>getAddress() - Returns the underlying device pointer</li>
+                <li>operator[] - Array indexing with optional bounds checking</li>
+                <li>operator bool() - Checks if buffer is valid</li>
+                <li>getNumElements() - Returns buffer size (only with oobCheck=true)</li>
+            </ul>
+        </div>
+
+        <div class="buffer-section">
+            <h3>RWBufferTemplate&lt;T, oobCheck&gt;</h3>
+            <p>Read-write buffer template providing device-side read/write access with optional out-of-bounds checking.</p>
+            
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>Key Features</h4>
+                    <ul>
+                        <li>Full read-write access to device memory</li>
+                        <li>Can be constructed from ROBufferTemplate</li>
+                        <li>Same bounds checking options as ROBufferTemplate</li>
+                        <li>Supports both const and non-const indexing</li>
+                    </ul>
+                </div>
+                
+                <div class="feature-card">
+                    <h4>Additional Capabilities</h4>
+                    <ul>
+                        <li>Implicit conversion from read-only buffers</li>
+                        <li>Maintains size information when oobCheck enabled</li>
+                        <li>Device-side assertion on out-of-bounds access</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <h2 id="main-buffer">Main Buffer Class</h2>
+        
+        <div class="buffer-section">
+            <h3>Buffer Class</h3>
+            <p>The main buffer management class supporting multiple memory types and CUDA/OpenGL interoperability.</p>
+            
+            <h4>Buffer Types (BufferType enum)</h4>
+            <div class="enum-values">
+                <span class="enum-value">Device (0)</span>
+                <span class="enum-value">GL_Interop (1)</span>
+                <span class="enum-value">ZeroCopy (2)</span>
+                <span class="enum-value">Managed (3)</span>
+            </div>
+            
+            <h4>Map Flags (BufferMapFlag enum)</h4>
+            <div class="enum-values">
+                <span class="enum-value">Unmapped</span>
+                <span class="enum-value">ReadWrite</span>
+                <span class="enum-value">ReadOnly</span>
+                <span class="enum-value">WriteOnlyDiscard</span>
+            </div>
+            
+            <table class="param-table">
+                <thead>
+                    <tr>
+                        <th>Method</th>
+                        <th>Description</th>
+                        <th>Parameters</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>initialize()</code></td>
+                        <td>Initialize buffer with specified type and size</td>
+                        <td>context, type, numElements, stride, [glBufferID]</td>
+                    </tr>
+                    <tr>
+                        <td><code>initializeFromGLBuffer()</code></td>
+                        <td>Create buffer from OpenGL buffer object</td>
+                        <td>context, stride, glBufferID</td>
+                    </tr>
+                    <tr>
+                        <td><code>resize()</code></td>
+                        <td>Resize buffer to new dimensions</td>
+                        <td>numElements, stride, [stream]</td>
+                    </tr>
+                    <tr>
+                        <td><code>map()/unmap()</code></td>
+                        <td>Map buffer for host access</td>
+                        <td>[stream], [flag]</td>
+                    </tr>
+                    <tr>
+                        <td><code>write()/read()</code></td>
+                        <td>Transfer data to/from device</td>
+                        <td>data, numValues, [stream]</td>
+                    </tr>
+                    <tr>
+                        <td><code>fill()</code></td>
+                        <td>Fill buffer with specified value</td>
+                        <td>value, [stream]</td>
+                    </tr>
+                    <tr>
+                        <td><code>copy()</code></td>
+                        <td>Create a copy of the buffer</td>
+                        <td>[stream]</td>
+                    </tr>
+                    <tr>
+                        <td><code>beginCUDAAccess()/endCUDAAccess()</code></td>
+                        <td>Manage CUDA access for interop buffers</td>
+                        <td>stream</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div class="info">
+                <strong>Note:</strong> The Buffer class supports move semantics but explicitly deletes copy constructor and copy assignment operator to prevent accidental copies.
+            </div>
+        </div>
+
+        <h2 id="typed-buffer">TypedBuffer&lt;T&gt; Class</h2>
+        
+        <div class="buffer-section">
+            <h3>TypedBuffer&lt;T&gt;</h3>
+            <p>Type-safe wrapper around Buffer class, providing strongly-typed operations for specific data types.</p>
+            
+            <h4>Key Features</h4>
+            <ul>
+                <li>Inherits from Buffer class</li>
+                <li>Automatic stride calculation based on type size</li>
+                <li>Type-safe read/write operations</li>
+                <li>Convenient constructors for initialization with values</li>
+                <li>Conversion operators to/from std::vector</li>
+            </ul>
+            
+            <h4>Special Methods</h4>
+            <ul class="method-list">
+                <li>getROBuffer&lt;oobCheck&gt;() - Get read-only buffer template</li>
+                <li>getRWBuffer&lt;oobCheck&gt;() - Get read-write buffer template</li>
+                <li>operator[] - Direct element access (requires map/unmap)</li>
+                <li>operator std::vector&lt;T&gt;() - Convert to std::vector</li>
+            </ul>
+            
+            <div class="code-block">
+// Example usage
+TypedBuffer&lt;float&gt; buffer(context, BufferType::Device, 1000);
+buffer.fill(1.0f);
+auto roBuffer = buffer.getROBuffer&lt;true&gt;(); // With bounds checking
+            </div>
+        </div>
+
+        <h2 id="array-class">Array Class</h2>
+        
+        <div class="buffer-section">
+            <h3>Array Class</h3>
+            <p>Manages CUDA arrays for texture operations, supporting 1D, 2D, and 3D arrays with mipmapping.</p>
+            
+            <h4>Array Element Types</h4>
+            <p>Supports various element types including:</p>
+            <div class="enum-values">
+                <span class="enum-value">UInt8/Int8</span>
+                <span class="enum-value">UInt16/Int16</span>
+                <span class="enum-value">UInt32/Int32</span>
+                <span class="enum-value">Float16/Float32</span>
+                <span class="enum-value">BC1-BC7 Compression</span>
+            </div>
+            
+            <h4>Initialization Methods</h4>
+            <table class="param-table">
+                <thead>
+                    <tr>
+                        <th>Method</th>
+                        <th>Description</th>
+                        <th>Key Parameters</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>initialize1D()</code></td>
+                        <td>Create 1D array</td>
+                        <td>length, numMipmapLevels</td>
+                    </tr>
+                    <tr>
+                        <td><code>initialize2D()</code></td>
+                        <td>Create 2D array/texture</td>
+                        <td>width, height, numMipmapLevels</td>
+                    </tr>
+                    <tr>
+                        <td><code>initialize3D()</code></td>
+                        <td>Create 3D array/volume</td>
+                        <td>width, height, depth, numMipmapLevels</td>
+                    </tr>
+                    <tr>
+                        <td><code>initializeFromGLTexture2D()</code></td>
+                        <td>Create from OpenGL texture</td>
+                        <td>glTexID, surfaceLoadStore, useTextureGather</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <h4>Key Features</h4>
+            <ul>
+                <li>Support for mipmapped arrays</li>
+                <li>Block-compressed texture format support</li>
+                <li>Surface object creation for read/write access</li>
+                <li>OpenGL texture interoperability</li>
+                <li>Per-mipmap level access control</li>
+            </ul>
+            
+            <div class="warning">
+                <strong>Important:</strong> When using OpenGL interop, remember to call beginCUDAAccess() before CUDA operations and endCUDAAccess() after completion.
+            </div>
+        </div>
+
+        <h2 id="texture-sampler">TextureSampler Class</h2>
+        
+        <div class="buffer-section">
+            <h3>TextureSampler</h3>
+            <p>Configures texture sampling parameters for texture objects created from arrays.</p>
+            
+            <h4>Configuration Options</h4>
+            
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h4>Filter Modes</h4>
+                    <ul>
+                        <li><strong>Point:</strong> Nearest neighbor sampling</li>
+                        <li><strong>Linear:</strong> Bilinear/trilinear interpolation</li>
+                    </ul>
+                </div>
+                
+                <div class="feature-card">
+                    <h4>Wrap Modes</h4>
+                    <ul>
+                        <li><strong>Repeat:</strong> Tile texture</li>
+                        <li><strong>Clamp:</strong> Clamp to edge</li>
+                        <li><strong>Mirror:</strong> Mirror repeat</li>
+                        <li><strong>Border:</strong> Use border color</li>
+                    </ul>
+                </div>
+                
+                <div class="feature-card">
+                    <h4>Indexing Modes</h4>
+                    <ul>
+                        <li><strong>NormalizedCoordinates:</strong> [0,1] range</li>
+                        <li><strong>ArrayIndex:</strong> Direct texel indexing</li>
+                    </ul>
+                </div>
+                
+                <div class="feature-card">
+                    <h4>Read Modes</h4>
+                    <ul>
+                        <li><strong>ElementType:</strong> Raw element values</li>
+                        <li><strong>NormalizedFloat:</strong> Normalized to [0,1]</li>
+                        <li><strong>NormalizedFloat_sRGB:</strong> sRGB conversion</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="code-block">
+// Example configuration
+TextureSampler sampler;
+sampler.setXyFilterMode(TextureFilterMode::Linear);
+sampler.setWrapMode(0, TextureWrapMode::Repeat);
+sampler.setReadMode(TextureReadMode::NormalizedFloat);
+CUtexObject texObj = sampler.createTextureObject(array);
+            </div>
+        </div>
+
+        <h2 id="interop-holders">Interop Holder Classes</h2>
+        
+        <div class="buffer-section">
+            <h3>InteropSurfaceObjectHolder&lt;NumBuffers&gt;</h3>
+            <p>Manages multiple surface objects for multi-buffered rendering with OpenGL interop.</p>
+            
+            <h4>Key Features</h4>
+            <ul>
+                <li>Template parameter controls buffer count</li>
+                <li>Automatic cycling through buffers</li>
+                <li>Surface object lifecycle management</li>
+                <li>Frame synchronization support</li>
+            </ul>
+            
+            <h4>Main Methods</h4>
+            <ul class="method-list">
+                <li>initialize() - Set up array references</li>
+                <li>beginCUDAAccess() - Start CUDA operations</li>
+                <li>endCUDAAccess() - End CUDA operations, optionally advance frame</li>
+                <li>getNext() - Get current surface object</li>
+            </ul>
+        </div>
+        
+        <div class="buffer-section">
+            <h3>InteropTextureObjectHolder&lt;NumBuffers&gt;</h3>
+            <p>Similar to InteropSurfaceObjectHolder but manages texture objects instead of surface objects.</p>
+            
+            <h4>Additional Features</h4>
+            <ul>
+                <li>Integrates with TextureSampler for configuration</li>
+                <li>Supports all texture sampling modes</li>
+                <li>Automatic texture object recreation on buffer switch</li>
+            </ul>
+        </div>
+
+        <h2 id="usage-examples">Usage Examples</h2>
+        
+        <div class="buffer-section">
+            <h3>Basic Device Buffer</h3>
+            <div class="code-block">
+// Create a typed buffer for float data
+CUcontext context;
+TypedBuffer&lt;float&gt; buffer(context, BufferType::Device, 1024);
+
+// Initialize with value
+buffer.fill(0.0f);
+
+// Write data
+std::vector&lt;float&gt; hostData(1024);
+buffer.write(hostData);
+
+// Read data back
+std::vector&lt;float&gt; result(1024);
+buffer.read(result);
+            </div>
+        </div>
+        
+        <div class="buffer-section">
+            <h3>OpenGL Interop Buffer</h3>
+            <div class="code-block">
+// Create buffer from OpenGL buffer object
+Buffer glBuffer;
+glBuffer.initializeFromGLBuffer(context, sizeof(float3), glBufferID);
+
+// Use in CUDA kernel
+glBuffer.beginCUDAAccess(stream);
+// ... launch kernel using glBuffer.getCUdeviceptr() ...
+glBuffer.endCUDAAccess(stream);
+            </div>
+        </div>
+        
+        <div class="buffer-section">
+            <h3>Texture with Sampling</h3>
+            <div class="code-block">
+// Create 2D array for texture
+Array textureArray;
+textureArray.initialize2D(
+    context, 
+    ArrayElementType::Float32, 
+    4,  // RGBA
+    ArraySurface::Disable,
+    ArrayTextureGather::Enable,
+    width, height, 
+    1   // no mipmaps
+);
+
+// Configure sampler
+TextureSampler sampler;
+sampler.setXyFilterMode(TextureFilterMode::Linear);
+sampler.setWrapMode(0, TextureWrapMode::Clamp);
+sampler.setWrapMode(1, TextureWrapMode::Clamp);
+
+// Create texture object
+CUtexObject texObj = sampler.createTextureObject(textureArray);
+            </div>
+        </div>
+        
+        <div class="info">
+            <strong>Performance Tips:</strong>
+            <ul style="margin-top: 10px;">
+                <li>Use TypedBuffer for type safety and convenience</li>
+                <li>Enable out-of-bounds checking only in debug builds</li>
+                <li>Prefer persistent mapped memory for frequently updated buffers</li>
+                <li>Use appropriate BufferMapFlag to optimize transfers</li>
+                <li>Batch operations using streams for better performance</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

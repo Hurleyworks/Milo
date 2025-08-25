@@ -20,7 +20,7 @@ public:
     void render(const mace::InputEvent& input, bool updateMotion, uint32_t frameNumber) override;
     void onEnvironmentChanged() override;
     std::string getName() const override { return "RiPR Engine"; }
-    std::string getDescription() const override { return "RiPR Path Tracing with area light support and improved handlers"; }
+    std::string getDescription() const override { return "RiPR Path Tracing with adaptive sampling and improved convergence"; }
     
     
     // Light probability computation kernels structure
