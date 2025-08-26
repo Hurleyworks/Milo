@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mesh-Based Lighting (Area Lights) Implementation Guide</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.8;
+            color: #000;
+            background: #fff;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        h1 {
+            font-size: 32px;
+            margin-bottom: 40px;
+            padding-bottom: 16px;
+            border-bottom: 3px solid #0066cc;
+            color: #000;
+        }
+        
+        h2 {
+            font-size: 24px;
+            margin: 40px 0 24px 0;
+            color: #000;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+        }
+        
+        h3 {
+            font-size: 20px;
+            margin: 32px 0 16px 0;
+            color: #333;
+        }
+        
+        h4 {
+            font-size: 18px;
+            margin: 24px 0 12px 0;
+            color: #555;
+        }
+        
+        p {
+            margin: 16px 0;
+            text-align: justify;
+        }
+        
+        .code-block, pre {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 20px;
+            margin: 24px 0;
+            overflow-x: auto;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #000;
+        }
+        
+        .section {
+            margin: 40px 0;
+        }
+        
+        .subsection {
+            margin: 24px 0;
+            padding-left: 20px;
+        }
+        
+        ul, ol {
+            margin: 16px 0;
+            padding-left: 40px;
+        }
+        
+        li {
+            margin: 8px 0;
+        }
+        
+        .highlight {
+            background: #ffffcc;
+            padding: 2px 4px;
+            border-radius: 2px;
+        }
+        
+        .note {
+            background: #e8f4f8;
+            border-left: 4px solid #0066cc;
+            padding: 16px 20px;
+            margin: 24px 0;
+            border-radius: 4px;
+        }
+        
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 24px 0;
+            border-radius: 4px;
+        }
+        
+        .diagram {
+            background: #fafafa;
+            border: 1px solid #ddd;
+            padding: 24px;
+            margin: 24px 0;
+            text-align: center;
+            border-radius: 4px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 24px 0;
+        }
+        
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+        
+        th {
+            background: #f8f8f8;
+            font-weight: 600;
+        }
+        
+        a {
+            color: #0066cc;
+            text-decoration: none;
+        }
+        
+        a:hover {
+            text-decoration: underline;
+        }
+        
+        .toc {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 24px;
+            margin: 32px 0;
+        }
+        
+        .toc h3 {
+            margin-top: 0;
+        }
+        
+        .toc ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        
+        .toc ul ul {
+            padding-left: 24px;
+        }
+        
+        .toc li {
+            margin: 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Mesh-Based Lighting (Area Lights) Implementation Guide for RiPREngine</h1>
+    
+    <div class="toc">
+        <h3>Table of Contents</h3>
+        <ul>
+            <li><a href="#overview">1. Overview</a></li>
+            <li><a href="#architecture">2. Architecture Overview</a></li>
+            <li><a href="#data-structures">3. Core Data Structures</a></li>
+            <li><a href="#implementation-flow">4. Implementation Flow</a></li>
+            <li><a href="#gpu-kernels">5. GPU Kernel Implementation</a></li>
+            <li><a href="#sampling">6. Light Sampling Strategy</a></li>
+            <li><a href="#integration">7. Integration with Path Tracing</a></li>
+            <li><a href="#ripr-implementation">8. Implementation Steps for RiPREngine</a></li>
+            <li><a href="#optimization">9. Optimization Strategies</a></li>
+            <li><a href="#testing">10. Testing and Validation</a></li>
+        </ul>
+    </div>
+    
+    <div class="section" id="overview">
+        <h2>1. Overview</h2>
+        <p>
+            Mesh-based lighting, also known as area lighting, allows any triangle mesh with emissive materials to act as a light source. 
+            This is essential for physically-based rendering as it enables realistic soft shadows and proper energy distribution from 
+            extended light sources. The implementation involves building a hierarchical probability distribution over emissive triangles 
+            to enable efficient importance sampling during path tracing.
+        </p>
+        
+        <div class="note">
+            <strong>Key Concept:</strong> Area lights are not separate entities but rather triangles with emissive materials. 
+            The system automatically identifies these triangles and builds sampling distributions for efficient light sampling.
+        </div>
+    </div>
+    
+    <div class="section" id="architecture">
+        <h2>2. Architecture Overview</h2>
+        <p>
+            The mesh-based lighting system consists of three hierarchical levels of probability distributions:
+        </p>
+        
+        <div class="diagram">
+            <pre>
+    Instance Level Distribution
+              ↓
+    Geometry Instance Level Distribution  
+              ↓
+    Primitive (Triangle) Level Distribution
+            </pre>
+        </div>
+        
+        <ol>
+            <li><strong>Instance Level:</strong> Distribution over all instances in the scene that contain emissive geometry</li>
+            <li><strong>Geometry Instance Level:</strong> Distribution over geometry instances within each instance</li>
+            <li><strong>Primitive Level:</strong> Distribution over individual triangles within each geometry instance</li>
+        </ol>
+    </div>
+    
+    <div class="section" id="data-structures">
+        <h2>3. Core Data Structures</h2>
+        
+        <h3>3.1 Light Distribution Structure</h3>
+        <pre class="code-block">
+// Represents a discrete probability distribution for light sampling
+struct LightDistribution {
+    float* weights;           // Array of importance weights
+    float* CDF;               // Cumulative distribution function
+    float integral;           // Sum of all weights
+    uint32_t numValues;       // Number of elements
+    
+    // Methods for sampling and PDF evaluation
+    uint32_t sample(float u, float* prob, float* remapped);
+    float evaluatePMF(uint32_t index);
+    float integral() const;
+};
+        </pre>
+        
+        <h3>3.2 Geometry Instance Data</h3>
+        <pre class="code-block">
+struct GeometryInstanceData {
+    ROBuffer&lt;Vertex&gt; vertexBuffer;
+    ROBuffer&lt;Triangle&gt; triangleBuffer;
+    LightDistribution emitterPrimDist;    // Distribution over emissive triangles
+    uint32_t materialSlot;
+    uint32_t geomInstSlot;
+};
+        </pre>
+        
+        <h3>3.3 Instance Data</h3>
+        <pre class="code-block">
+struct InstanceData {
+    Matrix4x4 transform;
+    Matrix3x3 normalMatrix;
+    float uniformScale;
+    ROBuffer&lt;uint32_t&gt; geomInstSlots;
+    LightDistribution lightGeomInstDist;  // Distribution over geometry instances
+};
+        </pre>
+        
+        <h3>3.4 Light Sample Structure</h3>
+        <pre class="code-block">
+struct LightSample {
+    RGB emittance;        // Emitted radiance
+    Point3D position;     // Sample position on light
+    Normal3D normal;      // Surface normal at sample point
+    uint32_t atInfinity;  // Flag for environment lights
+};
+        </pre>
+    </div>
+    
+    <div class="section" id="implementation-flow">
+        <h2>4. Implementation Flow</h2>
+        
+        <h3>4.1 Initialization Phase</h3>
+        <ol>
+            <li><strong>Identify Emissive Triangles:</strong>
+                <ul>
+                    <li>Iterate through all triangles in each geometry instance</li>
+                    <li>Check if the triangle's material has an emittance texture or value</li>
+                    <li>Calculate importance based on emitted radiance and triangle area</li>
+                </ul>
+            </li>
+            
+            <li><strong>Build Primitive Distribution:</strong>
+                <pre class="code-block">
+// For each triangle in geometry instance
+float computeTriangleImportance(GeometryInstanceData* geomInst, uint32_t triIndex) {
+    const MaterialData &mat = materialDataBuffer[geomInst->materialSlot];
+    const Triangle &tri = geomInst->triangleBuffer[triIndex];
+    
+    // Get triangle vertices
+    const Vertex v[3] = {
+        geomInst->vertexBuffer[tri.index0],
+        geomInst->vertexBuffer[tri.index1],
+        geomInst->vertexBuffer[tri.index2]
+    };
+    
+    // Calculate area
+    Normal3D normal = cross(v[1].position - v[0].position, 
+                           v[2].position - v[0].position);
+    float area = 0.5f * length(normal);
+    
+    // Sample emittance at vertices and average
+    RGB emittanceEstimate = 0;
+    for (int i = 0; i < 3; i++) {
+        emittanceEstimate += sampleTexture(mat.emittance, v[i].texCoord);
+    }
+    emittanceEstimate /= 3;
+    
+    // Importance = luminance * area
+    return calcLuminance(emittanceEstimate) * area;
+}
+                </pre>
+            </li>
+            
+            <li><strong>Build Geometry Instance Distribution:</strong>
+                <pre class="code-block">
+float computeGeomInstImportance(InstanceData* inst, uint32_t geomInstIndex) {
+    uint32_t slot = inst->geomInstSlots[geomInstIndex];
+    const GeometryInstanceData &geomInst = geometryInstanceDataBuffer[slot];
+    
+    // Sum of all emissive triangle importances in this geometry instance
+    return geomInst.emitterPrimDist.integral();
+}
+                </pre>
+            </li>
+            
+            <li><strong>Build Instance Distribution:</strong>
+                <pre class="code-block">
+float computeInstImportance(const InstanceData* instanceDataBuffer, uint32_t instIndex) {
+    const InstanceData &inst = instanceDataBuffer[instIndex];
+    
+    // Account for instance transform scale
+    float uniformScale = inst.uniformScale;
+    
+    // Scale affects area quadratically
+    return pow2(uniformScale) * inst.lightGeomInstDist.integral();
+}
+                </pre>
+            </li>
+        </ol>
+    </div>
+    
+    <div class="section" id="gpu-kernels">
+        <h2>5. GPU Kernel Implementation</h2>
+        
+        <h3>5.1 Compute Light Probabilities Kernel</h3>
+        <pre class="code-block">
+__global__ void computeTriangleProbBuffer(
+    GeometryInstanceData* geomInst, 
+    uint32_t numTriangles,
+    const MaterialData* materialDataBuffer) 
+{
+    uint32_t triIndex = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    if (triIndex == 0) {
+        geomInst->emitterPrimDist.setNumValues(numTriangles);
+    }
+    
+    if (triIndex < numTriangles) {
+        float importance = computeTriangleImportance(geomInst, triIndex, materialDataBuffer);
+        geomInst->emitterPrimDist.setWeightAt(triIndex, importance);
+    }
+}
+        </pre>
+        
+        <h3>5.2 Finalize Distribution Kernel</h3>
+        <pre class="code-block">
+__global__ void finalizeDiscreteDistribution1D(DiscreteDistribution1D* dist) {
+    if (threadIdx.x == 0) {
+        dist->finalize();  // Builds CDF from weights
+    }
+}
+        </pre>
+    </div>
+    
+    <div class="section" id="sampling">
+        <h2>6. Light Sampling Strategy</h2>
+        
+        <h3>6.1 Three-Level Hierarchical Sampling</h3>
+        <pre class="code-block">
+template &lt;bool useSolidAngleSampling&gt;
+void sampleLight(
+    const Point3D &shadingPoint,
+    float u_instance, float u_geomInst, float u_prim, float u0, float u1,
+    LightSample* lightSample, float* areaPDensity) 
+{
+    // Level 1: Sample an instance
+    float instProb;
+    uint32_t instSlot = lightInstDist.sample(u_instance, &instProb);
+    const InstanceData &inst = instanceDataBuffer[instSlot];
+    
+    // Level 2: Sample a geometry instance within the instance
+    float geomInstProb;
+    uint32_t geomInstIndex = inst.lightGeomInstDist.sample(u_geomInst, &geomInstProb);
+    uint32_t geomInstSlot = inst.geomInstSlots[geomInstIndex];
+    const GeometryInstanceData &geomInst = geometryInstanceDataBuffer[geomInstSlot];
+    
+    // Level 3: Sample a primitive within the geometry instance
+    float primProb;
+    uint32_t primIndex = geomInst.emitterPrimDist.sample(u_prim, &primProb);
+    
+    // Compute total probability
+    float lightProb = instProb * geomInstProb * primProb;
+    
+    // Get triangle data
+    const Triangle &tri = geomInst.triangleBuffer[primIndex];
+    const Vertex vA = geomInst.vertexBuffer[tri.index0];
+    const Vertex vB = geomInst.vertexBuffer[tri.index1];
+    const Vertex vC = geomInst.vertexBuffer[tri.index2];
+    
+    // Transform vertices to world space
+    Point3D pA = inst.transform * vA.position;
+    Point3D pB = inst.transform * vB.position;
+    Point3D pC = inst.transform * vC.position;
+    
+    // Sample point on triangle
+    float bcA, bcB, bcC;
+    if constexpr (useSolidAngleSampling) {
+        // Sample uniformly in solid angle subtended by triangle
+        sampleTriangleSolidAngle(shadingPoint, pA, pB, pC, u0, u1, 
+                                &bcA, &bcB, &bcC);
+    } else {
+        // Sample uniformly on triangle surface
+        sampleTriangleUniform(u0, u1, &bcA, &bcB, &bcC);
+    }
+    
+    // Compute sample position and normal
+    lightSample->position = bcA * pA + bcB * pB + bcC * pC;
+    lightSample->normal = normalize(inst.normalMatrix * 
+                         (bcA * vA.normal + bcB * vB.normal + bcC * vC.normal));
+    
+    // Sample emittance texture
+    Point2D texCoord = bcA * vA.texCoord + bcB * vB.texCoord + bcC * vC.texCoord;
+    lightSample->emittance = sampleTexture(mat.emittance, texCoord);
+    
+    // Compute area probability density
+    float triangleArea = 0.5f * length(cross(pB - pA, pC - pA));
+    *areaPDensity = lightProb / triangleArea;
+}
+        </pre>
+        
+        <h3>6.2 Solid Angle Sampling (Optional Advanced Feature)</h3>
+        <p>
+            For nearby light sources, sampling uniformly in solid angle can reduce variance:
+        </p>
+        <pre class="code-block">
+void sampleTriangleSolidAngle(
+    const Point3D &shadingPoint,
+    const Point3D &pA, const Point3D &pB, const Point3D &pC,
+    float u0, float u1,
+    float* bcA, float* bcB, float* bcC) 
+{
+    // Normalize directions to vertices
+    Vector3D A = normalize(pA - shadingPoint);
+    Vector3D B = normalize(pB - shadingPoint);
+    Vector3D C = normalize(pC - shadingPoint);
+    
+    // Compute solid angle using spherical excess formula
+    Vector3D cAB = normalize(cross(A, B));
+    Vector3D cBC = normalize(cross(B, C));
+    Vector3D cCA = normalize(cross(C, A));
+    
+    float cosAlpha = -dot(cAB, cCA);
+    float cosBeta = -dot(cBC, cAB);
+    float cosGamma = -dot(cCA, cBC);
+    
+    float alpha = acos(cosAlpha);
+    float sphArea = alpha + acos(cosBeta) + acos(cosGamma) - PI;
+    
+    // Sample within spherical triangle
+    // (Detailed implementation omitted for brevity)
+}
+        </pre>
+    </div>
+    
+    <div class="section" id="integration">
+        <h2>7. Integration with Path Tracing</h2>
+        
+        <h3>7.1 Direct Lighting Integration</h3>
+        <pre class="code-block">
+RGB performDirectLighting(
+    const Point3D &shadingPoint, 
+    const Vector3D &wo,
+    const ReferenceFrame &frame,
+    const BSDF &bsdf) 
+{
+    // Sample a light source
+    LightSample lightSample;
+    float lightPDF;
+    
+    float u_light = rng.getFloat();
+    bool sampleEnvLight = (u_light < probToSampleEnvLight) && envLightEnabled;
+    
+    if (sampleEnvLight) {
+        // Sample environment light
+        sampleEnvironmentLight(&lightSample, &lightPDF);
+    } else {
+        // Sample area lights
+        sampleLight(shadingPoint, rng.getFloat(), rng.getFloat(), 
+                   rng.getFloat(), rng.getFloat(), rng.getFloat(),
+                   &lightSample, &lightPDF);
+    }
+    
+    // Compute lighting contribution
+    Vector3D wi = lightSample.position - shadingPoint;
+    float dist2 = dot(wi, wi);
+    float dist = sqrt(dist2);
+    wi /= dist;
+    
+    // Evaluate BSDF
+    RGB f = bsdf.evaluate(wo, wi);
+    
+    // Compute geometry term
+    float cosThetaI = abs(dot(wi, frame.normal));
+    float cosThetaL = abs(dot(-wi, lightSample.normal));
+    float G = cosThetaI * cosThetaL / dist2;
+    
+    // Check visibility
+    if (evaluateVisibility(shadingPoint, lightSample)) {
+        return f * lightSample.emittance * G / lightPDF;
+    }
+    
+    return RGB(0);
+}
+        </pre>
+        
+        <h3>7.2 Multiple Importance Sampling (MIS)</h3>
+        <p>
+            For optimal results, combine light sampling with BSDF sampling using MIS:
+        </p>
+        <pre class="code-block">
+RGB evaluateDirectLightingWithMIS(/* parameters */) {
+    RGB result = 0;
+    
+    // Light sampling
+    {
+        LightSample lightSample;
+        float lightPDF;
+        sampleLight(/* ... */, &lightSample, &lightPDF);
+        
+        float bsdfPDF = bsdf.evaluatePDF(wo, wi);
+        float misWeight = powerHeuristic(lightPDF, bsdfPDF);
+        
+        result += contribution * misWeight;
+    }
+    
+    // BSDF sampling
+    {
+        Vector3D wi;
+        float bsdfPDF;
+        RGB f = bsdf.sample(wo, &wi, &bsdfPDF);
+        
+        float lightPDF = evaluateLightPDF(wi);
+        float misWeight = powerHeuristic(bsdfPDF, lightPDF);
+        
+        result += contribution * misWeight;
+    }
+    
+    return result;
+}
+        </pre>
+    </div>
+    
+    <div class="section" id="ripr-implementation">
+        <h2>8. Implementation Steps for RiPREngine</h2>
+        
+        <div class="warning">
+            <strong>Important:</strong> RiPREngine already has partial area light support. The following steps enhance and complete the implementation.
+        </div>
+        
+        <h3>8.1 Step 1: Enhance GeometryInstanceData Structure</h3>
+        <pre class="code-block">
+// In ripr_shared.h, ensure GeometryInstanceData includes:
+struct GeometryInstanceData {
+    ROBuffer&lt;Vertex&gt; vertexBuffer;
+    ROBuffer&lt;Triangle&gt; triangleBuffer;
+    LightDistribution emitterPrimDist;  // Already present
+    uint32_t materialSlot;
+    uint32_t geomInstSlot;
+    
+    // Add method to check if geometry has emissive triangles
+    bool hasEmissiveTriangles() const {
+        return emitterPrimDist.integral() > 0.0f;
+    }
+};
+        </pre>
+        
+        <h3>8.2 Step 2: Implement Light Probability Computation</h3>
+        <pre class="code-block">
+// Create compute_light_probs.cu in engines/ripr/cuda/
+__global__ void computeTriangleImportances(
+    GeometryInstanceData* geomInst,
+    uint32_t numTriangles,
+    const DisneyData* materialBuffer)
+{
+    uint32_t triIdx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (triIdx >= numTriangles) return;
+    
+    const DisneyData& mat = materialBuffer[geomInst->materialSlot];
+    
+    // Only compute for emissive materials
+    if (!mat.hasEmission()) {
+        geomInst->emitterPrimDist.setWeightAt(triIdx, 0.0f);
+        return;
+    }
+    
+    // Get triangle and compute area
+    const Triangle& tri = geomInst->triangleBuffer[triIdx];
+    // ... (compute importance as shown earlier)
+    
+    geomInst->emitterPrimDist.setWeightAt(triIdx, importance);
+}
+        </pre>
+        
+        <h3>8.3 Step 3: Update RiPRSceneHandler</h3>
+        <pre class="code-block">
+// In RiPRSceneHandler::updateLightDistributions()
+void RiPRSceneHandler::updateLightDistributions() {
+    // Clear existing light instances
+    lightInstances_.clear();
+    
+    // Iterate through all instances
+    for (const auto& [instId, instance] : instances_) {
+        bool hasEmissiveGeometry = false;
+        
+        // Check each geometry instance
+        for (const auto& geomInst : instance->getGeometryInstances()) {
+            if (geomInst->hasEmissiveTriangles()) {
+                hasEmissiveGeometry = true;
+                
+                // Launch kernel to compute triangle probabilities
+                computeTriangleImportances&lt;&lt;&lt;grid, block&gt;&gt;(
+                    geomInst->getDeviceData(),
+                    geomInst->getNumTriangles(),
+                    materialBuffer_
+                );
+            }
+        }
+        
+        if (hasEmissiveGeometry) {
+            lightInstances_.push_back(instance);
+            
+            // Compute geometry instance distribution
+            computeGeomInstProbabilities&lt;&lt;&lt;grid, block&gt;&gt;(
+                instance->getDeviceData(),
+                instance->getNumGeomInstances()
+            );
+        }
+    }
+    
+    // Build top-level instance distribution
+    if (!lightInstances_.empty()) {
+        computeInstanceProbabilities&lt;&lt;&lt;grid, block&gt;&gt;(
+            lightInstDistribution_,
+            lightInstances_.size(),
+            instanceBuffer_
+        );
+    }
+}
+        </pre>
+        
+        <h3>8.4 Step 4: Update Path Tracing Kernels</h3>
+        <pre class="code-block">
+// In optix_ripr_kernels.cu
+extern "C" __global__ void __raygen__pathtracing() {
+    // ... existing code ...
+    
+    // Direct lighting with area lights
+    if (plp.s->enableAreaLights && plp.s->numLightInsts > 0) {
+        // Decide between environment and area light sampling
+        float selectProb = rng.getFloat();
+        
+        LightSample lightSample;
+        float lightPDF;
+        
+        if (selectProb < probToSampleEnvLight && plp.f->enableEnvLight) {
+            // Sample environment light
+            sampleEnvironmentLight(/* ... */);
+        } else {
+            // Sample area lights
+            sampleLight&lt;false&gt;(
+                hitPoint.position,
+                rng.getFloat(), false,
+                rng.getFloat(), rng.getFloat(),
+                &lightSample, &lightPDF
+            );
+            
+            // Compute direct lighting contribution
+            RGB directLight = performDirectLighting&lt;PathTracingRayType, true&gt;(
+                hitPoint.position, wo, shadingFrame,
+                bsdf, lightSample
+            );
+            
+            contribution += throughput * directLight;
+        }
+    }
+}
+        </pre>
+        
+        <h3>8.5 Step 5: Handle Material Emission</h3>
+        <pre class="code-block">
+// In hit programs, add emission when ray hits emissive surface
+extern "C" __global__ void __closesthit__pathtracing() {
+    // ... existing hit point computation ...
+    
+    const DisneyData& mat = plp.s->materialDataBuffer[geomInst.materialSlot];
+    
+    // Add emission for first hit or when using MIS
+    if (payload->pathLength == 0 || useMIS) {
+        if (mat.hasEmission()) {
+            Point2D texCoord = /* interpolated texture coordinates */;
+            RGB emission = mat.sampleEmission(texCoord);
+            
+            // Weight by MIS if not first bounce
+            if (payload->pathLength > 0 && useMIS) {
+                float lightPDF = evaluateLightPDF(/* ... */);
+                float bsdfPDF = payload->prevDirPDensity;
+                float misWeight = powerHeuristic(bsdfPDF, lightPDF);
+                emission *= misWeight;
+            }
+            
+            payload->contribution += payload->throughput * emission;
+        }
+    }
+}
+        </pre>
+    </div>
+    
+    <div class="section" id="optimization">
+        <h2>9. Optimization Strategies</h2>
+        
+        <h3>9.1 Hierarchical Light Trees</h3>
+        <p>
+            For scenes with many light sources, build a light tree for better importance sampling:
+        </p>
+        <ul>
+            <li>Group spatially close lights</li>
+            <li>Build bounding boxes for light clusters</li>
+            <li>Traverse tree based on estimated contribution</li>
+        </ul>
+        
+        <h3>9.2 Light Visibility Caching</h3>
+        <p>
+            Cache visibility between surface points and lights:
+        </p>
+        <ul>
+            <li>Use spatial hashing for cache lookups</li>
+            <li>Temporal caching for animation</li>
+            <li>Irradiance caching for diffuse surfaces</li>
+        </ul>
+        
+        <h3>9.3 Adaptive Sampling</h3>
+        <pre class="code-block">
+// Adjust number of light samples based on variance
+int computeNumLightSamples(float variance) {
+    const int minSamples = 1;
+    const int maxSamples = 8;
+    
+    // More samples for high variance regions
+    float t = saturate(variance / targetVariance);
+    return lerp(minSamples, maxSamples, t);
+}
+        </pre>
+        
+        <h3>9.4 Texture-Space Light Importance</h3>
+        <p>
+            Pre-compute importance in texture space for textured emitters:
+        </p>
+        <pre class="code-block">
+// Pre-compute MIP chain for emittance textures
+void buildEmittanceMipChain(Texture2D emittanceTexture) {
+    for (int level = 1; level < numMipLevels; ++level) {
+        // Average 2x2 blocks, weighting by luminance
+        generateMipLevel(emittanceTexture, level);
+    }
+}
+        </pre>
+    </div>
+    
+    <div class="section" id="testing">
+        <h2>10. Testing and Validation</h2>
+        
+        <h3>10.1 Unit Tests</h3>
+        <pre class="code-block">
+// Test light distribution sampling
+TEST_CASE("LightDistribution") {
+    // Create distribution with known weights
+    float weights[] = {1.0f, 2.0f, 3.0f, 4.0f};
+    LightDistribution dist(weights, 4);
+    
+    // Test sampling
+    float prob;
+    uint32_t index = dist.sample(0.7f, &prob);
+    
+    // Verify probability
+    CHECK(prob == Approx(weights[index] / 10.0f));
+    
+    // Test PDF evaluation
+    CHECK(dist.evaluatePMF(index) == Approx(weights[index] / 10.0f));
+}
+        </pre>
+        
+        <h3>10.2 Integration Tests</h3>
+        <ol>
+            <li><strong>Cornell Box Test:</strong> Verify area light produces expected illumination pattern</li>
+            <li><strong>Energy Conservation:</strong> Ensure total emitted energy matches expected value</li>
+            <li><strong>Convergence Test:</strong> Verify image converges to reference with increasing samples</li>
+        </ol>
+        
+        <h3>10.3 Performance Benchmarks</h3>
+        <pre class="code-block">
+// Benchmark light sampling performance
+void benchmarkLightSampling() {
+    Timer timer;
+    const int numSamples = 1000000;
+    
+    timer.start();
+    for (int i = 0; i < numSamples; ++i) {
+        LightSample sample;
+        float pdf;
+        sampleLight(/* ... */, &sample, &pdf);
+    }
+    timer.stop();
+    
+    printf("Light sampling: %.3f million samples/sec\n", 
+           numSamples / (timer.elapsed() * 1e6));
+}
+        </pre>
+        
+        <h3>10.4 Visual Validation</h3>
+        <ul>
+            <li>Compare against reference path tracer</li>
+            <li>Check for fireflies and noise patterns</li>
+            <li>Verify soft shadows are correctly formed</li>
+            <li>Test with various emissive texture patterns</li>
+        </ul>
+    </div>
+    
+    <div class="note">
+        <h3>Key Implementation Considerations</h3>
+        <ul>
+            <li><strong>Memory Management:</strong> Pre-allocate buffers for maximum expected lights</li>
+            <li><strong>Dynamic Updates:</strong> Support for animated/deforming light sources</li>
+            <li><strong>Precision:</strong> Use double precision for large scenes if needed</li>
+            <li><strong>Debugging:</strong> Add visualization modes for light distributions</li>
+            <li><strong>Fallbacks:</strong> Handle edge cases (zero area triangles, invalid normals)</li>
+        </ul>
+    </div>
+    
+    <div class="section">
+        <h2>Conclusion</h2>
+        <p>
+            Implementing mesh-based lighting in RiPREngine requires careful attention to the hierarchical sampling structure, 
+            efficient GPU kernel implementation, and proper integration with the existing path tracing pipeline. The system 
+            already has foundational support for area lights, so the main tasks involve:
+        </p>
+        <ol>
+            <li>Completing the light probability computation kernels</li>
+            <li>Ensuring proper material emission handling</li>
+            <li>Implementing efficient sampling strategies</li>
+            <li>Adding multiple importance sampling for variance reduction</li>
+            <li>Optimizing for performance with large numbers of lights</li>
+        </ol>
+        <p>
+            Following this guide will enable physically accurate area lighting with soft shadows and proper energy conservation 
+            in your RiPREngine implementation.
+        </p>
+    </div>
+</body>
+</html>

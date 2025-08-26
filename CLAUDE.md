@@ -324,3 +324,37 @@ Avoid building functionality on speculation. Implement features only when they a
 - **Include guards or `#pragma once`** in all header files
 - **Forward declarations** in headers when possible to reduce compilation dependencies
 - **Const-correctness** - mark methods and parameters const when they don't modify state
+
+## HTML Documentation Guidelines
+
+### Code Block Styling
+When creating HTML documentation with code blocks, always use clean, readable styling:
+- **Background**: Light gray (#f8f8f8) with 1px solid #ddd border
+- **Text Color**: Pure black (#000) for maximum contrast
+- **Font**: 'Consolas', 'Courier New', monospace at 14px
+- **Padding**: 20px for comfortable spacing
+- **Line Height**: 1.6 for readability
+- **Border Radius**: 4px for subtle rounding
+
+Example CSS for code blocks:
+```css
+.code-block, pre {
+    background: #f8f8f8;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 20px;
+    margin: 24px 0;
+    overflow-x: auto;
+    font-family: 'Consolas', 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #000;
+}
+```
+
+### General HTML Documentation Design
+- **Use minimal, clean design** with white backgrounds and black text
+- **Avoid dark backgrounds** for code blocks - they reduce readability
+- **Keep layouts spacious** with generous margins and padding
+- **Maximum content width** around 900px for optimal reading
+- **Simple color scheme** - use colors sparingly, mainly for links (#0066cc)

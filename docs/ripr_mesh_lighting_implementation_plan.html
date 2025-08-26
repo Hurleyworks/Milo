@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RiPREngine Mesh-Based Lighting - Detailed Implementation Plan</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.8;
+            color: #000;
+            background: #fff;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        h1 {
+            font-size: 32px;
+            margin-bottom: 40px;
+            padding-bottom: 16px;
+            border-bottom: 3px solid #0066cc;
+            color: #000;
+        }
+        
+        h2 {
+            font-size: 24px;
+            margin: 40px 0 24px 0;
+            color: #000;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+        }
+        
+        h3 {
+            font-size: 20px;
+            margin: 32px 0 16px 0;
+            color: #333;
+        }
+        
+        h4 {
+            font-size: 18px;
+            margin: 24px 0 12px 0;
+            color: #555;
+        }
+        
+        p {
+            margin: 16px 0;
+            text-align: justify;
+        }
+        
+        .code-block, pre {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 20px;
+            margin: 24px 0;
+            overflow-x: auto;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #000;
+        }
+        
+        .status-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 24px 0;
+        }
+        
+        .status-table th, .status-table td {
+            padding: 12px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+        
+        .status-table th {
+            background: #f8f8f8;
+            font-weight: 600;
+        }
+        
+        .status-complete {
+            color: #28a745;
+            font-weight: 600;
+        }
+        
+        .status-partial {
+            color: #ffc107;
+            font-weight: 600;
+        }
+        
+        .status-missing {
+            color: #dc3545;
+            font-weight: 600;
+        }
+        
+        .step-box {
+            background: #f0f8ff;
+            border-left: 4px solid #0066cc;
+            padding: 20px;
+            margin: 24px 0;
+            border-radius: 4px;
+        }
+        
+        .step-number {
+            display: inline-block;
+            background: #0066cc;
+            color: white;
+            width: 36px;
+            height: 36px;
+            text-align: center;
+            line-height: 36px;
+            border-radius: 50%;
+            margin-right: 12px;
+            font-weight: 600;
+        }
+        
+        .priority-high {
+            background: #ffcccc;
+            border-left: 4px solid #dc3545;
+        }
+        
+        .priority-medium {
+            background: #fff8dc;
+            border-left: 4px solid #ffc107;
+        }
+        
+        .priority-low {
+            background: #ccffcc;
+            border-left: 4px solid #28a745;
+        }
+        
+        .note {
+            background: #e8f4f8;
+            border-left: 4px solid #0066cc;
+            padding: 16px 20px;
+            margin: 24px 0;
+            border-radius: 4px;
+        }
+        
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ff9800;
+            padding: 16px 20px;
+            margin: 24px 0;
+            border-radius: 4px;
+        }
+        
+        .checklist {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        
+        .checklist li {
+            padding: 8px 0;
+            padding-left: 32px;
+            position: relative;
+        }
+        
+        .checklist li::before {
+            content: '☐';
+            position: absolute;
+            left: 0;
+            font-size: 20px;
+        }
+        
+        .checklist li.done::before {
+            content: '✓';
+            color: #28a745;
+        }
+        
+        ul, ol {
+            margin: 16px 0;
+            padding-left: 40px;
+        }
+        
+        li {
+            margin: 8px 0;
+        }
+        
+        .toc {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 24px;
+            margin: 32px 0;
+        }
+        
+        .toc h3 {
+            margin-top: 0;
+        }
+        
+        .toc ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        
+        .toc ul ul {
+            padding-left: 24px;
+        }
+        
+        .toc li {
+            margin: 8px 0;
+        }
+        
+        .timeline {
+            margin: 32px 0;
+            padding: 20px;
+            background: #fafafa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        .timeline-item {
+            margin: 16px 0;
+            padding-left: 40px;
+            position: relative;
+        }
+        
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: 10px;
+            top: 8px;
+            width: 10px;
+            height: 10px;
+            background: #0066cc;
+            border-radius: 50%;
+        }
+        
+        .timeline-item::after {
+            content: '';
+            position: absolute;
+            left: 14px;
+            top: 18px;
+            width: 2px;
+            height: calc(100% + 8px);
+            background: #ddd;
+        }
+        
+        .timeline-item:last-child::after {
+            display: none;
+        }
+        
+        .file-path {
+            font-family: 'Consolas', 'Courier New', monospace;
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <h1>RiPREngine Mesh-Based Lighting - Detailed Implementation Plan</h1>
+    
+    <div class="toc">
+        <h3>Table of Contents</h3>
+        <ul>
+            <li><a href="#current-status">1. Current Implementation Status</a></li>
+            <li><a href="#missing-components">2. Missing Components</a></li>
+            <li><a href="#step-by-step">3. Step-by-Step Implementation Plan</a></li>
+            <li><a href="#testing-plan">4. Testing & Validation Plan</a></li>
+            <li><a href="#timeline">5. Implementation Timeline</a></li>
+            <li><a href="#risks">6. Risks & Mitigation</a></li>
+        </ul>
+    </div>
+    
+    <div id="current-status">
+        <h2>1. Current Implementation Status</h2>
+        
+        <p>
+            Based on analysis of the RiPREngine codebase, the mesh-based lighting system is partially implemented
+            but missing critical components for full functionality.
+        </p>
+        
+        <table class="status-table">
+            <thead>
+                <tr>
+                    <th>Component</th>
+                    <th>Status</th>
+                    <th>Location</th>
+                    <th>Notes</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Data Structures</td>
+                    <td class="status-complete">✓ Complete</td>
+                    <td><span class="file-path">ripr_shared.h</span></td>
+                    <td>LightDistribution, GeometryInstanceData, InstanceData all present</td>
+                </tr>
+                <tr>
+                    <td>Light Probability Kernels</td>
+                    <td class="status-partial">⚠ Partial</td>
+                    <td><span class="file-path">RiPREngine.cpp:492-547</span></td>
+                    <td>Kernel handles initialized but compute_light_probs.cu missing</td>
+                </tr>
+                <tr>
+                    <td>Emissive Detection</td>
+                    <td class="status-partial">⚠ Partial</td>
+                    <td><span class="file-path">RiPRSceneHandler.cpp:996-1026</span></td>
+                    <td>Logic exists but emitterPrimDist never populated</td>
+                </tr>
+                <tr>
+                    <td>Light Sampling</td>
+                    <td class="status-partial">⚠ Partial</td>
+                    <td><span class="file-path">ripr_shared.h:221-431</span></td>
+                    <td>Template functions exist but not integrated with kernels</td>
+                </tr>
+                <tr>
+                    <td>CUDA Kernels</td>
+                    <td class="status-missing">✗ Missing</td>
+                    <td>N/A</td>
+                    <td>compute_light_probs.cu file not created</td>
+                </tr>
+                <tr>
+                    <td>PTX Generation</td>
+                    <td class="status-missing">✗ Missing</td>
+                    <td>N/A</td>
+                    <td>No PTX for light probability computation</td>
+                </tr>
+                <tr>
+                    <td>MIS Integration</td>
+                    <td class="status-missing">✗ Missing</td>
+                    <td>N/A</td>
+                    <td>Multiple Importance Sampling not implemented</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <div id="missing-components">
+        <h2>2. Missing Components</h2>
+        
+        <div class="warning">
+            <strong>Critical Missing Components:</strong>
+            <ul>
+                <li><strong>compute_light_probs.cu:</strong> The entire CUDA kernel file is missing</li>
+                <li><strong>Triangle importance computation:</strong> No implementation of computeTriangleImportance()</li>
+                <li><strong>Distribution building:</strong> EmitterPrimDist is never populated with weights</li>
+                <li><strong>Kernel launches:</strong> computeLightProbabilities() is stubbed with just a log message</li>
+                <li><strong>Path tracing integration:</strong> Light sampling not called in ray generation programs</li>
+            </ul>
+        </div>
+    </div>
+    
+    <div id="step-by-step">
+        <h2>3. Step-by-Step Implementation Plan</h2>
+        
+        <!-- STEP 1 -->
+        <div class="step-box priority-high">
+            <h3><span class="step-number">1</span>Create compute_light_probs.cu CUDA Kernel File</h3>
+            
+            <p><strong>Priority:</strong> <span class="status-missing">HIGH - BLOCKING</span></p>
+            <p><strong>Location:</strong> <span class="file-path">framework/claude_core/excludeFromBuild/engines/ripr/cuda/compute_light_probs.cu</span></p>
+            
+            <h4>Implementation Details:</h4>
+            <pre class="code-block">
+// compute_light_probs.cu
+#define PURE_CUDA
+#include "../ripr_shared.h"
+
+using namespace ripr_shared;
+using namespace shared;
+
+// Compute triangle importance based on area and emittance
+__device__ float computeTriangleImportance(
+    const GeometryInstanceData* geomInst, 
+    uint32_t triIndex,
+    const DisneyData* materialBuffer) 
+{
+    const DisneyData& mat = materialBuffer[geomInst->materialSlot];
+    
+    // Check if material has emission
+    if (!mat.emission || mat.emissionScale <= 0.0f) {
+        return 0.0f;
+    }
+    
+    const Triangle& tri = geomInst->triangleBuffer[triIndex];
+    const Vertex v[3] = {
+        geomInst->vertexBuffer[tri.index0],
+        geomInst->vertexBuffer[tri.index1],
+        geomInst->vertexBuffer[tri.index2]
+    };
+    
+    // Compute triangle area
+    Normal3D normal = cross(v[1].position - v[0].position, 
+                           v[2].position - v[0].position);
+    float area = 0.5f * length(normal);
+    
+    // Sample emission at vertices
+    RGB emittanceSum(0.0f);
+    for (int i = 0; i < 3; i++) {
+        float4 texValue = tex2DLod<float4>(mat.emission, 
+                                          v[i].texCoord.x, 
+                                          v[i].texCoord.y, 0.0f);
+        emittanceSum += RGB(texValue.x, texValue.y, texValue.z);
+    }
+    
+    // Average emittance
+    RGB avgEmittance = (emittanceSum / 3.0f) * mat.emissionScale;
+    
+    // Importance = luminance * area
+    float luminance = 0.2126f * avgEmittance.r + 
+                     0.7152f * avgEmittance.g + 
+                     0.0722f * avgEmittance.b;
+    
+    return luminance * area;
+}
+
+// Initialize triangle probability distribution
+__global__ void computeTriangleProbBuffer(
+    GeometryInstanceData* geomInst,
+    uint32_t numTriangles,
+    const DisneyData* materialBuffer)
+{
+    uint32_t triIdx = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    if (triIdx == 0) {
+        geomInst->emitterPrimDist.setNumValues(numTriangles);
+    }
+    
+    if (triIdx < numTriangles) {
+        float importance = computeTriangleImportance(geomInst, triIdx, materialBuffer);
+        geomInst->emitterPrimDist.setWeightAt(triIdx, importance);
+    }
+}
+
+// Compute geometry instance importance
+__device__ float computeGeomInstImportance(
+    const InstanceData* inst,
+    const GeometryInstanceData* geomInstBuffer,
+    uint32_t geomInstIndex)
+{
+    uint32_t slot = inst->geomInstSlots[geomInstIndex];
+    const GeometryInstanceData& geomInst = geomInstBuffer[slot];
+    return geomInst.emitterPrimDist.integral();
+}
+
+// Initialize geometry instance distribution
+__global__ void computeGeomInstProbBuffer(
+    InstanceData* inst,
+    uint32_t numGeomInsts,
+    const GeometryInstanceData* geomInstBuffer)
+{
+    uint32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    if (idx == 0) {
+        inst->lightGeomInstDist.setNumValues(numGeomInsts);
+    }
+    
+    if (idx < numGeomInsts) {
+        float importance = computeGeomInstImportance(inst, geomInstBuffer, idx);
+        inst->lightGeomInstDist.setWeightAt(idx, importance);
+    }
+}
+
+// Compute instance importance
+__device__ float computeInstImportance(
+    const InstanceData* instBuffer,
+    uint32_t instIndex)
+{
+    const InstanceData& inst = instBuffer[instIndex];
+    
+    // Account for instance scaling
+    Vector3D scale;
+    inst.transform.decompose(&scale, nullptr, nullptr);
+    float uniformScale = (scale.x + scale.y + scale.z) / 3.0f;
+    
+    // Area scales quadratically with uniform scale
+    return uniformScale * uniformScale * inst.lightGeomInstDist.integral();
+}
+
+// Initialize instance distribution
+__global__ void computeInstProbBuffer(
+    LightDistribution* lightInstDist,
+    uint32_t numInsts,
+    const InstanceData* instBuffer)
+{
+    uint32_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+    
+    if (idx == 0) {
+        lightInstDist->setNumValues(numInsts);
+    }
+    
+    if (idx < numInsts) {
+        float importance = computeInstImportance(instBuffer, idx);
+        lightInstDist->setWeightAt(idx, importance);
+    }
+}
+
+// Finalize distribution (build CDF)
+__global__ void finalizeDiscreteDistribution1D(
+    LightDistribution* dist)
+{
+    if (threadIdx.x == 0) {
+        dist->finalize();
+    }
+}
+            </pre>
+            
+            <h4>Checklist:</h4>
+            <ul class="checklist">
+                <li>Create the CUDA file in the correct location</li>
+                <li>Implement computeTriangleImportance with Disney material support</li>
+                <li>Add all kernel functions for probability computation</li>
+                <li>Ensure proper device/host memory handling</li>
+                <li>Add error checking and bounds validation</li>
+            </ul>
+        </div>
+        
+        <!-- STEP 2 -->
+        <div class="step-box priority-high">
+            <h3><span class="step-number">2</span>Update Build System for New CUDA File</h3>
+            
+            <p><strong>Priority:</strong> <span class="status-missing">HIGH - BLOCKING</span></p>
+            <p><strong>Location:</strong> <span class="file-path">buildTools/render_common.lua</span></p>
+            
+            <h4>Implementation Details:</h4>
+            <pre class="code-block">
+-- In render_common.lua, add to CUDA files list:
+files { 
+    frameworkPath .. "/claude_core/excludeFromBuild/engines/ripr/cuda/**.cu",
+    frameworkPath .. "/claude_core/excludeFromBuild/engines/ripr/cuda/**.cuh"
+}
+
+-- Ensure PTX generation includes the new file:
+-- In scripts/desktop_embed_ptx_*.bat, verify compute_light_probs is included
+            </pre>
+            
+            <h4>Checklist:</h4>
+            <ul class="checklist">
+                <li>Update premake5.lua or render_common.lua</li>
+                <li>Regenerate Visual Studio solution</li>
+                <li>Verify CUDA file appears in project</li>
+                <li>Update PTX embedding scripts if needed</li>
+            </ul>
+        </div>
+        
+        <!-- STEP 3 -->
+        <div class="step-box priority-high">
+            <h3><span class="step-number">3</span>Implement computeLightProbabilities in RiPRModelHandler</h3>
+            
+            <p><strong>Priority:</strong> <span class="status-missing">HIGH</span></p>
+            <p><strong>Location:</strong> <span class="file-path">framework/claude_core/excludeFromBuild/engines/ripr/handlers/RiPRModelHandler.cpp:414</span></p>
+            
+            <h4>Implementation Details:</h4>
+            <pre class="code-block">
+void RiPRModelHandler::computeLightProbabilities(RiPRTriangleModel* model, uint32_t geomInstSlot)
+{
+    if (!model || !engine_ || geomInstSlot == SlotFinder::InvalidSlotIndex) {
+        LOG(WARNING) << "Cannot compute light probabilities: invalid parameters";
+        return;
+    }
+    
+    // Get the geometry instance data
+    GeometryInstanceData* geomInstData = nullptr;
+    if (geometryInstanceDataBuffer_) {
+        geomInstData = geometryInstanceDataBuffer_.getDevicePointer();
+    }
+    
+    if (!geomInstData) {
+        LOG(WARNING) << "Geometry instance buffer not available";
+        return;
+    }
+    
+    // Get material buffer
+    cudau::Buffer& materialBuffer = ctx_->getHandlers().disneyMaterialHandler->getMaterialBuffer();
+    DisneyData* materialData = materialBuffer.getDevicePointer<DisneyData>();
+    
+    // Get number of triangles
+    uint32_t numTriangles = model->getNumTriangles();
+    if (numTriangles == 0) {
+        LOG(WARNING) << "No triangles in model";
+        return;
+    }
+    
+    // Get the RiPREngine to access kernel handles
+    RiPREngine* riprEngine = dynamic_cast<RiPREngine*>(engine_);
+    if (!riprEngine) {
+        LOG(WARNING) << "Engine is not RiPREngine";
+        return;
+    }
+    
+    // Launch kernel to compute triangle probabilities
+    CUstream stream = 0; // Use default stream for now
+    
+    // Grid/block configuration
+    uint32_t blockSize = 256;
+    uint32_t gridSize = (numTriangles + blockSize - 1) / blockSize;
+    
+    // Get kernel from engine
+    const ComputeProbTextures& kernels = riprEngine->getLightProbKernels();
+    
+    // Launch the kernel
+    kernels.computeTriangleProbBuffer.launch(
+        gridSize, 1, 1,    // grid dimensions
+        stream,             // CUDA stream
+        &geomInstData[geomInstSlot],  // geometry instance data
+        numTriangles,                  // number of triangles
+        materialData                   // material buffer
+    );
+    
+    // Finalize the distribution (build CDF)
+    kernels.finalizeDiscreteDistribution1D.launch(
+        1, 1, 1,           // single thread
+        stream,
+        &geomInstData[geomInstSlot].emitterPrimDist
+    );
+    
+    // Synchronize to ensure completion
+    CUDADRV_CHECK(cuStreamSynchronize(stream));
+    
+    LOG(INFO) << "Computed light probabilities for " << numTriangles 
+              << " triangles at slot " << geomInstSlot;
+}
+            </pre>
+            
+            <h4>Checklist:</h4>
+            <ul class="checklist">
+                <li>Replace stub implementation with actual kernel launches</li>
+                <li>Get device pointers for buffers</li>
+                <li>Configure grid/block dimensions</li>
+                <li>Launch computeTriangleProbBuffer kernel</li>
+                <li>Launch finalizeDiscreteDistribution1D kernel</li>
+                <li>Add proper error handling</li>
+            </ul>
+        </div>
+        
+        <!-- STEP 4 -->
+        <div class="step-box priority-high">
+            <h3><span class="step-number">4</span>Add Kernel Access Method to RiPREngine</h3>
+            
+            <p><strong>Priority:</strong> <span class="status-missing">HIGH</span></p>
+            <p><strong>Location:</strong> <span class="file-path">framework/claude_core/excludeFromBuild/engines/ripr/RiPREngine.h</span></p>
+            
+            <h4>Implementation Details:</h4>
+            <pre class="code-block">
+// In RiPREngine.h, add public method:
+public:
+    // Get light probability computation kernels for external use
+    const ComputeProbTextures& getLightProbKernels() const { 
+        return computeProbTex_; 
+    }
+
+// Make sure ComputeProbTextures struct includes all needed kernels:
+struct ComputeProbTextures {
+    CUmodule cudaModule = nullptr;
+    cudau::Kernel computeFirstMip;
+    cudau::Kernel computeTriangleProbTexture;
+    cudau::Kernel computeTriangleProbBuffer;      // For discrete distribution
+    cudau::Kernel computeGeomInstProbTexture;
+    cudau::Kernel computeGeomInstProbBuffer;       // For discrete distribution
+    cudau::Kernel computeInstProbTexture;
+    cudau::Kernel computeInstProbBuffer;           // For discrete distribution
+    cudau::Kernel computeMip;
+    cudau::Kernel finalizeDiscreteDistribution1D;  // Build CDF
+    cudau::Kernel test;
+};
+            </pre>
+        </div>
+        
+        <!-- STEP 5 -->
+        <div class="step-box priority-medium">
+            <h3><span class="step-number">5</span>Update Instance Distribution Building</h3>
+            
+            <p><strong>Priority:</strong> <span class="status-partial">MEDIUM</span></p>
+            <p><strong>Location:</strong> <span class="file-path">framework/claude_core/excludeFromBuild/engines/ripr/handlers/RiPRSceneHandler.cpp:1028</span></p>
+            
+            <h4>Implementation Details:</h4>
+            <pre class="code-block">
+void RiPRSceneHandler::buildLightInstanceDistribution()
+{
+    if (!lightDistributionDirty_) return;
+    
+    if (emissiveInstances_.empty()) {
+        // Initialize empty distribution
+        lightInstDistribution_.initialize(
+            ctx->getCudaContext(), 
+            cudau::BufferType::Device, 
+            nullptr, 0);
+        lightDistributionDirty_ = false;
+        return;
+    }
+    
+    // Get engine and kernels
+    RiPREngine* riprEngine = dynamic_cast<RiPREngine*>(ctx->getEngine());
+    if (!riprEngine) {
+        LOG(WARNING) << "Engine is not RiPREngine";
+        return;
+    }
+    
+    const ComputeProbTextures& kernels = riprEngine->getLightProbKernels();
+    CUstream stream = 0;
+    
+    // First, compute geometry instance distributions for all instances
+    for (uint32_t instIdx : emissiveInstances_) {
+        // Get instance data
+        InstanceData* instData = instanceDataBuffer_[0].getDevicePointer();
+        GeometryInstanceData* geomInstData = geometryInstanceDataBuffer_.getDevicePointer();
+        
+        if (!instData || !geomInstData) continue;
+        
+        // Get number of geometry instances for this instance
+        // (This needs to be tracked per instance)
+        uint32_t numGeomInsts = getNumGeomInstsForInstance(instIdx);
+        
+        if (numGeomInsts > 0) {
+            uint32_t blockSize = 256;
+            uint32_t gridSize = (numGeomInsts + blockSize - 1) / blockSize;
+            
+            // Compute geometry instance distribution
+            kernels.computeGeomInstProbBuffer.launch(
+                gridSize, 1, 1,
+                stream,
+                &instData[instIdx],
+                numGeomInsts,
+                geomInstData
+            );
+            
+            // Finalize the distribution
+            kernels.finalizeDiscreteDistribution1D.launch(
+                1, 1, 1,
+                stream,
+                &instData[instIdx].lightGeomInstDist
+            );
+        }
+    }
+    
+    // Now build top-level instance distribution
+    uint32_t numEmissiveInsts = emissiveInstances_.size();
+    uint32_t blockSize = 256;
+    uint32_t gridSize = (numEmissiveInsts + blockSize - 1) / blockSize;
+    
+    // Allocate device buffer for light instance distribution
+    cudau::Buffer lightInstDistDevice;
+    lightInstDistDevice.initialize(
+        ctx->getCudaContext(),
+        cudau::BufferType::Device,
+        1,
+        sizeof(LightDistribution));
+    
+    // Launch kernel to build instance distribution
+    kernels.computeInstProbBuffer.launch(
+        gridSize, 1, 1,
+        stream,
+        lightInstDistDevice.getDevicePointer<LightDistribution>(),
+        numEmissiveInsts,
+        instanceDataBuffer_[0].getDevicePointer()
+    );
+    
+    // Finalize the distribution
+    kernels.finalizeDiscreteDistribution1D.launch(
+        1, 1, 1,
+        stream,
+        lightInstDistDevice.getDevicePointer<LightDistribution>()
+    );
+    
+    // Copy to member variable (if needed)
+    // Note: May need to adjust how lightInstDistribution_ is stored
+    
+    CUDADRV_CHECK(cuStreamSynchronize(stream));
+    
+    lightDistributionDirty_ = false;
+    LOG(INFO) << "Built light instance distribution for " 
+              << numEmissiveInsts << " emissive instances";
+}
+            </pre>
+        </div>
+        
+        <!-- STEP 6 -->
+        <div class="step-box priority-medium">
+            <h3><span class="step-number">6</span>Update Path Tracing Kernels for Light Sampling</h3>
+            
+            <p><strong>Priority:</strong> <span class="status-partial">MEDIUM</span></p>
+            <p><strong>Location:</strong> <span class="file-path">framework/claude_core/excludeFromBuild/engines/ripr/cuda/optix_ripr_kernels.cu</span></p>
+            
+            <h4>Implementation Details:</h4>
+            <pre class="code-block">
+// In __raygen__pathTraceBaseline
+extern "C" __global__ void __raygen__pathTraceBaseline()
+{
+    // ... existing setup code ...
+    
+    // After BSDF setup, add direct lighting with area lights
+    if (plp.s->enableAreaLights && plp.s->numLightInsts > 0) {
+        // Decide between environment and area light sampling
+        float selectProb = rng.getFloat();
+        
+        LightSample lightSample;
+        float lightPDF;
+        
+        if (selectProb < probToSampleEnvLight && plp.f->enableEnvLight) {
+            // Sample environment light (existing code)
+            sampleEnvironmentLight(/* ... */);
+        } else {
+            // Sample area lights using the template function
+            float u_light = rng.getFloat();
+            
+            // Renormalize probability for area lights
+            float u_renorm = (u_light - probToSampleEnvLight) / (1.0f - probToSampleEnvLight);
+            
+            sampleLight<false>(  // false = uniform area sampling
+                hitPoint.position,
+                u_renorm,           // for instance selection
+                false,              // not env light
+                rng.getFloat(),     // u0 for triangle sampling
+                rng.getFloat(),     // u1 for triangle sampling  
+                &lightSample, 
+                &lightPDF
+            );
+            
+            // Check if we got a valid light sample
+            if (lightPDF > 0) {
+                // Compute direct lighting contribution
+                RGB directLight = performDirectLighting<PathTracingRayType, true>(
+                    hitPoint.position, 
+                    wo,                // outgoing direction
+                    shadingFrame,
+                    bsdf, 
+                    lightSample
+                );
+                
+                // Add contribution
+                contribution += throughput * directLight;
+            }
+        }
+    }
+    
+    // ... rest of path tracing ...
+}
+            </pre>
+        </div>
+        
+        <!-- STEP 7 -->
+        <div class="step-box priority-medium">
+            <h3><span class="step-number">7</span>Handle Hit Emission in Closest Hit Program</h3>
+            
+            <p><strong>Priority:</strong> <span class="status-partial">MEDIUM</span></p>
+            <p><strong>Location:</strong> <span class="file-path">framework/claude_core/excludeFromBuild/engines/ripr/cuda/optix_ripr_kernels.cu</span></p>
+            
+            <h4>Implementation Details:</h4>
+            <pre class="code-block">
+// In __closesthit__pathTraceBaseline
+extern "C" __global__ void __closesthit__pathTraceBaseline()
+{
+    // ... existing hit point computation ...
+    
+    auto sbtr = HitGroupSBTRecordData::get();
+    const GeometryInstanceData& geomInst = plp.s->geometryInstanceDataBuffer[sbtr.geomInstSlot];
+    const DisneyData& mat = plp.s->materialDataBuffer[geomInst.materialSlot];
+    
+    // Add emission if this is an emissive surface
+    if (mat.emission && mat.emissionScale > 0.0f) {
+        // Only add emission on first hit or when using MIS
+        bool addEmission = false;
+        float misWeight = 1.0f;
+        
+        if (payload->pathLength == 0) {
+            // Always add emission for directly visible lights
+            addEmission = true;
+        } else if (plp.s->useMIS) {
+            // Compute MIS weight
+            float bsdfPDF = payload->prevDirPDensity;
+            
+            // Compute light sampling PDF for this hit
+            float lightPDF = computeLightSamplingPDF(
+                prevHitPoint,     // previous hit position
+                hitPoint.position,
+                hitPoint.normal,
+                geomInst,
+                instData
+            );
+            
+            // Power heuristic with beta=2
+            misWeight = bsdfPDF * bsdfPDF / (bsdfPDF * bsdfPDF + lightPDF * lightPDF);
+            addEmission = true;
+        }
+        
+        if (addEmission) {
+            // Sample emission texture
+            Point2D texCoord = /* interpolated tex coords */;
+            float4 emissionTex = tex2DLod<float4>(
+                mat.emission, 
+                texCoord.x, 
+                texCoord.y, 
+                0.0f
+            );
+            
+            RGB emission(emissionTex.x, emissionTex.y, emissionTex.z);
+            emission *= mat.emissionScale;
+            
+            // Add weighted emission to path contribution  
+            payload->contribution += payload->throughput * emission * misWeight;
+        }
+    }
+    
+    // ... rest of closest hit ...
+}
+            </pre>
+        </div>
+        
+        <!-- STEP 8 -->
+        <div class="step-box priority-low">
+            <h3><span class="step-number">8</span>Implement Multiple Importance Sampling (MIS)</h3>
+            
+            <p><strong>Priority:</strong> <span class="status-missing">LOW - OPTIMIZATION</span></p>
+            <p><strong>Location:</strong> <span class="file-path">framework/claude_core/excludeFromBuild/engines/ripr/cuda/optix_ripr_kernels.cu</span></p>
+            
+            <h4>Implementation Details:</h4>
+            <pre class="code-block">
+// Add helper function for computing light sampling PDF
+__device__ float computeLightSamplingPDF(
+    const Point3D& shadingPoint,
+    const Point3D& lightPoint,
+    const Normal3D& lightNormal,
+    const GeometryInstanceData& geomInst,
+    const InstanceData& instData)
+{
+    // Compute geometric factors
+    Vector3D wi = lightPoint - shadingPoint;
+    float dist2 = dot(wi, wi);
+    float dist = sqrt(dist2);
+    wi /= dist;
+    
+    float cosThetaLight = abs(dot(-wi, lightNormal));
+    if (cosThetaLight <= 0) return 0.0f;
+    
+    // Get probability of selecting this instance
+    float instProb = instData.isEmissive ? 
+        (1.0f / plp.s->numLightInsts) : 0.0f;  // Simplified
+    
+    // Get probability of selecting this geometry instance
+    float geomInstProb = 1.0f / instData.numGeomInsts;  // Simplified
+    
+    // Get probability of selecting this triangle
+    float primProb = geomInst.emitterPrimDist.evaluatePMF(primIndex);
+    
+    // Convert area PDF to solid angle PDF
+    float areaPDF = instProb * geomInstProb * primProb;
+    float solidAnglePDF = areaPDF * dist2 / cosThetaLight;
+    
+    return solidAnglePDF;
+}
+
+// Power heuristic for MIS
+__device__ float powerHeuristic(float pdf1, float pdf2, float beta = 2.0f)
+{
+    float pdf1Beta = pow(pdf1, beta);
+    float pdf2Beta = pow(pdf2, beta);
+    return pdf1Beta / (pdf1Beta + pdf2Beta);
+}
+            </pre>
+        </div>
+        
+        <!-- STEP 9 -->
+        <div class="step-box priority-medium">
+            <h3><span class="step-number">9</span>Update Launch Parameters</h3>
+            
+            <p><strong>Priority:</strong> <span class="status-partial">MEDIUM</span></p>
+            <p><strong>Location:</strong> <span class="file-path">framework/claude_core/excludeFromBuild/engines/ripr/RiPREngine.cpp:695</span></p>
+            
+            <h4>Implementation Details:</h4>
+            <pre class="code-block">
+void RiPREngine::updateLaunchParameters(const mace::InputEvent& input)
+{
+    // ... existing code ...
+    
+    // Update light distribution in static parameters
+    if (sceneHandler_) {
+        // Make sure light distributions are up to date
+        sceneHandler_->updateEmissiveInstances();
+        
+        if (sceneHandler_->isLightDistributionDirty()) {
+            sceneHandler_->buildLightInstanceDistribution();
+        }
+        
+        // Set light instance distribution
+        static_plp_.lightInstDist = sceneHandler_->getLightInstDistribution();
+        static_plp_.numLightInsts = sceneHandler_->getNumEmissiveInstances();
+        static_plp_.enableAreaLights = static_plp_.numLightInsts > 0 ? 1 : 0;
+    }
+    
+    // Set MIS flag (add to ripr_shared.h if needed)
+    static_plp_.useMIS = 1;  // Enable by default
+    
+    // ... rest of update ...
+}
+            </pre>
+        </div>
+        
+        <!-- STEP 10 -->
+        <div class="step-box priority-low">
+            <h3><span class="step-number">10</span>Add Debug Visualization</h3>
+            
+            <p><strong>Priority:</strong> <span class="status-missing">LOW - DEBUGGING</span></p>
+            <p><strong>Location:</strong> <span class="file-path">framework/claude_core/excludeFromBuild/engines/ripr/RiPREngine.cpp</span></p>
+            
+            <h4>Implementation Details:</h4>
+            <pre class="code-block">
+// Add debug mode to visualize light distributions
+void RiPREngine::debugVisualizeLightDistribution(CUstream stream)
+{
+    if (!debugShowLightDistribution_) return;
+    
+    // Launch a kernel that colors geometry based on importance
+    // Red = high importance, Blue = low importance
+    
+    // This helps verify that light distributions are computed correctly
+}
+            </pre>
+        </div>
+    </div>
+    
+    <div id="testing-plan">
+        <h2>4. Testing & Validation Plan</h2>
+        
+        <h3>4.1 Unit Tests</h3>
+        <ol>
+            <li><strong>Test Light Distribution Building:</strong>
+                <ul>
+                    <li>Create simple scene with known emissive triangles</li>
+                    <li>Verify distribution weights match expected values</li>
+                    <li>Test CDF construction</li>
+                </ul>
+            </li>
+            
+            <li><strong>Test Triangle Importance Computation:</strong>
+                <ul>
+                    <li>Unit triangle with known emission</li>
+                    <li>Verify importance = area * luminance</li>
+                    <li>Test with textured emission</li>
+                </ul>
+            </li>
+            
+            <li><strong>Test Sampling:</strong>
+                <ul>
+                    <li>Sample distribution 10000 times</li>
+                    <li>Verify sample frequencies match probabilities</li>
+                </ul>
+            </li>
+        </ol>
+        
+        <h3>4.2 Integration Tests</h3>
+        <ol>
+            <li><strong>Cornell Box with Area Light:</strong>
+                <ul>
+                    <li>Single rectangular light on ceiling</li>
+                    <li>Compare against reference image</li>
+                    <li>Verify soft shadows</li>
+                </ul>
+            </li>
+            
+            <li><strong>Multiple Area Lights:</strong>
+                <ul>
+                    <li>Scene with 5+ area lights of different sizes</li>
+                    <li>Verify all lights contribute</li>
+                    <li>Check sampling distribution</li>
+                </ul>
+            </li>
+            
+            <li><strong>Textured Emission:</strong>
+                <ul>
+                    <li>Use gradient emission texture</li>
+                    <li>Verify correct sampling based on brightness</li>
+                </ul>
+            </li>
+        </ol>
+        
+        <h3>4.3 Performance Tests</h3>
+        <pre class="code-block">
+// Benchmark configuration
+struct BenchmarkConfig {
+    int numTriangles;      // 100, 1000, 10000, 100000
+    int numLights;         // 1, 10, 100, 1000
+    int numSamples;        // 1, 4, 16, 64
+    bool useMIS;           // true/false
+    bool useSolidAngle;    // true/false
+};
+
+// Measure:
+// - Distribution build time
+// - Per-sample time
+// - Convergence rate
+// - Memory usage
+        </pre>
+    </div>
+    
+    <div id="timeline">
+        <h2>5. Implementation Timeline</h2>
+        
+        <div class="timeline">
+            <div class="timeline-item">
+                <strong>Day 1-2:</strong> Create compute_light_probs.cu and update build system
+            </div>
+            <div class="timeline-item">
+                <strong>Day 3:</strong> Implement kernel launch in RiPRModelHandler
+            </div>
+            <div class="timeline-item">
+                <strong>Day 4:</strong> Update instance distribution building
+            </div>
+            <div class="timeline-item">
+                <strong>Day 5-6:</strong> Integrate light sampling in path tracing kernels
+            </div>
+            <div class="timeline-item">
+                <strong>Day 7:</strong> Add emission handling in hit programs
+            </div>
+            <div class="timeline-item">
+                <strong>Day 8:</strong> Implement MIS (optional)
+            </div>
+            <div class="timeline-item">
+                <strong>Day 9-10:</strong> Testing and debugging
+            </div>
+            <div class="timeline-item">
+                <strong>Day 11:</strong> Performance optimization
+            </div>
+            <div class="timeline-item">
+                <strong>Day 12:</strong> Documentation and cleanup
+            </div>
+        </div>
+        
+        <p><strong>Total Estimated Time:</strong> 12 working days (2-3 weeks with buffer)</p>
+    </div>
+    
+    <div id="risks">
+        <h2>6. Risks & Mitigation</h2>
+        
+        <table class="status-table">
+            <thead>
+                <tr>
+                    <th>Risk</th>
+                    <th>Impact</th>
+                    <th>Probability</th>
+                    <th>Mitigation</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>PTX compilation fails</td>
+                    <td>HIGH</td>
+                    <td>Medium</td>
+                    <td>Test with simple kernel first, check CUDA version compatibility</td>
+                </tr>
+                <tr>
+                    <td>Memory corruption</td>
+                    <td>HIGH</td>
+                    <td>Low</td>
+                    <td>Add bounds checking, use cuda-memcheck tool</td>
+                </tr>
+                <tr>
+                    <td>Performance regression</td>
+                    <td>MEDIUM</td>
+                    <td>Medium</td>
+                    <td>Profile before/after, add feature toggle</td>
+                </tr>
+                <tr>
+                    <td>Incorrect light sampling</td>
+                    <td>HIGH</td>
+                    <td>Medium</td>
+                    <td>Extensive testing, visualization tools</td>
+                </tr>
+                <tr>
+                    <td>Build system issues</td>
+                    <td>LOW</td>
+                    <td>Low</td>
+                    <td>Document changes, test on clean checkout</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="note">
+        <h3>Final Notes</h3>
+        <ul>
+            <li><strong>Priority Order:</strong> Steps 1-4 are blocking and must be done first</li>
+            <li><strong>Testing:</strong> Test after each major step, don't wait until the end</li>
+            <li><strong>Documentation:</strong> Update code comments as you go</li>
+            <li><strong>Version Control:</strong> Commit after each working step</li>
+            <li><strong>Performance:</strong> Profile early and often</li>
+            <li><strong>Debugging:</strong> Add visualization modes to verify distributions</li>
+        </ul>
+    </div>
+    
+    <div class="warning">
+        <h3>Critical Success Factors</h3>
+        <ol>
+            <li><strong>CUDA Kernel Creation:</strong> Without compute_light_probs.cu, nothing else works</li>
+            <li><strong>PTX Generation:</strong> Must successfully compile and embed PTX</li>
+            <li><strong>Distribution Building:</strong> Must correctly populate emitterPrimDist</li>
+            <li><strong>Kernel Integration:</strong> Path tracing kernels must call sampling functions</li>
+            <li><strong>Testing:</strong> Verify with simple scenes before complex ones</li>
+        </ol>
+    </div>
+</body>
+</html>

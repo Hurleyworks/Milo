@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OptiX_Utility Dynamic Scene Management Guide</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            line-height: 1.7;
+            color: #1a1a1a;
+            background: #ffffff;
+            padding: 40px 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            font-size: 36px;
+            font-weight: 700;
+            margin-bottom: 40px;
+            color: #000;
+            letter-spacing: -0.5px;
+        }
+        
+        h2 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-top: 60px;
+            margin-bottom: 24px;
+            color: #000;
+            padding-top: 20px;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        h3 {
+            font-size: 22px;
+            font-weight: 600;
+            margin-top: 36px;
+            margin-bottom: 16px;
+            color: #333;
+        }
+        
+        h4 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-top: 28px;
+            margin-bottom: 12px;
+            color: #444;
+        }
+        
+        p {
+            margin-bottom: 16px;
+            color: #333;
+            font-size: 16px;
+        }
+        
+        /* Simple, readable code blocks */
+        .code-block, pre {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 20px;
+            margin: 24px 0;
+            overflow-x: auto;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #000;
+        }
+        
+        code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
+            color: #d14;
+        }
+        
+        /* Clean alert boxes */
+        .note {
+            background: #f0f7ff;
+            border-left: 4px solid #0066cc;
+            padding: 16px;
+            margin: 24px 0;
+            font-size: 15px;
+        }
+        
+        .warning {
+            background: #fffbf0;
+            border-left: 4px solid #f59e0b;
+            padding: 16px;
+            margin: 24px 0;
+            font-size: 15px;
+        }
+        
+        .critical {
+            background: #fef2f2;
+            border-left: 4px solid #dc2626;
+            padding: 16px;
+            margin: 24px 0;
+            font-size: 15px;
+        }
+        
+        .success {
+            background: #f0fdf4;
+            border-left: 4px solid #16a34a;
+            padding: 16px;
+            margin: 24px 0;
+            font-size: 15px;
+        }
+        
+        /* Simple tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 24px 0;
+            font-size: 15px;
+        }
+        
+        th {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        td {
+            border: 1px solid #ddd;
+            padding: 12px;
+        }
+        
+        tr:hover {
+            background: #f8f8f8;
+        }
+        
+        /* Clean navigation */
+        .toc {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 24px;
+            margin-bottom: 40px;
+        }
+        
+        .toc h2 {
+            font-size: 20px;
+            margin-top: 0;
+            margin-bottom: 16px;
+            border: none;
+            padding-top: 0;
+        }
+        
+        .toc ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .toc ul ul {
+            padding-left: 24px;
+            margin-top: 4px;
+        }
+        
+        .toc li {
+            margin: 8px 0;
+        }
+        
+        .toc a {
+            color: #0066cc;
+            text-decoration: none;
+            font-size: 15px;
+        }
+        
+        .toc a:hover {
+            text-decoration: underline;
+        }
+        
+        /* Lists */
+        ul, ol {
+            margin: 16px 0;
+            padding-left: 32px;
+        }
+        
+        li {
+            margin: 8px 0;
+            font-size: 16px;
+        }
+        
+        /* Utility classes */
+        .mt-40 { margin-top: 40px; }
+        .mb-40 { margin-bottom: 40px; }
+        
+        strong {
+            font-weight: 600;
+            color: #000;
+        }
+        
+        /* Footer */
+        .footer {
+            margin-top: 80px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        /* Workflow boxes */
+        .workflow-step {
+            background: #f0f9ff;
+            border: 2px solid #0ea5e9;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .workflow-step h4 {
+            color: #0284c7;
+            margin-top: 0;
+        }
+        
+        /* API reference boxes */
+        .api-box {
+            background: #f0fdf4;
+            border: 1px solid #16a34a;
+            border-radius: 4px;
+            padding: 16px;
+            margin: 20px 0;
+        }
+        
+        .api-box h5 {
+            color: #16a34a;
+            margin-top: 0;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>OptiX_Utility Dynamic Scene Management Guide</h1>
+        <h2 style="border-top: none;">Based on the OptiX_Utility Wrapper API</h2>
+        
+        <div class="toc">
+            <h2>Table of Contents</h2>
+            <ul>
+                <li><a href="#overview">1. Overview</a></li>
+                <li><a href="#architecture">2. OptiX_Utility Architecture</a>
+                    <ul>
+                        <li><a href="#scene-graph">2.1 Scene Graph Structure</a></li>
+                        <li><a href="#wrapper-classes">2.2 Core Wrapper Classes</a></li>
+                        <li><a href="#memory-model">2.3 Memory Management Model</a></li>
+                    </ul>
+                </li>
+                <li><a href="#geometry-management">3. Geometry Management</a>
+                    <ul>
+                        <li><a href="#creating-geometry">3.1 Creating GeometryInstances</a></li>
+                        <li><a href="#geometry-groups">3.2 GeometryGroups and GAS</a></li>
+                        <li><a href="#pre-transforms">3.3 Pre-transforms</a></li>
+                    </ul>
+                </li>
+                <li><a href="#instance-management">4. Instance Management</a>
+                    <ul>
+                        <li><a href="#creating-instances">4.1 Creating Instances</a></li>
+                        <li><a href="#groups-ias">4.2 Groups and IAS</a></li>
+                        <li><a href="#transform-updates">4.3 Transform Updates</a></li>
+                    </ul>
+                </li>
+                <li><a href="#dynamic-operations">5. Dynamic Scene Operations</a>
+                    <ul>
+                        <li><a href="#adding-geometry">5.1 Adding Geometry at Runtime</a></li>
+                        <li><a href="#removing-geometry">5.2 Removing Geometry</a></li>
+                        <li><a href="#dirty-propagation">5.3 Dirty Flag Propagation</a></li>
+                        <li><a href="#rebuild-strategies">5.4 Rebuild Strategies</a></li>
+                    </ul>
+                </li>
+                <li><a href="#sbt-management">6. SBT Management with OptiX_Utility</a>
+                    <ul>
+                        <li><a href="#sbt-layout">6.1 Automatic SBT Layout</a></li>
+                        <li><a href="#sbt-updates">6.2 SBT Updates</a></li>
+                        <li><a href="#double-buffering">6.3 Double Buffering</a></li>
+                    </ul>
+                </li>
+                <li><a href="#render-loop">7. Interactive Render Loop</a>
+                    <ul>
+                        <li><a href="#frame-flow">7.1 Frame Flow</a></li>
+                        <li><a href="#synchronization">7.2 Synchronization</a></li>
+                    </ul>
+                </li>
+                <li><a href="#best-practices">8. Best Practices</a></li>
+                <li><a href="#complete-example">9. Complete Example</a></li>
+                <li><a href="#api-reference">10. API Quick Reference</a></li>
+            </ul>
+        </div>
+
+        <h2 id="overview">1. Overview</h2>
+        
+        <p>The OptiX_Utility wrapper provides a high-level C++ abstraction over NVIDIA OptiX, significantly simplifying dynamic scene management. Unlike raw OptiX, this wrapper handles memory management, SBT generation, and acceleration structure updates automatically.</p>
+        
+        <div class="note">
+            <strong>Key Benefits of OptiX_Utility:</strong>
+            <ul>
+                <li>Automatic SBT layout generation and management</li>
+                <li>Smart dirty flag propagation through scene hierarchy</li>
+                <li>Simplified AS building with automatic memory management</li>
+                <li>Type-safe buffer management with CUDAU integration</li>
+                <li>Clean object-oriented scene graph API</li>
+            </ul>
+        </div>
+
+        <h2 id="architecture">2. OptiX_Utility Architecture</h2>
+        
+        <h3 id="scene-graph">2.1 Scene Graph Structure</h3>
+        
+        <p>OptiX_Utility uses a two-level hierarchy that maps directly to OptiX's acceleration structure model:</p>
+        
+        <pre>Scene (Root)
+    │
+    └── IAS (Instance Acceleration Structure)
+        │
+        ├── Instance → GAS → GeometryInstance (Triangle Mesh)
+        ├── Instance → GAS → GeometryInstance (Triangle Mesh)
+        └── Instance → IAS → [Sub-scene with more instances]
+        
+Bottom Level: GeometryInstance → GeometryGroup (via GAS)
+Top Level:    Instance → Group (via IAS)</pre>
+
+        <div class="critical">
+            <strong>Important Distinction:</strong>
+            <ul>
+                <li><code>GeometryInstance</code>: Actual geometry data (vertices, triangles)</li>
+                <li><code>GeometryGroup</code>: Container with GAS (GeometryAccelerationStructure)</li>
+                <li><code>Instance</code>: Reference to GAS/IAS with transform</li>
+                <li><code>Group</code>: Container with IAS (InstanceAccelerationStructure)</li>
+            </ul>
+        </div>
+
+        <h3 id="wrapper-classes">2.2 Core Wrapper Classes</h3>
+        
+        <table>
+            <tr>
+                <th>OptiX_Utility Class</th>
+                <th>Purpose</th>
+                <th>Key Methods</th>
+            </tr>
+            <tr>
+                <td><code>optixu::Context</code></td>
+                <td>Main OptiX context wrapper</td>
+                <td>create(), createScene(), createPipeline()</td>
+            </tr>
+            <tr>
+                <td><code>optixu::Scene</code></td>
+                <td>Scene management</td>
+                <td>createGeometryInstance(), createInstance(), generateShaderBindingTableLayout()</td>
+            </tr>
+            <tr>
+                <td><code>optixu::GeometryInstance</code></td>
+                <td>Triangle mesh geometry</td>
+                <td>setVertexBuffer(), setTriangleBuffer(), setMaterial()</td>
+            </tr>
+            <tr>
+                <td><code>optixu::GeometryAccelerationStructure</code></td>
+                <td>Bottom-level AS (GAS)</td>
+                <td>addChild(), removeChildAt(), rebuild(), markDirty()</td>
+            </tr>
+            <tr>
+                <td><code>optixu::Instance</code></td>
+                <td>Instance of geometry/group</td>
+                <td>setChild(), setTransform()</td>
+            </tr>
+            <tr>
+                <td><code>optixu::InstanceAccelerationStructure</code></td>
+                <td>Top-level AS (IAS)</td>
+                <td>addChild(), removeChildAt(), rebuild(), markDirty()</td>
+            </tr>
+        </table>
+
+        <h3 id="memory-model">2.3 Memory Management Model</h3>
+        
+        <p>OptiX_Utility integrates with CUDAU for type-safe buffer management:</p>
+        
+        <pre>// CUDAU buffer types used with OptiX_Utility
+cudau::TypedBuffer&lt;Vertex&gt;     // Vertex data
+cudau::TypedBuffer&lt;Triangle&gt;   // Index data
+cudau::Buffer                   // Generic buffers for AS memory
+
+// OptiX_Utility handles:
+// - Automatic resizing when AS grows
+// - Stream synchronization before reallocation
+// - Scratch buffer reuse across builds
+// - Double buffering for SBT updates</pre>
+
+        <h2 id="geometry-management">3. Geometry Management</h2>
+        
+        <h3 id="creating-geometry">3.1 Creating GeometryInstances</h3>
+        
+        <p>GeometryInstances represent actual mesh data in the scene:</p>
+        
+        <pre>// Step 1: Create vertex and index buffers
+cudau::TypedBuffer&lt;Vertex&gt; vertexBuffer;
+vertexBuffer.initialize(cuContext, cudau::BufferType::Device, numVertices);
+vertexBuffer.upload(vertices, numVertices);
+
+cudau::TypedBuffer&lt;uint32_t&gt; triangleBuffer;
+triangleBuffer.initialize(cuContext, cudau::BufferType::Device, numTriangles * 3);
+triangleBuffer.upload(indices, numTriangles * 3);
+
+// Step 2: Create GeometryInstance
+optixu::GeometryInstance geomInst = scene.createGeometryInstance();
+
+// Step 3: Set buffers
+geomInst.setVertexBuffer(vertexBuffer);
+geomInst.setTriangleBuffer(triangleBuffer);
+
+// Step 4: Configure materials
+geomInst.setNumMaterials(1, optixu::BufferView());  // 1 material slot
+geomInst.setMaterial(0, 0, material);  // Set material at slot 0
+
+// Step 5: Set user data for shader access (SBT data)
+struct GeometryData {
+    CUdeviceptr vertexBuffer;
+    CUdeviceptr triangleBuffer;
+    CUdeviceptr normalBuffer;
+    uint32_t materialID;
+};
+
+GeometryData geomData = {};
+geomData.vertexBuffer = vertexBuffer.getDevicePointer();
+geomData.triangleBuffer = triangleBuffer.getDevicePointer();
+geomData.materialID = materialID;
+geomInst.setUserData(geomData);</pre>
+
+        <h3 id="geometry-groups">3.2 GeometryGroups and GAS</h3>
+        
+        <div class="api-box">
+            <h5>GeometryGroup Pattern</h5>
+            <p>A GeometryGroup contains multiple GeometryInstances in a single GAS. This is efficient for static meshes that are often used together.</p>
+        </div>
+        
+        <pre>// Create GAS (GeometryAccelerationStructure)
+optixu::GeometryAccelerationStructure gas = scene.createGeometryAccelerationStructure();
+
+// Configure GAS
+gas.setConfiguration(
+    optixu::ASTradeoff::PreferFastTrace,      // Prefer trace speed over build time
+    optixu::AllowUpdate::No,                  // Static geometry
+    optixu::AllowCompaction::Yes               // Enable compaction
+);
+
+// Set material configuration
+gas.setNumMaterialSets(1);                    // Number of material sets
+gas.setNumRayTypes(0, NumRayTypes);           // Ray types for material set 0
+
+// Add geometry instances to GAS
+for (auto& geomInst : geometryInstances) {
+    // Optional: pre-transform for this geometry
+    float preTransform[12] = { /* 3x4 matrix */ };
+    
+    // User data for this child
+    GASChildData childData = { geomInst.materialID, geomInst.geometryID };
+    
+    gas.addChild(
+        geomInst.optixGeomInst,
+        preTransform,     // Optional pre-transform (can be nullptr)
+        childData         // User data for this geometry
+    );
+}
+
+// Build the GAS
+OptixAccelBufferSizes bufferSizes;
+gas.prepareForBuild(&bufferSizes);
+
+// Allocate build memory
+cudau::Buffer gasMem, scratchBuffer;
+gasMem.initialize(cuContext, cudau::BufferType::Device, bufferSizes.outputSizeInBytes);
+scratchBuffer.initialize(cuContext, cudau::BufferType::Device, bufferSizes.tempSizeInBytes);
+
+// Build
+gas.rebuild(stream, gasMem, scratchBuffer);
+
+// Get handle for use in instances
+OptixTraversableHandle gasHandle = gas.getHandle();</pre>
+
+        <h3 id="pre-transforms">3.3 Pre-transforms</h3>
+        
+        <p>Pre-transforms are applied to GeometryInstances within a GAS:</p>
+        
+        <pre>// Pre-transforms are stored in a buffer for dynamic updates
+cudau::TypedBuffer&lt;float&gt; preTransformBuffer;
+preTransformBuffer.initialize(cuContext, cudau::BufferType::Device, 12 * numGeometries);
+
+// Set pre-transform for a specific geometry
+void updatePreTransform(int geomIndex, const float* transform3x4) {
+    preTransformBuffer.upload(transform3x4, 12, 12 * geomIndex);
+    
+    // Update GAS child with new transform
+    gas.setChildPreTransform(geomIndex, transform3x4);
+    
+    // Mark GAS for rebuild
+    gas.markDirty();
+}</pre>
+
+        <h2 id="instance-management">4. Instance Management</h2>
+        
+        <h3 id="creating-instances">4.1 Creating Instances</h3>
+        
+        <p>Instances reference GAS or IAS with a transform:</p>
+        
+        <pre>// Create instance
+optixu::Instance instance = scene.createInstance();
+
+// Set the child (can be GAS or IAS)
+instance.setChild(gas);  // or instance.setChild(ias);
+
+// Set transform (3x4 row-major matrix)
+float transform[12] = {
+    1, 0, 0, 10,  // Row 0: X axis + X translation
+    0, 1, 0, 0,   // Row 1: Y axis + Y translation  
+    0, 0, 1, 5    // Row 2: Z axis + Z translation
+};
+instance.setTransform(transform);
+
+// Optional: Set instance ID for shader access
+instance.setID(uniqueInstanceID);
+
+// Optional: Set visibility mask
+instance.setVisibilityMask(0xFF);  // Visible to all ray types</pre>
+
+        <h3 id="groups-ias">4.2 Groups and IAS</h3>
+        
+        <pre>// Create IAS (InstanceAccelerationStructure)
+optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
+
+// Configure IAS
+ias.setConfiguration(
+    optixu::ASTradeoff::PreferFastBuild,  // Prefer build speed (for dynamic scenes)
+    optixu::AllowUpdate::Yes,              // Allow updates without full rebuild
+    optixu::AllowCompaction::No            // Skip compaction for dynamic scenes
+);
+
+// Add instances to IAS
+for (auto& inst : instances) {
+    ias.addChild(inst);
+}
+
+// Build the IAS
+OptixAccelBufferSizes bufferSizes;
+ias.prepareForBuild(&bufferSizes);
+
+// Instance buffer for instance records
+cudau::TypedBuffer&lt;OptixInstance&gt; instanceBuffer;
+size_t numInstances = ias.getNumChildren();
+instanceBuffer.initialize(cuContext, cudau::BufferType::Device, numInstances);
+
+// Build memory
+cudau::Buffer iasMem, scratchBuffer;
+iasMem.initialize(cuContext, cudau::BufferType::Device, bufferSizes.outputSizeInBytes);
+scratchBuffer.initialize(cuContext, cudau::BufferType::Device, bufferSizes.tempSizeInBytes);
+
+// Rebuild IAS with instance buffer
+ias.rebuild(stream, instanceBuffer, iasMem, scratchBuffer);
+
+// Get traversable handle for ray tracing
+OptixTraversableHandle iasHandle = ias.getHandle();</pre>
+
+        <h3 id="transform-updates">4.3 Transform Updates</h3>
+        
+        <div class="success">
+            <strong>Fast Path:</strong> Transform updates only require IAS update, not rebuild!
+        </div>
+        
+        <pre>// Update instance transform
+instance.setTransform(newTransform);
+
+// Mark IAS as dirty (will trigger update, not rebuild)
+ias.markDirty();
+
+// In render loop: check and update
+if (!ias.isReady()) {
+    // This will do an UPDATE operation if AllowUpdate was set
+    ias.update(stream, instanceBuffer, iasMem, scratchBuffer);
+}</pre>
+
+        <h2 id="dynamic-operations">5. Dynamic Scene Operations</h2>
+        
+        <h3 id="adding-geometry">5.1 Adding Geometry at Runtime</h3>
+        
+        <div class="workflow-step">
+            <h4>Workflow for Adding New Geometry</h4>
+            <ol>
+                <li>Create GeometryInstance with buffers</li>
+                <li>Either:
+                    <ul>
+                        <li>Add to existing GAS (if compatible), OR</li>
+                        <li>Create new GAS for this geometry</li>
+                    </ul>
+                </li>
+                <li>Create Instance referencing the GAS</li>
+                <li>Add Instance to IAS</li>
+                <li>Mark IAS as dirty</li>
+                <li>Scene will handle SBT regeneration automatically</li>
+            </ol>
+        </div>
+        
+        <pre>// Function to add mesh to scene dynamically
+void addMeshToScene(const MeshData& meshData) {
+    // 1. Create GeometryInstance
+    optixu::GeometryInstance geomInst = scene.createGeometryInstance();
+    geomInst.setVertexBuffer(meshData.vertexBuffer);
+    geomInst.setTriangleBuffer(meshData.indexBuffer);
+    geomInst.setMaterial(0, 0, meshData.material);
+    geomInst.setUserData(meshData.sbtData);
+    
+    // 2. Add to GAS (existing or new)
+    if (shouldCreateNewGAS(meshData)) {
+        // Create new GAS for this geometry
+        optixu::GeometryAccelerationStructure newGAS = scene.createGeometryAccelerationStructure();
+        newGAS.setConfiguration(optixu::ASTradeoff::PreferFastTrace);
+        newGAS.setNumMaterialSets(1);
+        newGAS.setNumRayTypes(0, NumRayTypes);
+        newGAS.addChild(geomInst);
+        
+        // Build new GAS
+        OptixAccelBufferSizes bufferSizes;
+        newGAS.prepareForBuild(&bufferSizes);
+        allocateAndBuildGAS(newGAS, bufferSizes);
+        
+        // Create instance for new GAS
+        optixu::Instance instance = scene.createInstance();
+        instance.setChild(newGAS);
+        instance.setTransform(meshData.transform);
+        
+        // Add to root IAS
+        rootIAS.addChild(instance);
+    } else {
+        // Add to existing GAS
+        existingGAS.addChild(geomInst, meshData.preTransform, meshData.childData);
+        existingGAS.markDirty();
+    }
+    
+    // 3. Mark IAS dirty
+    rootIAS.markDirty();
+    
+    // 4. Wrapper will automatically detect SBT layout change
+    // No manual SBT management needed!
+}</pre>
+
+        <h3 id="removing-geometry">5.2 Removing Geometry</h3>
+        
+        <pre>// Remove geometry from scene
+void removeGeometryFromScene(size_t geomIndex) {
+    // 1. Find and remove from GAS
+    GeometryGroup* geomGroup = findGeometryGroup(geomIndex);
+    size_t childIndex = geomGroup->findChildIndex(geomIndex);
+    
+    // Remove child from GAS
+    geomGroup->gas.removeChildAt(childIndex);
+    geomGroup->gas.markDirty();
+    
+    // 2. If GAS is now empty, remove its instance
+    if (geomGroup->gas.getNumChildren() == 0) {
+        // Find instance referencing this GAS
+        Instance* inst = findInstanceForGAS(geomGroup->gas);
+        size_t instIndex = rootIAS.findChildIndex(inst);
+        
+        // Remove instance from IAS
+        rootIAS.removeChildAt(instIndex);
+        rootIAS.markDirty();
+        
+        // Clean up empty GAS
+        geomGroup->gas.destroy();
+        delete geomGroup;
+    }
+    
+    // 3. Scene automatically handles SBT update
+}</pre>
+
+        <h3 id="dirty-propagation">5.3 Dirty Flag Propagation</h3>
+        
+        <div class="note">
+            <strong>Automatic Propagation:</strong> OptiX_Utility automatically propagates dirty flags up the scene hierarchy.
+        </div>
+        
+        <pre>// Dirty flag propagation in the wrapper
+class Group {
+    void propagateMarkDirty() const {
+        optixIAS.markDirty();  // Mark self as dirty
+        
+        // Propagate to parent instances
+        for (const auto& parentRef : parentInstances) {
+            if (auto parent = parentRef.lock()) {
+                parent->propagateMarkDirty();
+            }
+        }
+    }
+};
+
+// Usage: Just mark the modified node
+gas.markDirty();  // Automatically propagates up to IAS</pre>
+
+        <h3 id="rebuild-strategies">5.4 Rebuild Strategies</h3>
+        
+        <table>
+            <tr>
+                <th>Operation</th>
+                <th>GAS Action</th>
+                <th>IAS Action</th>
+                <th>SBT Action</th>
+            </tr>
+            <tr>
+                <td>Add GeometryInstance</td>
+                <td>Rebuild</td>
+                <td>Rebuild</td>
+                <td>Auto-regenerate</td>
+            </tr>
+            <tr>
+                <td>Remove GeometryInstance</td>
+                <td>Rebuild</td>
+                <td>Rebuild</td>
+                <td>Auto-regenerate</td>
+            </tr>
+            <tr>
+                <td>Update Transform</td>
+                <td>None</td>
+                <td>Update</td>
+                <td>None</td>
+            </tr>
+            <tr>
+                <td>Update Pre-transform</td>
+                <td>Rebuild</td>
+                <td>None</td>
+                <td>None</td>
+            </tr>
+            <tr>
+                <td>Change Material</td>
+                <td>None</td>
+                <td>None</td>
+                <td>Auto-regenerate</td>
+            </tr>
+        </table>
+
+        <h2 id="sbt-management">6. SBT Management with OptiX_Utility</h2>
+        
+        <h3 id="sbt-layout">6.1 Automatic SBT Layout</h3>
+        
+        <div class="success">
+            <strong>Key Feature:</strong> OptiX_Utility automatically generates and manages the SBT layout!
+        </div>
+        
+        <pre>// Check if SBT needs regeneration
+if (!scene.shaderBindingTableLayoutIsReady()) {
+    // Get required SBT size
+    size_t hitGroupSbtSize;
+    scene.generateShaderBindingTableLayout(&hitGroupSbtSize);
+    
+    // Allocate SBT buffer
+    hitGroupSBT.resize(hitGroupSbtSize, 1, stream);
+    
+    // Set SBT in pipeline
+    void* sbtPtr = hitGroupSBT.map();
+    pipeline.setHitGroupShaderBindingTable(hitGroupSBT, sbtPtr);
+    hitGroupSBT.unmap();
+}
+
+// The wrapper handles:
+// - Calculating SBT offsets for each geometry
+// - Packing hit group records
+// - Maintaining proper alignment
+// - Updating when scene changes</pre>
+
+        <h3 id="sbt-updates">6.2 SBT Updates</h3>
+        
+        <pre>// SBT is automatically marked for update when:
+// 1. Geometry is added/removed
+// 2. Materials are changed
+// 3. Ray type configuration changes
+
+// In render loop:
+void render() {
+    // Check and regenerate SBT if needed
+    if (!scene.shaderBindingTableLayoutIsReady()) {
+        regenerateSBT();
+    }
+    
+    // SBT is now valid for current scene state
+    launchRayTracing();
+}</pre>
+
+        <h3 id="double-buffering">6.3 Double Buffering</h3>
+        
+        <pre>// Double buffering for SBT updates without stalling
+class SBTManager {
+    cudau::Buffer hitGroupSBT[2];
+    int currentSBTIndex = 0;
+    
+    void updateSBT() {
+        if (!scene.shaderBindingTableLayoutIsReady()) {
+            // Switch to other buffer
+            currentSBTIndex = (currentSBTIndex + 1) % 2;
+            
+            size_t sbtSize;
+            scene.generateShaderBindingTableLayout(&sbtSize);
+            
+            // Update inactive buffer
+            hitGroupSBT[currentSBTIndex].resize(sbtSize, 1, stream);
+            
+            // Set new SBT
+            void* mapped = hitGroupSBT[currentSBTIndex].map();
+            pipeline.setHitGroupShaderBindingTable(
+                hitGroupSBT[currentSBTIndex], 
+                mapped
+            );
+            hitGroupSBT[currentSBTIndex].unmap();
+        }
+    }
+};</pre>
+
+        <h2 id="render-loop">7. Interactive Render Loop</h2>
+        
+        <h3 id="frame-flow">7.1 Frame Flow</h3>
+        
+        <pre>void renderFrame() {
+    // 1. Process user input and scene modifications
+    if (userAddedMesh) {
+        addMeshToScene(newMesh);
+    }
+    if (userRemovedMesh) {
+        removeGeometryFromScene(meshIndex);
+    }
+    if (userMovedObject) {
+        updateInstanceTransform(instanceID, newTransform);
+    }
+    
+    // 2. Update dirty acceleration structures
+    updateAccelerationStructures();
+    
+    // 3. Check and update SBT if needed
+    if (!scene.shaderBindingTableLayoutIsReady()) {
+        regenerateSBT();
+    }
+    
+    // 4. Set launch parameters
+    LaunchParameters params;
+    params.travHandle = rootIAS.getHandle();
+    params.frameIndex = frameCount++;
+    paramsBuffer.upload(&params, 1);
+    
+    // 5. Launch ray tracing
+    pipeline.launch(
+        stream,
+        paramsBuffer.getDevicePointer(),
+        renderWidth, renderHeight, 1
+    );
+    
+    // 6. Display result
+    displayFrame();
+}</pre>
+
+        <h3 id="synchronization">7.2 Synchronization</h3>
+        
+        <pre>void updateAccelerationStructures() {
+    // Collect all dirty AS
+    std::vector&lt;AS*&gt; dirtyAS = collectDirtyAS();
+    
+    // Check if we need to resize buffers
+    bool needsSync = false;
+    for (auto* as : dirtyAS) {
+        OptixAccelBufferSizes sizes;
+        as->prepareForBuild(&sizes);
+        
+        if (sizes.outputSizeInBytes > as->currentBufferSize) {
+            needsSync = true;
+            break;
+        }
+    }
+    
+    // Synchronize if buffer resize needed
+    if (needsSync) {
+        CUDADRV_CHECK(cuStreamSynchronize(stream));
+    }
+    
+    // Update all dirty AS
+    for (auto* as : dirtyAS) {
+        if (as->allowsUpdate && !as->structureChanged) {
+            // Fast update path
+            as->update(stream, as->instanceBuffer, as->outputBuffer, scratchBuffer);
+        } else {
+            // Full rebuild
+            as->rebuild(stream, as->instanceBuffer, as->outputBuffer, scratchBuffer);
+        }
+    }
+}</pre>
+
+        <h2 id="best-practices">8. Best Practices</h2>
+        
+        <div class="success">
+            <strong>Performance Best Practices:</strong>
+            <ul>
+                <li><strong>Group small meshes:</strong> Combine small static meshes in a single GAS</li>
+                <li><strong>Enable updates for dynamic IAS:</strong> Set AllowUpdate::Yes for frequently changing IAS</li>
+                <li><strong>Use pre-transforms wisely:</strong> Pre-transforms in GAS for static variations</li>
+                <li><strong>Batch modifications:</strong> Make multiple changes before rebuilding</li>
+                <li><strong>Reuse scratch buffers:</strong> Share scratch buffer across AS builds</li>
+                <li><strong>Double buffer SBT:</strong> Avoid stalls during SBT updates</li>
+            </ul>
+        </div>
+        
+        <div class="warning">
+            <strong>Common Pitfalls:</strong>
+            <ul>
+                <li><strong>Forgetting markDirty():</strong> Changes won't propagate without marking dirty</li>
+                <li><strong>Not checking isReady():</strong> May use stale AS data</li>
+                <li><strong>Ignoring shaderBindingTableLayoutIsReady():</strong> SBT may be out of sync</li>
+                <li><strong>Buffer lifetime:</strong> Keep buffers alive while AS references them</li>
+                <li><strong>Transform format:</strong> OptiX uses row-major 3x4 matrices</li>
+            </ul>
+        </div>
+
+        <h2 id="complete-example">9. Complete Example</h2>
+        
+        <pre>// Complete interactive application using OptiX_Utility
+class InteractiveRenderer {
+private:
+    // OptiX core
+    CUcontext cuContext;
+    optixu::Context optixContext;
+    optixu::Scene scene;
+    optixu::Pipeline pipeline;
+    
+    // Acceleration structures
+    optixu::InstanceAccelerationStructure rootIAS;
+    std::vector&lt;std::unique_ptr&lt;GeometryGroup&gt;&gt; geometryGroups;
+    std::vector&lt;std::unique_ptr&lt;Instance&gt;&gt; instances;
+    
+    // Memory
+    cudau::Buffer scratchBuffer;
+    cudau::Buffer hitGroupSBT[2];
+    int sbtIndex = 0;
+    
+    // Scene data
+    struct GeometryGroup {
+        optixu::GeometryAccelerationStructure gas;
+        cudau::Buffer gasMemory;
+        std::vector&lt;optixu::GeometryInstance&gt; geometries;
+    };
+    
+    struct Instance {
+        optixu::Instance optixInst;
+        uint32_t geometryGroupId;
+        float transform[12];
+    };
+
+public:
+    void initialize() {
+        // Initialize CUDA
+        CUDADRV_CHECK(cuInit(0));
+        CUDADRV_CHECK(cuCtxCreate(&cuContext, 0, 0));
+        
+        // Create OptiX context and scene
+        optixContext = optixu::Context::create(cuContext);
+        scene = optixContext.createScene();
+        
+        // Create pipeline
+        pipeline = optixContext.createPipeline();
+        setupPipeline();
+        
+        // Create root IAS
+        rootIAS = scene.createInstanceAccelerationStructure();
+        rootIAS.setConfiguration(
+            optixu::ASTradeoff::PreferFastBuild,
+            optixu::AllowUpdate::Yes,
+            optixu::AllowCompaction::No
+        );
+        
+        // Allocate scratch buffer (shared for all AS builds)
+        scratchBuffer.initialize(cuContext, cudau::BufferType::Device, 
+                               64 * 1024 * 1024); // 64MB scratch
+    }
+    
+    uint32_t addMesh(
+        const std::vector&lt;Vertex&gt;& vertices,
+        const std::vector&lt;uint32_t&gt;& indices,
+        const float* transform,
+        uint32_t materialId
+    ) {
+        // Create buffers
+        auto vertexBuffer = std::make_unique&lt;cudau::TypedBuffer&lt;Vertex&gt;&gt;();
+        vertexBuffer->initialize(cuContext, cudau::BufferType::Device, vertices.size());
+        vertexBuffer->upload(vertices.data(), vertices.size());
+        
+        auto indexBuffer = std::make_unique&lt;cudau::TypedBuffer&lt;uint32_t&gt;&gt;();
+        indexBuffer->initialize(cuContext, cudau::BufferType::Device, indices.size());
+        indexBuffer->upload(indices.data(), indices.size());
+        
+        // Create GeometryInstance
+        optixu::GeometryInstance geomInst = scene.createGeometryInstance();
+        geomInst.setVertexBuffer(*vertexBuffer);
+        geomInst.setTriangleBuffer(*indexBuffer);
+        geomInst.setNumMaterials(1, optixu::BufferView());
+        geomInst.setMaterial(0, 0, materials[materialId]);
+        
+        // Set SBT data
+        GeometryData sbtData = {};
+        sbtData.vertexBuffer = vertexBuffer->getDevicePointer();
+        sbtData.triangleBuffer = indexBuffer->getDevicePointer();
+        sbtData.materialId = materialId;
+        geomInst.setUserData(sbtData);
+        
+        // Create or reuse GeometryGroup
+        GeometryGroup* targetGroup = nullptr;
+        
+        if (vertices.size() > 10000) {
+            // Large mesh gets its own GAS
+            auto newGroup = std::make_unique&lt;GeometryGroup&gt;();
+            newGroup->gas = scene.createGeometryAccelerationStructure();
+            newGroup->gas.setConfiguration(optixu::ASTradeoff::PreferFastTrace);
+            newGroup->gas.setNumMaterialSets(1);
+            newGroup->gas.setNumRayTypes(0, NumRayTypes);
+            
+            targetGroup = newGroup.get();
+            geometryGroups.push_back(std::move(newGroup));
+        } else {
+            // Small mesh goes to shared GAS
+            targetGroup = getOrCreateSharedGroup();
+        }
+        
+        // Add to GAS
+        targetGroup->geometries.push_back(geomInst);
+        targetGroup->gas.addChild(geomInst);
+        targetGroup->gas.markDirty();
+        
+        // Create instance
+        auto inst = std::make_unique&lt;Instance&gt;();
+        inst->optixInst = scene.createInstance();
+        inst->optixInst.setChild(targetGroup->gas);
+        inst->optixInst.setTransform(transform);
+        inst->geometryGroupId = getGroupId(targetGroup);
+        memcpy(inst->transform, transform, sizeof(float) * 12);
+        
+        // Add to IAS
+        rootIAS.addChild(inst->optixInst);
+        rootIAS.markDirty();
+        
+        uint32_t instanceId = instances.size();
+        instances.push_back(std::move(inst));
+        
+        return instanceId;
+    }
+    
+    void updateTransform(uint32_t instanceId, const float* newTransform) {
+        if (instanceId >= instances.size()) return;
+        
+        Instance* inst = instances[instanceId].get();
+        memcpy(inst->transform, newTransform, sizeof(float) * 12);
+        inst->optixInst.setTransform(newTransform);
+        
+        // Only mark IAS for update (not rebuild)
+        rootIAS.markDirty();
+    }
+    
+    void render() {
+        // Update acceleration structures
+        updateDirtyAS();
+        
+        // Update SBT if needed
+        if (!scene.shaderBindingTableLayoutIsReady()) {
+            updateSBT();
+        }
+        
+        // Set launch parameters
+        LaunchParams params = {};
+        params.travHandle = rootIAS.getHandle();
+        params.time = getCurrentTime();
+        paramsBuffer.upload(&params, 1);
+        
+        // Launch
+        pipeline.launch(stream, paramsBuffer.getDevicePointer(),
+                       renderWidth, renderHeight, 1);
+    }
+    
+private:
+    void updateDirtyAS() {
+        // Update all dirty GAS
+        for (auto& group : geometryGroups) {
+            if (!group->gas.isReady()) {
+                OptixAccelBufferSizes sizes;
+                group->gas.prepareForBuild(&sizes);
+                
+                // Resize if needed
+                if (sizes.outputSizeInBytes > group->gasMemory.sizeInBytes()) {
+                    cuStreamSynchronize(stream);
+                    group->gasMemory.resize(sizes.outputSizeInBytes, 1, stream);
+                }
+                
+                // Rebuild
+                group->gas.rebuild(stream, group->gasMemory, scratchBuffer);
+            }
+        }
+        
+        // Update root IAS
+        if (!rootIAS.isReady()) {
+            OptixAccelBufferSizes sizes;
+            rootIAS.prepareForBuild(&sizes);
+            
+            // Prepare instance buffer
+            size_t numInstances = rootIAS.getNumChildren();
+            instanceBuffer.resize(numInstances, 1, stream);
+            
+            // Rebuild or update
+            if (rootIAS.allowsUpdate() && !rootIAS.structureChanged()) {
+                rootIAS.update(stream, instanceBuffer, iasMemory, scratchBuffer);
+            } else {
+                if (sizes.outputSizeInBytes > iasMemory.sizeInBytes()) {
+                    cuStreamSynchronize(stream);
+                    iasMemory.resize(sizes.outputSizeInBytes, 1, stream);
+                }
+                rootIAS.rebuild(stream, instanceBuffer, iasMemory, scratchBuffer);
+            }
+        }
+    }
+    
+    void updateSBT() {
+        // Switch buffer for double buffering
+        sbtIndex = (sbtIndex + 1) % 2;
+        
+        // Generate new layout
+        size_t sbtSize;
+        scene.generateShaderBindingTableLayout(&sbtSize);
+        
+        // Resize buffer
+        hitGroupSBT[sbtIndex].resize(sbtSize, 1, stream);
+        
+        // Update pipeline
+        void* mapped = hitGroupSBT[sbtIndex].map();
+        pipeline.setHitGroupShaderBindingTable(hitGroupSBT[sbtIndex], mapped);
+        hitGroupSBT[sbtIndex].unmap();
+    }
+};</pre>
+
+        <h2 id="api-reference">10. API Quick Reference</h2>
+        
+        <div class="api-box">
+            <h5>Scene Creation</h5>
+            <pre>optixu::Context context = optixu::Context::create(cuContext);
+optixu::Scene scene = context.createScene();
+optixu::GeometryInstance geomInst = scene.createGeometryInstance();
+optixu::GeometryAccelerationStructure gas = scene.createGeometryAccelerationStructure();
+optixu::Instance inst = scene.createInstance();
+optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();</pre>
+        </div>
+        
+        <div class="api-box">
+            <h5>Geometry Setup</h5>
+            <pre>geomInst.setVertexBuffer(buffer);
+geomInst.setTriangleBuffer(buffer);
+geomInst.setNumMaterials(count, offsetsBuffer);
+geomInst.setMaterial(matSetIdx, matIdx, material);
+geomInst.setUserData(data);</pre>
+        </div>
+        
+        <div class="api-box">
+            <h5>Acceleration Structure Operations</h5>
+            <pre>as.setConfiguration(tradeoff, allowUpdate, allowCompaction);
+as.addChild(child [, preTransform] [, userData]);
+as.removeChildAt(index);
+as.setChildUserData(index, data);
+as.markDirty();
+as.isReady();
+as.prepareForBuild(&bufferSizes);
+as.rebuild(stream, outputBuffer, scratchBuffer);
+as.update(stream, outputBuffer, scratchBuffer);
+as.getHandle();</pre>
+        </div>
+        
+        <div class="api-box">
+            <h5>Instance Operations</h5>
+            <pre>instance.setChild(gas_or_ias);
+instance.setTransform(matrix3x4);
+instance.setID(id);
+instance.setVisibilityMask(mask);
+instance.setFlags(flags);</pre>
+        </div>
+        
+        <div class="api-box">
+            <h5>SBT Management</h5>
+            <pre>scene.shaderBindingTableLayoutIsReady();
+scene.generateShaderBindingTableLayout(&sbtSize);
+pipeline.setHitGroupShaderBindingTable(buffer, mappedPtr);</pre>
+        </div>
+        
+        <div class="api-box">
+            <h5>Scene Map/Unmap Pattern</h5>
+            <pre>// Map scene for GPU memory updates
+scene.map();
+// ... create/modify geometry ...
+scene.unmap();  // Ensure synchronization</pre>
+        </div>
+        
+        <div class="api-box">
+            <h5>Denoiser Integration</h5>
+            <pre>optixu::Denoiser denoiser = optixContext.createDenoiser(
+    OPTIX_DENOISER_MODEL_KIND_TEMPORAL);
+denoiser.setup(width, height, tileWidth, tileHeight, false);
+
+optixu::DenoiserInputBuffers inputBuffers = {};
+inputBuffers.noisyBeauty = beautyBuffer;
+inputBuffers.albedo = albedoBuffer;
+inputBuffers.normal = normalBuffer;
+denoiser.invoke(stream, task, inputBuffers, 
+    optixu::IsFirstFrame(newSequence), 
+    hdrNormalizer, blendFactor, outputBuffer);</pre>
+        </div>
+
+        <h2 id="advanced-patterns">11. Advanced Patterns from Production Code</h2>
+        
+        <p>Based on production samples, here are additional advanced patterns for OptiX_Utility:</p>
+        
+        <h3>11.1 Manager-Based Architecture</h3>
+        
+        <p>For complex applications, organize functionality into specialized managers:</p>
+        
+        <pre>class RenderingApplication {
+    // Core infrastructure
+    GPUContext gpuContext;
+    
+    // Specialized managers
+    PipelineManager pipelineManager;
+    ScreenBufferManager screenBufferManager;
+    DenoiserManager denoiserManager;
+    EnvironmentLightingManager environmentManager;
+    MaterialManager materialManager;
+    
+    void initialize() {
+        gpuContext.initialize();
+        pipelineManager.initialize(gpuContext);
+        screenBufferManager.initialize(gpuContext, width, height);
+        // ... initialize other managers
+    }
+};</pre>
+
+        <h3>11.2 Static vs Per-Frame Parameters</h3>
+        
+        <p>Optimize parameter updates by separating static and per-frame data:</p>
+        
+        <pre>// Static parameters (rarely change)
+struct StaticPipelineLaunchParameters {
+    int2 imageSize;
+    ROBuffer&lt;MaterialData&gt; materialDataBuffer;
+    ROBuffer&lt;GeometryData&gt; geometryDataBuffer;
+    CUtexObject environmentTexture;
+    // Set once or infrequently
+};
+
+// Per-frame parameters (change every frame)
+struct PerFramePipelineLaunchParameters {
+    OptixTraversableHandle travHandle;
+    uint32_t frameIndex;
+    Camera camera;
+    Camera prevCamera;  // For temporal effects
+    // Update every frame
+};
+
+// Usage pattern
+void updateParameters(bool sceneChanged) {
+    if (sceneChanged) {
+        updateStaticParameters();
+    }
+    updatePerFrameParameters();
+}</pre>
+
+        <h3>11.3 Double Buffering for Dynamic Data</h3>
+        
+        <pre>// Double buffer instance data for animation
+class Scene {
+    cudau::TypedBuffer&lt;InstanceData&gt; instanceBuffers[2];
+    int currentBuffer = 0;
+    
+    void updateInstances(float deltaTime) {
+        // Swap buffers
+        currentBuffer = (currentBuffer + 1) % 2;
+        
+        // Update on CPU side
+        InstanceData* data = instanceBuffers[currentBuffer].map();
+        for (auto& controller : instanceControllers) {
+            controller->update(data, deltaTime);
+        }
+        instanceBuffers[currentBuffer].unmap();
+        
+        // Mark IAS for update
+        rootIAS.markDirty();
+    }
+};</pre>
+
+        <h3>11.4 Multi-Pass Rendering with G-Buffer</h3>
+        
+        <pre>// G-buffer generation for deferred shading
+enum class GBufferRayType {
+    Primary,
+    NumTypes
+};
+
+struct GBuffer0Elements {
+    uint32_t instanceId;
+    uint32_t primitiveId;
+    float2 barycentrics;
+};
+
+struct GBuffer1Elements {
+    float2 motionVector;
+    float3 normal;
+    float3 albedo;
+};
+
+// Generate G-buffer in first pass
+void generateGBuffer() {
+    pipeline.launch(stream, paramsBuffer, width, height, 1,
+                   OPTIX_SHADER_BINDING_TABLE_RECORD_TRAVERSAL_OBJECT_BEGIN);
+}
+
+// Use G-buffer for shading in second pass
+void shadingPass() {
+    // Read from G-buffer, perform shading
+}</pre>
+
+        <h3>11.5 Stream Chain Management</h3>
+        
+        <pre>// Manage multiple CUDA streams for overlap
+template&lt;int NumStreams&gt;
+class StreamChain {
+    CUstream streams[NumStreams];
+    CUevent events[NumStreams];
+    int currentIndex = 0;
+    
+    CUstream getCurrentStream() {
+        // Wait for stream to be available
+        cuEventSynchronize(events[currentIndex]);
+        return streams[currentIndex];
+    }
+    
+    void swap() {
+        // Record event and move to next stream
+        cuEventRecord(events[currentIndex], streams[currentIndex]);
+        currentIndex = (currentIndex + 1) % NumStreams;
+    }
+};</pre>
+
+        <h3>11.6 Environment Lighting with Importance Sampling</h3>
+        
+        <pre>// Load and prepare environment map
+class EnvironmentLightingManager {
+    cudau::Array2D&lt;float4&gt; environmentTexture;
+    RegularConstantContinuousDistribution2D importanceMap;
+    
+    bool loadEnvironmentTexture(const std::string& path) {
+        // Load HDR image
+        int width, height;
+        float* data = loadHDR(path, &width, &height);
+        
+        // Upload to GPU
+        environmentTexture.initialize(cuContext, cudau::ArrayElementType::Float32, 
+                                     4, width, height);
+        environmentTexture.upload(data);
+        
+        // Build importance map for sampling
+        importanceMap.initialize(cuContext, data, width, height);
+        
+        return true;
+    }
+};</pre>
+
+        <h3>11.7 Scene Loading from JSON</h3>
+        
+        <pre>// Load scene configuration from JSON
+void loadSceneFromJSON(const std::string& jsonPath) {
+    nlohmann::json config = loadJSON(jsonPath);
+    
+    // Load geometry
+    for (auto& mesh : config["meshes"]) {
+        createTriangleMeshes(
+            mesh["name"],
+            mesh["path"],
+            parseTransform(mesh["transform"]),
+            cuContext, &scene, material
+        );
+    }
+    
+    // Load lights
+    for (auto& light : config["lights"]) {
+        if (light["type"] == "area") {
+            createRectangleLight(
+                light["name"],
+                light["width"], light["height"],
+                parseRGB(light["color"]),
+                parseRGB(light["intensity"]),
+                parseTransform(light["transform"]),
+                cuContext, &scene, material
+            );
+        }
+    }
+}</pre>
+
+        <div class="footer">
+            <p>OptiX_Utility Dynamic Scene Management Guide</p>
+            <p>Based on OptiX_Utility Wrapper API and Production Samples</p>
+        </div>
+    </div>
+</body>
+</html>
