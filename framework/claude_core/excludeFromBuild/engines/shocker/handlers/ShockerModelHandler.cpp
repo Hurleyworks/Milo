@@ -208,7 +208,7 @@ void ShockerModelHandler::addCgModel(RenderableWeakRef weakNode)
             {
                 for (int i = 0; i < materialCount; ++i)
                 {
-                    optixu::Material mat = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
+                    auto [mat, slot] = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
                         model->S[i].cgMaterial, contentFolder, model);
                     triangleModel->getGeometryInstance()->setMaterial(0, i, mat);
                     
@@ -221,7 +221,7 @@ void ShockerModelHandler::addCgModel(RenderableWeakRef weakNode)
             }
             else
             {
-                optixu::Material mat = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
+                auto [mat, slot] = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
                     model->S[0].cgMaterial, contentFolder, model);
                 triangleModel->getGeometryInstance()->setMaterial(0, 0, mat);
                 
@@ -354,14 +354,14 @@ void ShockerModelHandler::addCgModelList(const WeakRenderableList& weakNodeList)
                 {
                     for (int i = 0; i < materialCount; ++i)
                     {
-                        optixu::Material mat = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
+                        auto [mat, slot] = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
                             model->S[i].cgMaterial, contentFolder, model);
                         triangleModel->getGeometryInstance()->setMaterial(0, i, mat);
                     }
                 }
                 else
                 {
-                    optixu::Material mat = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
+                    auto [mat, slot] = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
                         model->S[0].cgMaterial, contentFolder, model);
                     triangleModel->getGeometryInstance()->setMaterial(0, 0, mat);
                 }

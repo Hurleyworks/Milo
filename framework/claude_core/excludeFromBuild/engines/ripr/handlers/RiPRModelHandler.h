@@ -160,7 +160,7 @@ public:
     }
     
     // Compute light probabilities for emissive geometry
-    void computeLightProbabilities(RiPRTriangleModel* model, uint32_t geomInstSlot);
+    void computeLightProbabilities(RiPRTriangleModel* model, uint32_t geomInstSlot, uint32_t materialSlot);
 
 private:
     RenderContextPtr ctx_ = nullptr;  // Render context for OptiX operations

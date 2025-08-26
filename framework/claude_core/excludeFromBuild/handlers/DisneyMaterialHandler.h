@@ -36,7 +36,8 @@ class DisneyMaterialHandler
 
     // Creates a Disney BRDF material with physically-based rendering properties
     // Implements the Disney Principled BRDF model with comprehensive parameter set
-    optixu::Material createDisneyMaterial (
+    // Returns a tuple of (Material, materialSlot) via std::tie
+    std::tuple<optixu::Material, uint32_t> createDisneyMaterial (
         const CgMaterial& material,              // Source material data
         const std::filesystem::path& materialFolder, // Folder containing texture files
         CgModelPtr model);                       // Model this material is associated with

@@ -195,6 +195,10 @@ void RiPRModelHandler::addCgModel(RenderableWeakRef weakNode)
         }
         riprModel->createGeometry(ctx_, node, scene);
 
+        // Track material slots and emissive flags outside the triangle model block
+        std::vector<uint32_t> materialSlots;
+        std::vector<bool> isEmissive;
+        
         // Now create materials for each surface
         RiPRTriangleModel* triangleModel = dynamic_cast<RiPRTriangleModel*>(riprModel.get());
         if (triangleModel)
@@ -203,55 +207,61 @@ void RiPRModelHandler::addCgModel(RenderableWeakRef weakNode)
             fs::path contentFolder = ctx_->getPropertyService().renderProps->getVal<std::string>(RenderKey::ContentFolder);
             
             uint32_t materialCount = model->S.size();
-            bool hasEmissive = false;
+            
             if (materialCount > 1)
             {
                 for (int i = 0; i < materialCount; ++i)
                 {
-                    optixu::Material mat = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
+                    auto [mat, slot] = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
                         model->S[i].cgMaterial, contentFolder, model);
                     triangleModel->getGeometryInstance()->setMaterial(0, i, mat);
                     
-                    // Check if material is emissive
-                    if (model->S[i].cgMaterial.emission.luminous > 0.0f)
-                    {
-                        hasEmissive = true;
-                    }
+                    materialSlots.push_back(slot);
+                    isEmissive.push_back(model->S[i].cgMaterial.emission.luminous > 0.0f);
                 }
             }
             else
             {
-                optixu::Material mat = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
+                auto [mat, slot] = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
                     model->S[0].cgMaterial, contentFolder, model);
                 triangleModel->getGeometryInstance()->setMaterial(0, 0, mat);
                 
-                // Check if material is emissive
-                if (model->S[0].cgMaterial.emission.luminous > 0.0f)
-                {
-                    hasEmissive = true;
-                }
+                materialSlots.push_back(slot);
+                isEmissive.push_back(model->S[0].cgMaterial.emission.luminous > 0.0f);
             }
+            
+            // Check if any surface is emissive
+            bool hasEmissive = std::any_of(isEmissive.begin(), isEmissive.end(), [](bool e) { return e; });
             
             // Mark the model as having emissive materials
             triangleModel->setHasEmissiveMaterials(hasEmissive);
-            
-            // If model has emissive materials, compute light probabilities
-            if (hasEmissive)
-            {
-                computeLightProbabilities(triangleModel, geomInstSlot);
-            }
         }
 
         // Create a Geometry Acceleration Structure (GAS) for ray tracing
         riprModel->createGAS (ctx_, scene, ripr_shared::maxNumRayTypes, scratchMem);
         
-        // Populate geometry instance data in the global buffer
+        // Populate geometry instance data in the global buffer - MUST be done before computing light probabilities
         if (geomInstSlot != SlotFinder::InvalidSlotIndex)
         {
             shared::GeometryInstanceData* geomInstDataOnHost = geometryInstanceDataBuffer_.map();
             riprModel->populateGeometryInstanceData(&geomInstDataOnHost[geomInstSlot]);
             geometryInstanceDataBuffer_.unmap();
             LOG(DBUG) << "Populated geometry instance data for slot " << geomInstSlot;
+            
+            // If model has emissive materials, compute light probabilities AFTER geometry data is populated
+            if (triangleModel && triangleModel->hasEmissiveMaterials())
+            {
+                // Pass the material slots and emissive flags to properly compute light probabilities
+                // For now, just use the first emissive material found
+                for (size_t i = 0; i < materialSlots.size(); ++i)
+                {
+                    if (isEmissive[i])
+                    {
+                        computeLightProbabilities(triangleModel, geomInstSlot, materialSlots[i]);
+                        break;  // TODO: Handle multiple emissive materials properly
+                    }
+                }
+            }
         }
 
         // Create a regular instance in the scene
@@ -354,14 +364,14 @@ void RiPRModelHandler::addCgModelList(const WeakRenderableList& weakNodeList)
                 {
                     for (int i = 0; i < materialCount; ++i)
                     {
-                        optixu::Material mat = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
+                        auto [mat, slot] = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
                             model->S[i].cgMaterial, contentFolder, model);
                         triangleModel->getGeometryInstance()->setMaterial(0, i, mat);
                     }
                 }
                 else
                 {
-                    optixu::Material mat = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
+                    auto [mat, slot] = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
                         model->S[0].cgMaterial, contentFolder, model);
                     triangleModel->getGeometryInstance()->setMaterial(0, 0, mat);
                 }
@@ -411,7 +421,45 @@ void RiPRModelHandler::removeModel(ItemID itemID)
     modelMgr.removeModel(itemID);
 }
 
-void RiPRModelHandler::computeLightProbabilities(RiPRTriangleModel* model, uint32_t geomInstSlot)
+// computeLightProbabilities - Prepares a 3D model to act as a light source in the scene
+//
+// PURPOSE:
+// In path tracing (a realistic rendering technique), any object with an emissive material can act as a light source.
+// This includes things like lamp bulbs, TV screens, neon signs, or glowing hot metal. However, when we want to 
+// efficiently sample these light sources during rendering, we need to know which triangles are more important
+// (emit more light) so we can sample them more frequently. This function builds that importance distribution.
+//
+// WHAT IT DOES:
+// 1. Takes a 3D model made of triangles and checks each triangle to see if it emits light
+// 2. For each triangle, calculates an "importance" value based on:
+//    - How much light it emits (brightness/color from its material's emission texture)
+//    - How large the triangle is (bigger triangles emit more total light)
+// 3. Creates a probability distribution that says "when picking a random light sample, prefer brighter/larger triangles"
+// 4. This distribution is stored on the GPU for fast access during rendering
+//
+// HOW IT WORKS:
+// Imagine you have a room with 100 light bulbs of different sizes and brightness:
+// - Small, dim bulbs might get importance value of 0.1
+// - Large, bright bulbs might get importance value of 10.0
+// When the renderer needs to sample a light, it uses these weights to pick bulbs probabilistically:
+// - The bright bulb is 100x more likely to be chosen than the dim one
+// - This reduces noise in the final image because we sample important lights more often
+//
+// TECHNICAL DETAILS:
+// - Runs a CUDA kernel (GPU program) that processes all triangles in parallel
+// - Each triangle's importance = emission_color_brightness × triangle_area
+// - Builds a CDF (Cumulative Distribution Function) for efficient random sampling
+// - The CDF allows O(log n) sampling using binary search during rendering
+//
+// PARAMETERS:
+// - model: The 3D model whose triangles we're analyzing for light emission
+// - geomInstSlot: Index in the global geometry buffer where this model's data is stored
+//
+// EXAMPLE:
+// A mesh representing a neon sign would have high importance values for the glowing tube triangles
+// and zero importance for the non-emissive mounting bracket triangles. During rendering, the path
+// tracer would almost always sample points on the glowing tubes when looking for light from this object.
+void RiPRModelHandler::computeLightProbabilities(RiPRTriangleModel* model, uint32_t geomInstSlot, uint32_t materialSlot)
 {
     if (!model || !engine_ || geomInstSlot == SlotFinder::InvalidSlotIndex)
     {
@@ -419,10 +467,94 @@ void RiPRModelHandler::computeLightProbabilities(RiPRTriangleModel* model, uint3
         return;
     }
     
-    // For now, just log that we would compute light probabilities
-    // We'll implement the actual kernel launch in Step 4
-    LOG(INFO) << "Ready to compute light probabilities for emissive geometry at slot " << geomInstSlot;
+    // Get geometry instance buffer device pointer
+    shared::GeometryInstanceData* geomInstData = geometryInstanceDataBuffer_.getDevicePointer();
+    if (!geomInstData)
+    {
+        LOG(WARNING) << "Geometry instance buffer not available";
+        return;
+    }
     
-    // TODO: Launch compute kernels here
-    // engine_->getComputeProbTex().computeTriangleProbBuffer.launch(...)
+    // Get material buffer from DisneyMaterialHandler
+    auto materialHandler = ctx_->getHandlers().disneyMaterialHandler;
+    if (!materialHandler)
+    {
+        LOG(WARNING) << "DisneyMaterialHandler not available";
+        return;
+    }
+    
+    cudau::TypedBuffer<shared::DisneyData>* materialBuffer = materialHandler->getMaterialDataBuffer();
+    if (!materialBuffer)
+    {
+        LOG(WARNING) << "Material buffer not available";
+        return;
+    }
+    
+    shared::DisneyData* materialData = materialBuffer->getDevicePointer();
+    if (!materialData)
+    {
+        LOG(WARNING) << "Material buffer device pointer not available";
+        return;
+    }
+    
+    // Get number of triangles from the model's triangle buffer
+    uint32_t numTriangles = model->getTriangleBuffer().numElements();
+    if (numTriangles == 0)
+    {
+        LOG(WARNING) << "No triangles in model";
+        return;
+    }
+    
+    // Get RiPREngine to access kernel handles
+    RiPREngine* riprEngine = dynamic_cast<RiPREngine*>(engine_);
+    if (!riprEngine)
+    {
+        LOG(WARNING) << "Engine is not RiPREngine";
+        return;
+    }
+    
+    const RiPREngine::ComputeProbTex& kernels = riprEngine->getComputeProbTex();
+    CUstream stream = ctx_->getCudaStream();
+    
+    // Get pointer to the specific material's data
+    shared::DisneyData* specificMaterial = &materialData[materialSlot];
+    
+    // Launch kernel to compute triangle probabilities
+    kernels.computeTriangleProbBuffer(
+        stream,
+        kernels.computeTriangleProbBuffer.calcGridDim(numTriangles),
+        &geomInstData[geomInstSlot],
+        numTriangles,
+        specificMaterial  // Pass specific material instead of whole buffer
+    );
+    
+    // Finalize the distribution (build CDF)
+    kernels.finalizeDiscreteDistribution1D(
+        stream,
+        kernels.finalizeDiscreteDistribution1D.calcGridDim(1),
+        &geomInstData[geomInstSlot].emitterPrimDist
+    );
+    
+    // Synchronize to ensure completion
+    CUDADRV_CHECK(cuStreamSynchronize(stream));
+    
+    // Optional: Check if any triangles were marked as emissive
+    // Read back just the integral value from the distribution
+    shared::LightDistribution lightDistOnHost;
+    CUDADRV_CHECK(cuMemcpyDtoH(&lightDistOnHost, 
+                               reinterpret_cast<CUdeviceptr>(&geomInstData[geomInstSlot].emitterPrimDist),
+                               sizeof(lightDistOnHost)));
+    
+    float integral = lightDistOnHost.integral();
+    if (integral > 0.0f)
+    {
+        LOG(INFO) << "Computed light probabilities for " << numTriangles 
+                  << " triangles at slot " << geomInstSlot 
+                  << " (integral: " << integral << ")";
+    }
+    else
+    {
+        LOG(DBUG) << "No emissive triangles found in " << numTriangles 
+                  << " triangles at slot " << geomInstSlot;
+    }
 }

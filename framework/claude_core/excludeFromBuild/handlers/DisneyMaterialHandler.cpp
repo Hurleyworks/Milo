@@ -182,7 +182,7 @@ optixu::Material DisneyMaterialHandler::createOptixMaterial()
     return mat;
 }
 
-optixu::Material DisneyMaterialHandler::createDisneyMaterial (const CgMaterial& material,
+std::tuple<optixu::Material, uint32_t> DisneyMaterialHandler::createDisneyMaterial (const CgMaterial& material,
                                                         const std::filesystem::path& materialFolder, CgModelPtr model)
 {
     // Create the OptiX material first
@@ -197,14 +197,14 @@ optixu::Material DisneyMaterialHandler::createDisneyMaterial (const CgMaterial& 
         shared::DisneyData disneyData = {};
         mat.setUserData(disneyData);
         materials.push_back(std::move(hostDisney));
-        return mat;
+        return std::make_tuple(mat, InvalidSlotIndex);  // Return invalid slot in legacy mode
     }
     
     CUcontext cuContext = ctx->getCudaContext();
     if (!cuContext)
     {
         LOG(WARNING) << "No CUDA context available for material creation";
-        return mat;
+        return std::make_tuple(mat, InvalidSlotIndex);
     }
     
     // Allocate a material slot
@@ -212,7 +212,7 @@ optixu::Material DisneyMaterialHandler::createDisneyMaterial (const CgMaterial& 
     if (materialSlot == InvalidSlotIndex)
     {
         LOG(WARNING) << "No available material slots";
-        return mat;
+        return std::make_tuple(mat, InvalidSlotIndex);
     }
     materialSlotFinder_.setInUse(materialSlot);
     
@@ -222,7 +222,7 @@ optixu::Material DisneyMaterialHandler::createDisneyMaterial (const CgMaterial& 
     {
         LOG(WARNING) << "Failed to map material data buffer";
         materialSlotFinder_.setNotInUse(materialSlot);
-        return mat;
+        return std::make_tuple(mat, InvalidSlotIndex);
     }
     
     shared::DisneyData& disneyData = matDataOnHost[materialSlot];
@@ -334,7 +334,7 @@ optixu::Material DisneyMaterialHandler::createDisneyMaterial (const CgMaterial& 
     
     LOG(DBUG) << "Created Disney material in slot " << materialSlot;
 
-    return mat;
+    return std::make_tuple(mat, materialSlot);
 }
 
 // Process texture information to load and configure a texture

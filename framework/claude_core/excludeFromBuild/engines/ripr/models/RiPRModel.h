@@ -183,9 +183,9 @@ public:
         // Convert light distribution to device format
         emitterPrimDist.getDeviceType(&geomInstData->emitterPrimDist);
         
-        // Material slot will be set separately when materials are assigned
-        // For now, use invalid slot as we don't have the material yet
-        geomInstData->materialSlot = SlotFinder::InvalidSlotIndex;
+        // Initialize material slot to 0 for testing
+        // TODO: This should be properly set based on the actual material assignment
+        geomInstData->materialSlot = 0;
         
         // Store geometry instance slot
         geomInstData->geomInstSlot = geomInstSlot_;

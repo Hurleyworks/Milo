@@ -246,7 +246,7 @@ void Renderer::initializeEngine (CameraHandle camera, ImageCacheHandlerPtr image
         }
 
         // Start with basic path tracer as default
-        engineManager_->switchEngine ("shocker");
+        engineManager_->switchEngine ("ripr");
 
         // Step 7: Pipeline Handler is already initialized for geometry support
         // The scene pipeline is active by default for model creation

@@ -357,7 +357,7 @@ OptiXTriMesh* TriangleMeshHandler::createTriMeshFromModelWithMaterials (
         const auto& surface = model->S[surfaceIndex];
         
         // Create OptiX material using DisneyMaterialHandler
-        optixu::Material optixMat = disneyMaterialHandler->createDisneyMaterial(
+        auto [optixMat, materialSlot] = disneyMaterialHandler->createDisneyMaterial(
             surface.cgMaterial, 
             materialFolder, 
             model);

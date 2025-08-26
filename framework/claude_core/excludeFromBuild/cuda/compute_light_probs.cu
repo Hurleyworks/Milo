@@ -2,7 +2,6 @@
 #include "../common/deviceCommon.h"
 #include "../material/DeviceDisneyMaterial.h"
 
-#if 1
 using namespace shared;
 
 CUDA_DEVICE_KERNEL void computeProbabilityTextureFirstMip(
@@ -23,8 +22,8 @@ CUDA_DEVICE_KERNEL void computeProbabilityTextureFirstMip(
 
 CUDA_DEVICE_FUNCTION CUDA_INLINE float computeTriangleImportance(
     GeometryInstanceData* geomInst, uint32_t triIndex,
-    const DisneyData* materialDataBuffer) {
-    const DisneyData &mat = materialDataBuffer[geomInst->materialSlot];
+    const DisneyData* material) {
+    const DisneyData &mat = *material;
     const Triangle &tri = geomInst->triangleBuffer[triIndex];
     const Vertex (&v)[3] = {
         geomInst->vertexBuffer[tri.index0],
@@ -49,7 +48,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float computeTriangleImportance(
 
 CUDA_DEVICE_KERNEL void computeTriangleProbTexture(
     GeometryInstanceData* geomInst, uint32_t numTriangles,
-    const DisneyData* materialDataBuffer,
+    const DisneyData* material,
     optixu::NativeBlockBuffer2D<float> dstMip) {
     if constexpr (USE_PROBABILITY_TEXTURE) {
         uint32_t linearIndex = blockDim.x * blockIdx.x + threadIdx.x;
@@ -61,7 +60,7 @@ CUDA_DEVICE_KERNEL void computeTriangleProbTexture(
         uint2 idx2D = compute2DFrom1D(dims, linearIndex);
         float importance = 0.0f;
         if (linearIndex < numTriangles)
-            importance = computeTriangleImportance(geomInst, linearIndex, materialDataBuffer);
+            importance = computeTriangleImportance(geomInst, linearIndex, material);
         if (idx2D.x < dims.x && idx2D.y < dims.y)
             dstMip.write(idx2D, importance);
     }
@@ -69,7 +68,7 @@ CUDA_DEVICE_KERNEL void computeTriangleProbTexture(
 
 CUDA_DEVICE_KERNEL void computeTriangleProbBuffer(
     GeometryInstanceData* geomInst, uint32_t numTriangles,
-    const DisneyData* materialDataBuffer) {
+    const DisneyData* material) {
     if constexpr (!USE_PROBABILITY_TEXTURE) {
         uint32_t linearIndex = blockDim.x * blockIdx.x + threadIdx.x;
 #if !USE_PROBABILITY_TEXTURE
@@ -77,7 +76,7 @@ CUDA_DEVICE_KERNEL void computeTriangleProbBuffer(
             geomInst->emitterPrimDist.setNumValues(numTriangles);
 #endif
         if (linearIndex < numTriangles) {
-            float importance = computeTriangleImportance(geomInst, linearIndex, materialDataBuffer);
+            float importance = computeTriangleImportance(geomInst, linearIndex, material);
             geomInst->emitterPrimDist.setWeightAt(linearIndex, importance);
         }
     }
@@ -226,4 +225,3 @@ CUDA_DEVICE_KERNEL void testProbabilityTexture(
     rngs[linearIndex] = rng;
 }
 
-#endif 
