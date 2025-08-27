@@ -36,10 +36,28 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float computeTriangleImportance(
 
     // TODO: もっと正確な、少なくとも保守的な推定の実装。テクスチャー空間中の面積に応じてMIPレベルを選択する？
     RGB emittanceEstimate(0.0f, 0.0f, 0.0f);
-    emittanceEstimate += RGB(getXYZ(tex2DLod<float4>(mat.emissive, v[0].texCoord.x, v[0].texCoord.y, 0)));
-    emittanceEstimate += RGB(getXYZ(tex2DLod<float4>(mat.emissive, v[1].texCoord.x, v[1].texCoord.y, 0)));
-    emittanceEstimate += RGB(getXYZ(tex2DLod<float4>(mat.emissive, v[2].texCoord.x, v[2].texCoord.y, 0)));
-    emittanceEstimate /= 3;
+    
+    if (mat.emissive) {
+        // Material has an emissive texture - sample it at triangle vertices
+        emittanceEstimate += RGB(getXYZ(tex2DLod<float4>(mat.emissive, v[0].texCoord.x, v[0].texCoord.y, 0)));
+        emittanceEstimate += RGB(getXYZ(tex2DLod<float4>(mat.emissive, v[1].texCoord.x, v[1].texCoord.y, 0)));
+        emittanceEstimate += RGB(getXYZ(tex2DLod<float4>(mat.emissive, v[2].texCoord.x, v[2].texCoord.y, 0)));
+        emittanceEstimate /= 3;
+    } else {
+        // No emissive texture - use a default emittance
+        // This is crucial for area lights without textures
+        emittanceEstimate = RGB(1.0f, 1.0f, 1.0f);
+    }
+    
+    // Apply emissive strength if available
+    if (mat.emissiveStrength) {
+        float strengthEstimate = 0.0f;
+        strengthEstimate += tex2DLod<float>(mat.emissiveStrength, v[0].texCoord.x, v[0].texCoord.y, 0);
+        strengthEstimate += tex2DLod<float>(mat.emissiveStrength, v[1].texCoord.x, v[1].texCoord.y, 0);
+        strengthEstimate += tex2DLod<float>(mat.emissiveStrength, v[2].texCoord.x, v[2].texCoord.y, 0);
+        strengthEstimate /= 3;
+        emittanceEstimate *= strengthEstimate;
+    }
 
     float importance = sRGB_calcLuminance(emittanceEstimate) * area;
     Assert(stc::isfinite(importance), "imp: %g, area: %g", importance, area);

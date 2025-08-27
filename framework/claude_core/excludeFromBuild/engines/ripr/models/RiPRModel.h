@@ -171,6 +171,12 @@ public:
         return emitterPrimDist;
     }
     
+    // Get non-const emitter primitive distribution for modification
+    LightDistribution& getEmitterPrimDist()
+    {
+        return emitterPrimDist;
+    }
+    
     // Populate geometry instance data for triangle mesh
     void populateGeometryInstanceData(shared::GeometryInstanceData* geomInstData) override
     {
@@ -180,8 +186,16 @@ public:
         geomInstData->vertexBuffer = vertexBuffer.getROBuffer<shared::enableBufferOobCheck>();
         geomInstData->triangleBuffer = triangleBuffer.getROBuffer<shared::enableBufferOobCheck>();
         
-        // Convert light distribution to device format
-        emitterPrimDist.getDeviceType(&geomInstData->emitterPrimDist);
+        // Only convert light distribution if it's been initialized (for emissive materials)
+        if (emitterPrimDist.isInitialized())
+        {
+            emitterPrimDist.getDeviceType(&geomInstData->emitterPrimDist);
+        }
+        else
+        {
+            // Set empty distribution for non-emissive geometry
+            geomInstData->emitterPrimDist = shared::LightDistribution();
+        }
         
         // Initialize material slot to 0 for testing
         // TODO: This should be properly set based on the actual material assignment
@@ -205,6 +219,9 @@ public:
     
     // Mark this model as having emissive materials
     void setHasEmissiveMaterials(bool emissive) { hasEmissive_ = emissive; }
+    
+    // Get the geometry instance slot for area light support
+    uint32_t getGeometryInstanceSlot() const { return getGeomInstSlot(); }
 
 private:
     GAS gasData;

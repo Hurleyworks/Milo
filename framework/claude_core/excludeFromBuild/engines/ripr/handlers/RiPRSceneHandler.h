@@ -230,4 +230,9 @@ class RiPRSceneHandler
     std::vector<uint32_t> emissiveInstances_; // Track emissive instance indices
     LightDistribution lightInstDistribution_; // Distribution for sampling light instances (host side)
     bool lightDistributionDirty_ = true;      // Flag for rebuild
+    
+    // Per-instance light distribution buffers
+    // These store the geometry slot buffers and light distributions for each emissive instance
+    std::unordered_map<uint32_t, cudau::TypedBuffer<uint32_t>> geomInstSlotsBuffers_[2];
+    std::unordered_map<uint32_t, DiscreteDistribution1D> perInstanceLightDists_[2];
 };

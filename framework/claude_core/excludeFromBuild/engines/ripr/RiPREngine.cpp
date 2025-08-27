@@ -409,6 +409,22 @@ void RiPREngine::onEnvironmentChanged()
     LOG (INFO) << "Environment changed - accumulation reset";
 }
 
+void RiPREngine::buildLightDistributions()
+{
+    if (!sceneHandler_)
+    {
+        LOG (WARNING) << "No scene handler available to build light distributions";
+        return;
+    }
+    
+    // Update emissive instances and build distributions
+    sceneHandler_->updateEmissiveInstances();
+    sceneHandler_->buildLightInstanceDistribution();
+    
+    LOG (INFO) << "Light distributions built with " 
+              << sceneHandler_->getNumEmissiveInstances() << " emissive instances";
+}
+
 // setupPipelines() using PipelineHandler
 void RiPREngine::setupPipelines()
 {
@@ -699,7 +715,17 @@ void RiPREngine::updateLaunchParameters (const mace::InputEvent& input)
         sceneHandler_->buildLightInstanceDistribution();
 
         // Get the device representation of the light distribution
-        sceneHandler_->getLightInstDistribution().getDeviceType (&static_plp_.lightInstDist);
+        // Only if it's initialized (has emissive instances)
+        const auto& lightDist = sceneHandler_->getLightInstDistribution();
+        if (lightDist.isInitialized())
+        {
+            lightDist.getDeviceType (&static_plp_.lightInstDist);
+        }
+        else
+        {
+            // Set empty distribution when no emissive instances
+            static_plp_.lightInstDist = shared::LightDistribution();
+        }
     }
     else
     {

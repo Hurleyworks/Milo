@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DiscreteDistribution1D Setup and Usage Guide</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.8;
+            color: #333;
+            background: #fff;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        h1 {
+            font-size: 36px;
+            margin-bottom: 24px;
+            color: #000;
+            border-bottom: 3px solid #0066cc;
+            padding-bottom: 12px;
+        }
+        
+        h2 {
+            font-size: 28px;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            color: #000;
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 8px;
+        }
+        
+        h3 {
+            font-size: 22px;
+            margin-top: 32px;
+            margin-bottom: 16px;
+            color: #333;
+        }
+        
+        h4 {
+            font-size: 18px;
+            margin-top: 24px;
+            margin-bottom: 12px;
+            color: #555;
+        }
+        
+        p {
+            margin-bottom: 16px;
+        }
+        
+        .code-block, pre {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 20px;
+            margin: 24px 0;
+            overflow-x: auto;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #000;
+        }
+        
+        .inline-code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
+            color: #000;
+        }
+        
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 4px;
+            padding: 16px;
+            margin: 20px 0;
+        }
+        
+        .warning strong {
+            color: #856404;
+        }
+        
+        .note {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            border-radius: 4px;
+            padding: 16px;
+            margin: 20px 0;
+        }
+        
+        .note strong {
+            color: #0c5460;
+        }
+        
+        .success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 4px;
+            padding: 16px;
+            margin: 20px 0;
+        }
+        
+        .success strong {
+            color: #155724;
+        }
+        
+        ul, ol {
+            margin-bottom: 16px;
+            margin-left: 32px;
+        }
+        
+        li {
+            margin-bottom: 8px;
+        }
+        
+        .section-overview {
+            background: #f9f9f9;
+            border-left: 4px solid #0066cc;
+            padding: 16px;
+            margin: 24px 0;
+        }
+        
+        a {
+            color: #0066cc;
+            text-decoration: none;
+        }
+        
+        a:hover {
+            text-decoration: underline;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 24px 0;
+        }
+        
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        
+        th {
+            background: #f8f8f8;
+            font-weight: 600;
+        }
+        
+        .toc {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 20px;
+            margin: 32px 0;
+        }
+        
+        .toc h3 {
+            margin-top: 0;
+            margin-bottom: 16px;
+        }
+        
+        .toc ul {
+            list-style-type: none;
+            margin-left: 0;
+        }
+        
+        .toc li {
+            margin-bottom: 8px;
+        }
+        
+        .toc a {
+            display: block;
+            padding: 4px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>DiscreteDistribution1D Setup and Usage Guide</h1>
+    
+    <div class="section-overview">
+        <p><strong>Purpose:</strong> This guide explains how to properly set up and use <span class="inline-code">DiscreteDistribution1D</span> for importance sampling in CUDA/OptiX ray tracing applications. This distribution class is essential for efficiently sampling light sources based on their relative importance.</p>
+    </div>
+    
+    <div class="toc">
+        <h3>Table of Contents</h3>
+        <ul>
+            <li><a href="#overview">1. Overview</a></li>
+            <li><a href="#host-setup">2. Host-Side Setup</a></li>
+            <li><a href="#device-transfer">3. Device Transfer</a></li>
+            <li><a href="#device-usage">4. Device-Side Usage</a></li>
+            <li><a href="#complete-example">5. Complete Working Example</a></li>
+            <li><a href="#common-issues">6. Common Issues and Solutions</a></li>
+            <li><a href="#best-practices">7. Best Practices</a></li>
+        </ul>
+    </div>
+    
+    <h2 id="overview">1. Overview</h2>
+    
+    <p>The <span class="inline-code">DiscreteDistribution1D</span> class implements a discrete probability distribution for importance sampling. It exists in two forms:</p>
+    
+    <ul>
+        <li><strong>Host version:</strong> <span class="inline-code">DiscreteDistribution1D</span> (manages GPU memory allocation)</li>
+        <li><strong>Device version:</strong> <span class="inline-code">shared::DiscreteDistribution1D</span> (lightweight struct for GPU kernel use)</li>
+    </ul>
+    
+    <div class="note">
+        <strong>Note:</strong> The implementation supports two sampling methods: Walker's Alias Method (faster sampling) and CDF-based sampling (traditional approach). The choice is controlled by the <span class="inline-code">USE_WALKER_ALIAS_METHOD</span> preprocessor define.
+    </div>
+    
+    <h2 id="host-setup">2. Host-Side Setup</h2>
+    
+    <h3>Step 1: Include Required Headers</h3>
+    
+    <pre class="code-block">
+#include "common_host.h"     // Contains DiscreteDistribution1D definition
+#include "common_shared.h"   // Contains shared::DiscreteDistribution1D
+</pre>
+    
+    <h3>Step 2: Create and Initialize the Distribution</h3>
+    
+    <pre class="code-block">
+// Example: Creating a light distribution for 5 lights
+class LightManager {
+    DiscreteDistribution1D m_lightDistribution;
+    CUcontext m_cuContext;
+    
+public:
+    void setupLightDistribution(const std::vector&lt;float&gt;&amp; lightPowers) {
+        // lightPowers contains the relative importance/power of each light
+        // For example: {100.0f, 50.0f, 200.0f, 75.0f, 25.0f}
+        
+        m_lightDistribution.initialize(
+            m_cuContext,
+            cudau::BufferType::Device,  // or Scene::bufferType
+            lightPowers.data(),
+            static_cast&lt;uint32_t&gt;(lightPowers.size())
+        );
+    }
+    
+    void cleanup() {
+        m_lightDistribution.finalize();
+    }
+};
+</pre>
+    
+    <h3>Step 3: Handling Empty Distributions</h3>
+    
+    <pre class="code-block">
+// Safe initialization with nullptr for zero lights
+void setupEmptyDistribution() {
+    m_lightDistribution.initialize(
+        m_cuContext,
+        cudau::BufferType::Device,
+        nullptr,    // Pass nullptr for empty distribution
+        0           // Zero elements
+    );
+}
+
+// Always check if initialized before use
+if (m_lightDistribution.isInitialized()) {
+    // Safe to use
+}
+</pre>
+    
+    <h2 id="device-transfer">3. Device Transfer</h2>
+    
+    <h3>Method 1: Direct Transfer to Launch Parameters</h3>
+    
+    <pre class="code-block">
+struct LaunchParameters {
+    shared::DiscreteDistribution1D lightDistribution;
+    // ... other parameters
+};
+
+// On host, before kernel launch:
+void prepareLaunchParameters(LaunchParameters* params) {
+    // Convert host DiscreteDistribution1D to device version
+    m_lightDistribution.getDeviceType(&amp;params-&gt;lightDistribution);
+}
+</pre>
+    
+    <h3>Method 2: Through a Buffer Structure</h3>
+    
+    <pre class="code-block">
+// Define a structure that will be uploaded to GPU
+struct SceneData {
+    shared::DiscreteDistribution1D lightInstDist;
+    // ... other scene data
+};
+
+// Upload to GPU
+void uploadSceneData() {
+    SceneData* sceneData = m_sceneBuffer.map();
+    m_lightDistribution.getDeviceType(&amp;sceneData-&gt;lightInstDist);
+    m_sceneBuffer.unmap();
+}
+</pre>
+    
+    <div class="warning">
+        <strong>Warning:</strong> Never pass the host <span class="inline-code">DiscreteDistribution1D</span> directly to GPU kernels. Always use <span class="inline-code">getDeviceType()</span> to convert to <span class="inline-code">shared::DiscreteDistribution1D</span>.
+    </div>
+    
+    <h2 id="device-usage">4. Device-Side Usage</h2>
+    
+    <h3>Basic Sampling</h3>
+    
+    <pre class="code-block">
+// In your CUDA/OptiX kernel:
+CUDA_DEVICE_FUNCTION void sampleLight(
+    const shared::DiscreteDistribution1D&amp; lightDist,
+    float u,  // Random number [0, 1)
+    uint32_t* lightIndex,
+    float* probability) {
+    
+    // Sample an index from the distribution
+    float remapped;
+    *lightIndex = lightDist.sample(u, probability, &amp;remapped);
+    
+    // lightIndex: The selected light index
+    // probability: The probability of selecting this light
+    // remapped: Remapped random value for further use
+}
+</pre>
+    
+    <h3>Evaluating Probability</h3>
+    
+    <pre class="code-block">
+// Get the probability of a specific index
+CUDA_DEVICE_FUNCTION float getLightProbability(
+    const shared::DiscreteDistribution1D&amp; lightDist,
+    uint32_t lightIndex) {
+    
+    return lightDist.evaluatePMF(lightIndex);
+}
+
+// Get the integral (sum of all weights)
+CUDA_DEVICE_FUNCTION float getTotalPower(
+    const shared::DiscreteDistribution1D&amp; lightDist) {
+    
+    return lightDist.integral();
+}
+</pre>
+    
+    <h2 id="complete-example">5. Complete Working Example</h2>
+    
+    <h3>Host Side Implementation</h3>
+    
+    <pre class="code-block">
+class RiPREngine {
+private:
+    struct InstanceData {
+        shared::DiscreteDistribution1D lightGeomInstDist;
+        // ... other instance data
+    };
+    
+    DiscreteDistribution1D m_lightInstDist;
+    cudau::TypedBuffer&lt;InstanceData&gt; m_instanceBuffer;
+    
+public:
+    void setupLighting(const std::vector&lt;LightInfo&gt;&amp; lights) {
+        // Step 1: Collect light powers/importances
+        std::vector&lt;float&gt; lightImportances;
+        for (const auto&amp; light : lights) {
+            lightImportances.push_back(light.power * light.area);
+        }
+        
+        // Step 2: Initialize distribution on host
+        m_lightInstDist.initialize(
+            m_cuContext,
+            cudau::BufferType::Device,
+            lightImportances.data(),
+            static_cast&lt;uint32_t&gt;(lightImportances.size())
+        );
+        
+        // Step 3: Upload to GPU buffer
+        InstanceData* instData = m_instanceBuffer.map();
+        m_lightInstDist.getDeviceType(&amp;instData-&gt;lightGeomInstDist);
+        m_instanceBuffer.unmap();
+    }
+    
+    void updateLaunchParameters(PipelineLaunchParameters* plp) {
+        // Transfer to launch parameters
+        m_lightInstDist.getDeviceType(&amp;plp-&gt;s-&gt;lightInstDist);
+    }
+    
+    void cleanup() {
+        m_lightInstDist.finalize();
+    }
+};
+</pre>
+    
+    <h3>Device Side Implementation</h3>
+    
+    <pre class="code-block">
+// OptiX ray generation or closest hit program
+template &lt;bool useSolidAngleSampling&gt;
+CUDA_DEVICE_FUNCTION void sampleLight(
+    const Point3D&amp; shadingPoint,
+    float ul,  // Random number for light selection
+    float u0, float u1,  // Random numbers for position on light
+    shared::LightSample* lightSample,
+    float* areaPDensity) {
+    
+    // Access the light distribution from launch parameters
+    const shared::DiscreteDistribution1D&amp; lightDist = plp.s-&gt;lightInstDist;
+    
+    // Step 1: Sample a light instance
+    float lightProb;
+    float remappedU;
+    uint32_t lightIndex = lightDist.sample(ul, &amp;lightProb, &amp;remappedU);
+    
+    // Check for valid selection
+    if (lightProb == 0.0f) {
+        *areaPDensity = 0.0f;
+        return;
+    }
+    
+    // Step 2: Use the selected light index to access light data
+    const LightData&amp; light = plp.s-&gt;lightsBuffer[lightIndex];
+    
+    // Step 3: Sample position on the selected light
+    // ... (use u0, u1 for area sampling)
+    
+    // Step 4: Compute final probability density
+    *areaPDensity = lightProb * (1.0f / light.area);
+    
+    // ... fill lightSample with computed values
+}
+</pre>
+    
+    <h2 id="common-issues">6. Common Issues and Solutions</h2>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>Issue</th>
+                <th>Cause</th>
+                <th>Solution</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Kernel crash / Invalid memory access</td>
+                <td>Using host DiscreteDistribution1D in device code</td>
+                <td>Always use <span class="inline-code">getDeviceType()</span> to convert to <span class="inline-code">shared::DiscreteDistribution1D</span></td>
+            </tr>
+            <tr>
+                <td>Zero probability for all samples</td>
+                <td>Distribution not initialized or all weights are zero</td>
+                <td>Check <span class="inline-code">isInitialized()</span> and ensure non-zero weights</td>
+            </tr>
+            <tr>
+                <td>Incorrect sampling results</td>
+                <td>Weights not normalized or integral not computed</td>
+                <td>The class handles normalization internally; ensure weights are positive</td>
+            </tr>
+            <tr>
+                <td>Memory leaks</td>
+                <td>Not calling <span class="inline-code">finalize()</span></td>
+                <td>Always call <span class="inline-code">finalize()</span> in destructor or cleanup</td>
+            </tr>
+            <tr>
+                <td>Compilation errors with shared::</td>
+                <td>Missing common_shared.h include</td>
+                <td>Include both common_host.h and common_shared.h</td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <h2 id="best-practices">7. Best Practices</h2>
+    
+    <h3>Initialization Pattern</h3>
+    
+    <pre class="code-block">
+class SafeLightDistribution {
+private:
+    DiscreteDistribution1D m_distribution;
+    bool m_needsUpdate = true;
+    
+public:
+    void updateIfNeeded(const std::vector&lt;float&gt;&amp; weights) {
+        if (!m_needsUpdate &amp;&amp; m_distribution.isInitialized()) {
+            return;
+        }
+        
+        // Finalize old distribution if exists
+        if (m_distribution.isInitialized()) {
+            m_distribution.finalize();
+        }
+        
+        // Initialize new distribution
+        if (!weights.empty()) {
+            m_distribution.initialize(
+                g_cuContext,
+                cudau::BufferType::Device,
+                weights.data(),
+                static_cast&lt;uint32_t&gt;(weights.size())
+            );
+        } else {
+            // Initialize empty distribution
+            m_distribution.initialize(
+                g_cuContext,
+                cudau::BufferType::Device,
+                nullptr, 0
+            );
+        }
+        
+        m_needsUpdate = false;
+    }
+    
+    ~SafeLightDistribution() {
+        if (m_distribution.isInitialized()) {
+            m_distribution.finalize();
+        }
+    }
+};
+</pre>
+    
+    <h3>Performance Tips</h3>
+    
+    <ul>
+        <li><strong>Batch Updates:</strong> Avoid frequent re-initialization. Update distributions only when light configuration changes.</li>
+        <li><strong>Walker's Alias Method:</strong> Enable <span class="inline-code">USE_WALKER_ALIAS_METHOD</span> for O(1) sampling performance.</li>
+        <li><strong>Pre-compute Importances:</strong> Calculate light importance (power × area) once on CPU rather than in every kernel.</li>
+        <li><strong>Cache Distributions:</strong> For static scenes, compute distributions once during initialization.</li>
+    </ul>
+    
+    <div class="success">
+        <strong>Success Tip:</strong> Always follow this pattern: Initialize on host → Convert with getDeviceType() → Use shared:: version in kernels → Finalize when done.
+    </div>
+    
+    <h3>Integration with RiPREngine</h3>
+    
+    <pre class="code-block">
+// Proper integration example for RiPREngine
+class ClaudeRiPREngine {
+    // Member variables
+    DiscreteDistribution1D m_globalLightDistribution;
+    std::vector&lt;DiscreteDistribution1D&gt; m_perInstanceDistributions;
+    
+    void buildLightDistributions() {
+        // Build per-instance distributions
+        std::vector&lt;float&gt; instanceImportances;
+        
+        for (size_t i = 0; i &lt; m_instances.size(); ++i) {
+            const auto&amp; instance = m_instances[i];
+            std::vector&lt;float&gt; geomImportances;
+            
+            // Collect geometry light importances
+            for (const auto&amp; geom : instance.geometries) {
+                if (geom.isEmissive()) {
+                    geomImportances.push_back(geom.emittance * geom.area);
+                }
+            }
+            
+            // Create per-instance distribution
+            if (!geomImportances.empty()) {
+                m_perInstanceDistributions[i].initialize(
+                    m_cuContext,
+                    cudau::BufferType::Device,
+                    geomImportances.data(),
+                    static_cast&lt;uint32_t&gt;(geomImportances.size())
+                );
+                
+                // Add to global distribution
+                instanceImportances.push_back(
+                    m_perInstanceDistributions[i].getIntengral()
+                );
+            }
+        }
+        
+        // Build global distribution
+        if (!instanceImportances.empty()) {
+            m_globalLightDistribution.initialize(
+                m_cuContext,
+                cudau::BufferType::Device,
+                instanceImportances.data(),
+                static_cast&lt;uint32_t&gt;(instanceImportances.size())
+            );
+        }
+    }
+    
+    void uploadToGPU(LaunchParameters* params) {
+        // Convert global distribution
+        m_globalLightDistribution.getDeviceType(&amp;params-&gt;lightInstDist);
+        
+        // Convert per-instance distributions
+        for (size_t i = 0; i &lt; m_perInstanceDistributions.size(); ++i) {
+            if (m_perInstanceDistributions[i].isInitialized()) {
+                m_perInstanceDistributions[i].getDeviceType(
+                    &amp;params-&gt;instanceData[i].lightGeomInstDist
+                );
+            }
+        }
+    }
+};
+</pre>
+    
+    <div class="note">
+        <strong>Final Note:</strong> The key to successful DiscreteDistribution1D usage is understanding the host/device separation. The host class manages GPU memory, while the device struct provides efficient access during rendering. Always ensure proper conversion between the two using <span class="inline-code">getDeviceType()</span>.
+    </div>
+    
+</body>
+</html>

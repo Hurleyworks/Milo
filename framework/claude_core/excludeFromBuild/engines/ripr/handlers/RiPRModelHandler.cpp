@@ -253,13 +253,21 @@ void RiPRModelHandler::addCgModel(RenderableWeakRef weakNode)
             {
                 // Pass the material slots and emissive flags to properly compute light probabilities
                 // For now, just use the first emissive material found
+                bool hasComputedEmissive = false;
                 for (size_t i = 0; i < materialSlots.size(); ++i)
                 {
                     if (isEmissive[i])
                     {
                         computeLightProbabilities(triangleModel, geomInstSlot, materialSlots[i]);
+                        hasComputedEmissive = true;
                         break;  // TODO: Handle multiple emissive materials properly
                     }
+                }
+                
+                // After computing light probabilities, trigger distribution building
+                if (hasComputedEmissive && engine_)
+                {
+                    engine_->buildLightDistributions();
                 }
             }
         }
@@ -505,6 +513,19 @@ void RiPRModelHandler::computeLightProbabilities(RiPRTriangleModel* model, uint3
         return;
     }
     
+    // Initialize the emitter distribution if not already initialized
+    if (!model->getEmitterPrimDist().isInitialized())
+    {
+        model->getEmitterPrimDist().initialize(
+            ctx_->getCudaContext(), cudau::BufferType::Device, nullptr, numTriangles);
+        LOG(DBUG) << "Initialized emitter distribution for " << numTriangles << " triangles";
+        
+        // Update the device buffer with the newly initialized distribution
+        shared::GeometryInstanceData* geomInstDataOnHost = geometryInstanceDataBuffer_.map();
+        model->getEmitterPrimDist().getDeviceType(&geomInstDataOnHost[geomInstSlot].emitterPrimDist);
+        geometryInstanceDataBuffer_.unmap();
+    }
+    
     // Get RiPREngine to access kernel handles
     RiPREngine* riprEngine = dynamic_cast<RiPREngine*>(engine_);
     if (!riprEngine)
@@ -527,6 +548,26 @@ void RiPRModelHandler::computeLightProbabilities(RiPRTriangleModel* model, uint3
         numTriangles,
         specificMaterial  // Pass specific material instead of whole buffer
     );
+    
+    // Compute CDF from weights using CUB scan
+    // This is required before calling finalize!
+    size_t scratchMemSize = 0;
+    CUDADRV_CHECK(cubd::DeviceScan::ExclusiveSum(
+        nullptr, scratchMemSize,
+        model->getEmitterPrimDist().weightsOnDevice(),
+        model->getEmitterPrimDist().cdfOnDevice(),
+        numTriangles, stream));
+    
+    cudau::Buffer scanScratchMem;
+    scanScratchMem.initialize(ctx_->getCudaContext(), cudau::BufferType::Device, scratchMemSize, 1u);
+    
+    CUDADRV_CHECK(cubd::DeviceScan::ExclusiveSum(
+        scanScratchMem.getDevicePointer(), scratchMemSize,
+        model->getEmitterPrimDist().weightsOnDevice(),
+        model->getEmitterPrimDist().cdfOnDevice(),
+        numTriangles, stream));
+    
+    scanScratchMem.finalize();
     
     // Finalize the distribution (build CDF)
     kernels.finalizeDiscreteDistribution1D(
@@ -551,10 +592,30 @@ void RiPRModelHandler::computeLightProbabilities(RiPRTriangleModel* model, uint3
         LOG(INFO) << "Computed light probabilities for " << numTriangles 
                   << " triangles at slot " << geomInstSlot 
                   << " (integral: " << integral << ")";
+        
+        // Mark the model as having emissive materials
+        if (auto triModel = dynamic_cast<RiPRTriangleModel*>(model))
+        {
+            triModel->setHasEmissiveMaterials(true);
+        }
+        
+        // Update the host-side geometry instance data with the computed distribution
+        // This ensures the distribution is available for future calls to populateGeometryInstanceData
+        shared::GeometryInstanceData* geomInstDataOnHost = geometryInstanceDataBuffer_.map();
+        model->getEmitterPrimDist().getDeviceType(&geomInstDataOnHost[geomInstSlot].emitterPrimDist);
+        geometryInstanceDataBuffer_.unmap();
     }
     else
     {
         LOG(DBUG) << "No emissive triangles found in " << numTriangles 
                   << " triangles at slot " << geomInstSlot;
+        
+        // IMPORTANT: Clear the emissive flag since no actual emissive triangles were found
+        // This handles cases where the material has emission.luminous > 0 but the actual
+        // computed emission is zero (e.g., due to other material properties)
+        if (auto triModel = dynamic_cast<RiPRTriangleModel*>(model))
+        {
+            triModel->setHasEmissiveMaterials(false);
+        }
     }
 }

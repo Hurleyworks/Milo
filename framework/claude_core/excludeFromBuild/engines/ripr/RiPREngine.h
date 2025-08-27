@@ -22,6 +22,10 @@ public:
     std::string getName() const override { return "RiPR Engine"; }
     std::string getDescription() const override { return "RiPR Path Tracing with adaptive sampling and improved convergence"; }
     
+    // Build light distributions for emissive geometry
+    // Call this after adding emissive geometry to the scene
+    void buildLightDistributions();
+    
     
     // Light probability computation kernels structure
     struct ComputeProbTex {
@@ -40,6 +44,10 @@ public:
     
     // Accessor for light probability computation kernels
     const ComputeProbTex& getComputeProbTex() const { return computeProbTex_; }
+    const ComputeProbTex& getLightProbKernels() const { return computeProbTex_; }
+    
+    // Check if light probability kernels are initialized
+    bool hasLightProbKernels() const { return computeProbTex_.cudaModule != nullptr; }
 
 private:
     // Pipeline setup methods

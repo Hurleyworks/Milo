@@ -3,11 +3,8 @@
 // and from RiPR GfxExp
 // https://github.com/ripr-0x15/GfxEx
 
-
-
-
-
 #include "principledDisney_ripr.h"
+
 
 RT_PIPELINE_LAUNCH_PARAMETERS ripr_shared::PipelineLaunchParameters ripr_plp;
 
@@ -142,7 +139,7 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE RGB performNextEventEstimation (
             misWeight = pow2 (lightPDensity) / (pow2 (bsdfPDensity) + pow2 (lightPDensity));
         }
 
-        if (areaPDensity > 0.0f)
+        if (areaPDensity > 0.0f && stc::isfinite(areaPDensity) && stc::isfinite(misWeight))
             ret = performDirectLighting<PathTracingRayType, true> (
                       shadingPoint, vOutLocal, shadingFrame, bsdf, lightSample) *
                   (misWeight / areaPDensity);
@@ -167,6 +164,15 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
     const PerspectiveCamera& camera = ripr_plp.f->camera;
 
     const bool useEnvLight = ripr_plp.s->envLightTexture && ripr_plp.f->enableEnvLight;
+    
+    // Debug: Check light distribution status
+    if (launchIndex.x == 512 && launchIndex.y == 384 && ripr_plp.f->numAccumFrames == 0)
+    {
+        float lightDistIntegral = ripr_plp.s->lightInstDist.integral();
+        printf("Frame %d: Light dist integral=%f, useEnvLight=%d\n", 
+               ripr_plp.f->numAccumFrames, lightDistIntegral, useEnvLight);
+    }
+    
     RGB contribution (0.0f, 0.0f, 0.0f);
     if (instSlot != 0xFFFFFFFF)
     {
@@ -222,21 +228,80 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
 
             // EN: Accumulate the contribution from a light source directly seeing.
             contribution = RGB (0.0f);
-            if (vOutLocal.z > 0 && mat.emissive)
+            
+            // Debug output for center pixel
+            if (launchIndex.x == 512 && launchIndex.y == 384 && ripr_plp.f->numAccumFrames < 5)
             {
-                const float4 texValue = tex2DLod<float4> (mat.emissive, texCoord.x, texCoord.y, 0.0f);
-                const RGB emittance (getXYZ (texValue));
+                printf("Frame %d: mat.emissive=%llu, mat.emissiveStrength=%llu, vOutLocal.z=%f\n", 
+                       ripr_plp.f->numAccumFrames, mat.emissive, mat.emissiveStrength, vOutLocal.z);
+            }
+            
+            if (vOutLocal.z > 0 && (mat.emissive || mat.emissiveStrength))
+            {
+                RGB emittance(0.0f);
+                if (mat.emissive) {
+                    const float4 texValue = tex2DLod<float4> (mat.emissive, texCoord.x, texCoord.y, 0.0f);
+                    emittance = RGB (getXYZ (texValue));
+                } else {
+                    // No emissive texture but has emissive strength - use default white color
+                    emittance = RGB(1.0f, 1.0f, 1.0f);
+                }
+                
+                // Apply emissive strength if available
+                if (mat.emissiveStrength) {
+                    float strength = tex2DLod<float> (mat.emissiveStrength, texCoord.x, texCoord.y, 0.0f);
+                    emittance *= strength;
+                }
+                
                 contribution += alpha * emittance / pi_v<float>;
+                
+                if (launchIndex.x == 512 && launchIndex.y == 384 && ripr_plp.f->numAccumFrames < 5)
+                {
+                    printf("  Emittance: (%f, %f, %f), Contribution: (%f, %f, %f)\n",
+                           emittance.r, emittance.g, emittance.b,
+                           contribution.r, contribution.g, contribution.b);
+                }
             }
 
+            // Debug material data for emissive surfaces
+            if (launchIndex.x == 512 && launchIndex.y == 384 && ripr_plp.f->numAccumFrames < 5)
+            {
+                // Sample the textures to see what values we get
+                float metallicVal = mat.metallic ? tex2DLod<float>(mat.metallic, texCoord.x, texCoord.y, 0.0f) : 0.0f;
+                float roughnessVal = mat.roughness ? tex2DLod<float>(mat.roughness, texCoord.x, texCoord.y, 0.0f) : 0.04f;
+                float2 anisoVal = mat.anisotropic ? tex2DLod<float2>(mat.anisotropic, texCoord.x, texCoord.y, 0.0f) : make_float2(0.0f, 0.0f);
+                
+                printf("  RG Init: Material - metallic=%f, roughness=%f, aniso=(%f,%f)\n",
+                       metallicVal, roughnessVal, anisoVal.x, anisoVal.y);
+                printf("  RG Init: Handles - metallic=%llu, roughness=%llu, aniso=%llu, baseColor=%llu\n",
+                       mat.metallic, mat.roughness, mat.anisotropic, mat.baseColor);
+            }
+            
             // Create DisneyPrincipled instance directly instead of using BSDF
             DisneyPrincipled bsdf = DisneyPrincipled::create (
                 mat, texCoord, 0.0f, ripr_plp.s->makeAllGlass, ripr_plp.s->globalGlassIOR,
                 ripr_plp.s->globalTransmittanceDist, ripr_plp.s->globalGlassType);
 
              // Next event estimation (explicit light sampling) on the first hit.
-            contribution += alpha * performNextEventEstimation (
+            RGB neeContrib = performNextEventEstimation (
                                         positionInWorld, vOutLocal, shadingFrame, bsdf, rng);
+            
+            // Debug NEE
+            if (launchIndex.x == 512 && launchIndex.y == 384 && ripr_plp.f->numAccumFrames < 5)
+            {
+                printf("  RG Init: NEE=(%f,%f,%f), alpha=(%f,%f,%f)\n",
+                       neeContrib.r, neeContrib.g, neeContrib.b,
+                       alpha.r, alpha.g, alpha.b);
+            }
+            
+            contribution += alpha * neeContrib;
+            
+            // Debug after NEE
+            if (launchIndex.x == 512 && launchIndex.y == 384 && ripr_plp.f->numAccumFrames < 5)
+            {
+                printf("  RG Init: After NEE, contribution=(%f,%f,%f)\n",
+                       contribution.r, contribution.g, contribution.b);
+            }
 
             // generate a next ray.
             Vector3D vInLocal;
@@ -244,15 +309,35 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
                 vOutLocal, rng.getFloat0cTo1o(), rng.getFloat0cTo1o(),
                 &vInLocal, &dirPDensity);
 
+            // Debug sampling
+            if (launchIndex.x == 512 && launchIndex.y == 384 && ripr_plp.f->numAccumFrames < 5)
+            {
+                printf("  RG Init: Sample throughput=(%f,%f,%f), pdf=%f, vInLocal.z=%f\n",
+                       throughput.r, throughput.g, throughput.b, dirPDensity, vInLocal.z);
+            }
+
             // Apply the same calculation as RiPR: multiply by cosine and divide by PDF
-            if (dirPDensity > 0.0f && stc::isfinite (dirPDensity))
+            // Also check for reasonable PDF values to avoid numerical issues
+            if (dirPDensity > 0.0f && dirPDensity < 1e6f && stc::isfinite (dirPDensity))
             {
                 alpha *= throughput * std::fabs (vInLocal.z) / dirPDensity;
+                
+                // Debug alpha update
+                if (launchIndex.x == 512 && launchIndex.y == 384 && ripr_plp.f->numAccumFrames < 5)
+                {
+                    printf("  RG Init: Alpha after update=(%f,%f,%f)\n",
+                           alpha.r, alpha.g, alpha.b);
+                }
             }
             else
             {
                 alpha = RGB (0.0f);
                 dirPDensity = 0.0f;
+                
+                if (launchIndex.x == 512 && launchIndex.y == 384 && ripr_plp.f->numAccumFrames < 5)
+                {
+                    printf("  RG Init: Invalid sampling, setting alpha to 0\n");
+                }
             }
 
             vIn = shadingFrame.fromLocal (vInLocal);
@@ -267,14 +352,29 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
         rwPayload.alpha = alpha;
         rwPayload.prevDirPDensity = dirPDensity;
         rwPayload.contribution = contribution;
+        
+        // Debug payload setup
+        if (launchIndex.x == 512 && launchIndex.y == 384 && ripr_plp.f->numAccumFrames < 5)
+        {
+            printf("  RG Init: Setting up payload - contrib=(%f,%f,%f), alpha=(%f,%f,%f), pdf=%f\n",
+                   contribution.r, contribution.g, contribution.b,
+                   alpha.r, alpha.g, alpha.b, dirPDensity);
+        }
         rwPayload.pathLength = 1;
         Point3D rayOrg = positionInWorld;
         Vector3D rayDir = vIn;
+        // Debug for center pixel path extension
+        bool isDebugPixel = (launchIndex.x == 512 && launchIndex.y == 384 && ripr_plp.f->numAccumFrames < 5);
+        
         while (true)
         {
             const bool isValidSampling = rwPayload.prevDirPDensity > 0.0f && stc::isfinite (rwPayload.prevDirPDensity);
             if (!isValidSampling)
+            {
+                if (isDebugPixel)
+                    printf("  RG: Invalid sampling, breaking. pdf=%f\n", rwPayload.prevDirPDensity);
                 break;
+            }
 
             ++rwPayload.pathLength;
             if (rwPayload.pathLength >= ripr_plp.f->maxPathLength)
@@ -286,13 +386,28 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
             if constexpr (!useImplicitLightSampling)
             {
                 if (rwPayload.maxLengthTerminate)
+                {
+                    if (isDebugPixel)
+                        printf("  RG: Max path length reached\n");
                     break;
+                }
                 // Russian roulette
                 const float continueProb =
                     std::fmin (sRGB_calcLuminance (rwPayload.alpha) / rwPayload.initImportance, 1.0f);
                 if (rwPayload.rng.getFloat0cTo1o() >= continueProb)
+                {
+                    if (isDebugPixel)
+                        printf("  RG: Russian roulette termination, prob=%f\n", continueProb);
                     break;
+                }
                 rwPayload.alpha /= continueProb;
+            }
+
+            if (isDebugPixel)
+            {
+                printf("  RG: Tracing ray %d, contrib before=(%f,%f,%f)\n", 
+                       rwPayload.pathLength,
+                       rwPayload.contribution.r, rwPayload.contribution.g, rwPayload.contribution.b);
             }
 
             constexpr PathTracingRayType pathTraceRayType = PathTracingRayType::Closest;
@@ -301,12 +416,27 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
                 0.0f, FLT_MAX, 0.0f, 0xFF, OPTIX_RAY_FLAG_NONE,
                 pathTraceRayType, maxNumRayTypes, pathTraceRayType,
                 woPayloadPtr, rwPayloadPtr);
+                
+            if (isDebugPixel)
+            {
+                printf("  RG: After trace %d, terminate=%d, contrib=(%f,%f,%f)\n", 
+                       rwPayload.pathLength, rwPayload.terminate,
+                       rwPayload.contribution.r, rwPayload.contribution.g, rwPayload.contribution.b);
+            }
+                
             if (rwPayload.terminate)
                 break;
             rayOrg = woPayload.nextOrigin;
             rayDir = woPayload.nextDirection;
         }
         contribution = rwPayload.contribution;
+        
+        // Debug output for final contribution
+        if (launchIndex.x == 512 && launchIndex.y == 384 && ripr_plp.f->numAccumFrames < 5)
+        {
+            printf("  Final contribution after path tracing: (%f, %f, %f)\n",
+                   contribution.r, contribution.g, contribution.b);
+        }
 
         ripr_plp.s->rngBuffer.write (launchIndex, rwPayload.rng);
     }
@@ -326,6 +456,15 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_rayGen_generic()
         prevColorResult = RGB (getXYZ (ripr_plp.s->beautyAccumBuffer.read (launchIndex)));
     const float curWeight = 1.0f / (1 + ripr_plp.f->numAccumFrames);
     const RGB colorResult = (1 - curWeight) * prevColorResult + curWeight * contribution;
+    
+    // Debug accumulation for center pixel
+    if (launchIndex.x == 512 && launchIndex.y == 384 && ripr_plp.f->numAccumFrames < 5)
+    {
+        printf("  Accumulation: prevColor=(%f,%f,%f), curWeight=%f, finalColor=(%f,%f,%f)\n",
+               prevColorResult.r, prevColorResult.g, prevColorResult.b,
+               curWeight,
+               colorResult.r, colorResult.g, colorResult.b);
+    }
 
     ripr_plp.s->beautyAccumBuffer.write (launchIndex, make_float4 (colorResult.toNative(), 1.0f));
 }
@@ -382,10 +521,23 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_closestHit_generic()
     if constexpr (useImplicitLightSampling)
     {
         // Implicit Light Sampling
-        if (vOutLocal.z > 0 && mat.emissive)
+        if (vOutLocal.z > 0 && (mat.emissive || mat.emissiveStrength))
         {
-             const float4 texValue = tex2DLod<float4> (mat.emissive, texCoord.x, texCoord.y, 0.0f);
-             const RGB emittance (getXYZ (texValue));
+             RGB emittance(0.0f);
+             if (mat.emissive) {
+                 const float4 texValue = tex2DLod<float4> (mat.emissive, texCoord.x, texCoord.y, 0.0f);
+                 emittance = RGB (getXYZ (texValue));
+             } else {
+                 // No emissive texture but has emissive strength - use default white color
+                 emittance = RGB(1.0f, 1.0f, 1.0f);
+             }
+             
+             // Apply emissive strength if available
+             if (mat.emissiveStrength) {
+                 float strength = tex2DLod<float> (mat.emissiveStrength, texCoord.x, texCoord.y, 0.0f);
+                 emittance *= strength;
+             }
+             
              float misWeight = 1.0f;
              if constexpr (useMultipleImportanceSampling)
              {
@@ -409,9 +561,34 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_closestHit_generic()
         mat, texCoord, 0.0f, ripr_plp.s->makeAllGlass, ripr_plp.s->globalGlassIOR,
         ripr_plp.s->globalTransmittanceDist, ripr_plp.s->globalGlassType);
 
+    // Debug output at closest hit entry
+    uint3 debugIdx = optixGetLaunchIndex();
+    bool isDebugPixel = (debugIdx.x == 512 && debugIdx.y == 384 && ripr_plp.f->numAccumFrames < 5);
+    
+    if (isDebugPixel)
+    {
+        printf("  CH[%d]: Enter - contrib=(%f,%f,%f), alpha=(%f,%f,%f)\n",
+               rwPayload->pathLength,
+               rwPayload->contribution.r, rwPayload->contribution.g, rwPayload->contribution.b,
+               rwPayload->alpha.r, rwPayload->alpha.g, rwPayload->alpha.b);
+    }
+
     // Next Event Estimation (Explicit Light Sampling)
-    rwPayload->contribution += rwPayload->alpha * performNextEventEstimation (
-                                                      positionInWorld, vOutLocal, shadingFrame, bsdf, rng);
+    RGB neeContrib = performNextEventEstimation(positionInWorld, vOutLocal, shadingFrame, bsdf, rng);
+    
+    if (isDebugPixel)
+    {
+        printf("  CH[%d]: NEE=(%f,%f,%f)\n", rwPayload->pathLength, neeContrib.r, neeContrib.g, neeContrib.b);
+    }
+    
+    rwPayload->contribution += rwPayload->alpha * neeContrib;
+
+    if (isDebugPixel)
+    {
+        printf("  CH[%d]: After NEE - contrib=(%f,%f,%f)\n",
+               rwPayload->pathLength,
+               rwPayload->contribution.r, rwPayload->contribution.g, rwPayload->contribution.b);
+    }
 
     // generate a next ray.
     Vector3D vInLocal;
@@ -420,14 +597,43 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_closestHit_generic()
         vOutLocal, rng.getFloat0cTo1o(), rng.getFloat0cTo1o(),
         &vInLocal, &dirPDensity);
 
+    if (isDebugPixel)
+    {
+        printf("  CH[%d]: Sample - throughput=(%f,%f,%f), pdf=%f, vInLocal.z=%f\n",
+               rwPayload->pathLength,
+               throughput.r, throughput.g, throughput.b, 
+               dirPDensity, vInLocal.z);
+    }
+
     // Apply the same calculation as RiPR: multiply by cosine and divide by PDF
     if (dirPDensity > 0.0f && stc::isfinite (dirPDensity))
     {
+        RGB alphaBeforeMul = rwPayload->alpha;
         rwPayload->alpha *= throughput * std::fabs (vInLocal.z) / dirPDensity;
+        
+        if (isDebugPixel)
+        {
+            printf("  CH[%d]: Alpha update - before=(%f,%f,%f), after=(%f,%f,%f)\n",
+                   rwPayload->pathLength,
+                   alphaBeforeMul.r, alphaBeforeMul.g, alphaBeforeMul.b,
+                   rwPayload->alpha.r, rwPayload->alpha.g, rwPayload->alpha.b);
+            
+            // Check if alpha became NaN
+            if (!stc::isfinite(rwPayload->alpha.r) || !stc::isfinite(rwPayload->alpha.g) || !stc::isfinite(rwPayload->alpha.b))
+            {
+                printf("  CH[%d]: WARNING! Alpha became NaN! throughput/pdf=%f/%f, cos=%f\n",
+                       rwPayload->pathLength,
+                       throughput.r, dirPDensity, std::fabs(vInLocal.z));
+            }
+        }
     }
     else
     {
         rwPayload->alpha = RGB (0.0f);
+        if (isDebugPixel)
+        {
+            printf("  CH[%d]: Invalid sampling! pdf=%f\n", rwPayload->pathLength, dirPDensity);
+        }
         dirPDensity = 0.0f;
     }
 
@@ -437,6 +643,14 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE void pathTrace_closestHit_generic()
     woPayload->nextDirection = vIn;
     rwPayload->prevDirPDensity = dirPDensity;
     rwPayload->terminate = false;
+    
+    if (isDebugPixel)
+    {
+        printf("  CH[%d]: Exit - prevPDF=%f, contrib=(%f,%f,%f)\n",
+               rwPayload->pathLength, 
+               dirPDensity,
+               rwPayload->contribution.r, rwPayload->contribution.g, rwPayload->contribution.b);
+    }
 }
 
 CUDA_DEVICE_KERNEL void RT_CH_NAME (pathTraceBaseline)()

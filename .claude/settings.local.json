@@ -69,7 +69,21 @@
       "Read(//mnt/e/1Shocker/GfxExp/**)",
       "Read(//mnt/e/1Shocker/GfxExp/**)",
       "Read(//mnt/e/1Shocker/GfxExp/**)",
-      "Bash(xxd:*)"
+      "Bash(xxd:*)",
+      "Read(//mnt/e/1Shocker/GfxExp/**)",
+      "Read(//mnt/e/1Shocker/GfxExp/**)",
+      "Read(//mnt/e/1Shocker/GfxExp/**)",
+      "Read(//mnt/e/1Shocker/GfxExp/**)",
+      "Read(//mnt/e/1Shocker/GfxExp/**)",
+      "Read(//mnt/e/1Shocker/GfxExp/**)",
+      "Read(//mnt/e/1Shocker/GfxExp/**)",
+      "Read(//mnt/e/1Shocker/GfxExp/**)",
+      "Read(//mnt/e/1Shocker/GfxExp/**)",
+      "Read(//mnt/e/1Shocker/GfxExp/**)",
+      "Read(//mnt/e/1Shocker/GfxExp/**)",
+      "Read(//mnt/e/1Shocker/GfxExp/**)",
+      "Read(//mnt/e/1Shocker/OptiX_Utility/**)",
+      "Bash(git checkout:*)"
     ],
     "deny": []
   },

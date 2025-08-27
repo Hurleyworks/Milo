@@ -91,8 +91,7 @@ void RiPRTriangleModel::createGeometry(RenderContextPtr ctx, RenderableNode& nod
 
     // Materials will be created separately by RiPRMaterialHandler in RiPRModelHandler::addCgModel
     
-    emitterPrimDist.initialize(
-        ctx->getCudaContext(), cudau::BufferType::Device, nullptr, static_cast<uint32_t>(triangles.size()));
+    // Don't initialize emitterPrimDist here - it will be initialized later if the model has emissive materials
 
     geomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
     
