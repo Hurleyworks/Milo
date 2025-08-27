@@ -99,6 +99,10 @@ public:
     
     // Set the engine pointer for accessing compute kernels
     void setEngine(ClaudiaEngine* engine) { engine_ = engine; }
+    
+    // Set the area light handler
+    void setAreaLightHandler(std::shared_ptr<class ClaudiaAreaLightHandler> areaLightHandler);
+    std::shared_ptr<class ClaudiaAreaLightHandler> getAreaLightHandler() { return areaLightHandler_; }
 
     // Adds a single model from a renderable node to the Claudia scene
     void addCgModel(RenderableWeakRef weakNode);
@@ -168,6 +172,7 @@ private:
     
     // Handler references (not owned)
     std::shared_ptr<ClaudiaSceneHandler> sceneHandler_;
+    std::shared_ptr<class ClaudiaAreaLightHandler> areaLightHandler_;
     ClaudiaEngine* engine_ = nullptr;  // Engine for accessing compute kernels
 
     // Slot management for geometry instances

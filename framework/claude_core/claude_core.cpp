@@ -40,6 +40,7 @@
 // claudia handlers  
 #include "excludeFromBuild/engines/claudia/handlers/ClaudiaModelHandler.cpp"
 #include "excludeFromBuild/engines/claudia/handlers/ClaudiaSceneHandler.cpp"
+#include "excludeFromBuild/engines/claudia/handlers/ClaudiaAreaLightHandler.cpp"
 
 // engines
 #include "excludeFromBuild/engines/base/BaseRenderingEngine.cpp"

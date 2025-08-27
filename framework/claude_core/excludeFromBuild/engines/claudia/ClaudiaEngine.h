@@ -21,32 +21,12 @@ public:
     void onEnvironmentChanged() override;
     std::string getName() const override { return "Claudia Engine"; }
     std::string getDescription() const override { return "Claudia Path Tracing with adaptive sampling and improved convergence"; }
-    
-    
-    // Light probability computation kernels structure
-    struct ComputeProbTex {
-        CUmodule cudaModule = nullptr;
-        cudau::Kernel computeFirstMip;
-        cudau::Kernel computeTriangleProbTexture;
-        cudau::Kernel computeGeomInstProbTexture;
-        cudau::Kernel computeInstProbTexture;
-        cudau::Kernel computeMip;
-        cudau::Kernel computeTriangleProbBuffer;
-        cudau::Kernel computeGeomInstProbBuffer;
-        cudau::Kernel computeInstProbBuffer;
-        cudau::Kernel finalizeDiscreteDistribution1D;
-        cudau::Kernel test;
-    };
-    
-    // Accessor for light probability computation kernels
-    const ComputeProbTex& getComputeProbTex() const { return computeProbTex_; }
 
 private:
     // Pipeline setup methods
     void setupPipelines();
 
     void updateMaterialHitGroups(ClaudiaModelPtr model);  // Set hit groups on a specific model's materials
-    void initializeLightProbabilityKernels();  // Initialize CUDA kernels for light probability computation
     
     // GBuffer rendering
     void outputGBufferDebugInfo(CUstream stream);
@@ -64,6 +44,7 @@ private:
     // Scene management
     std::shared_ptr<class ClaudiaSceneHandler> sceneHandler_;
     std::shared_ptr<class ClaudiaModelHandler> modelHandler_;
+    std::shared_ptr<class ClaudiaAreaLightHandler> areaLightHandler_;
     
      // Pipeline parameter structures
     claudia_shared::StaticPipelineLaunchParameters static_plp_;
@@ -91,9 +72,6 @@ private:
     
     // Environment light state
     bool environmentDirty_ = true;
-    
-    // Light probability computation kernels
-    ComputeProbTex computeProbTex_;
     
     // Debug settings
     bool enableGBufferDebug_ = false;

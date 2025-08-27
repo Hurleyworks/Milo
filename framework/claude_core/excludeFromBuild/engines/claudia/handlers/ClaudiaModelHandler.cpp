@@ -1,5 +1,6 @@
 #include "ClaudiaModelHandler.h"
 #include "ClaudiaSceneHandler.h"
+#include "ClaudiaAreaLightHandler.h"
 #include "../ClaudiaEngine.h"
 #include "../models/ClaudiaModel.h"
 #include "../../../handlers/Handlers.h"
@@ -411,6 +412,11 @@ void ClaudiaModelHandler::removeModel(ItemID itemID)
     modelMgr.removeModel(itemID);
 }
 
+void ClaudiaModelHandler::setAreaLightHandler(std::shared_ptr<ClaudiaAreaLightHandler> areaLightHandler)
+{
+    areaLightHandler_ = areaLightHandler;
+}
+
 void ClaudiaModelHandler::computeLightProbabilities(ClaudiaTriangleModel* model, uint32_t geomInstSlot)
 {
     if (!model || !engine_ || geomInstSlot == SlotFinder::InvalidSlotIndex)
@@ -419,10 +425,21 @@ void ClaudiaModelHandler::computeLightProbabilities(ClaudiaTriangleModel* model,
         return;
     }
     
-    // For now, just log that we would compute light probabilities
-    // We'll implement the actual kernel launch in Step 4
-    LOG(INFO) << "Ready to compute light probabilities for emissive geometry at slot " << geomInstSlot;
-    
-    // TODO: Launch compute kernels here
-    // engine_->getComputeProbTex().computeTriangleProbBuffer.launch(...)
+    // Use area light handler if available
+    if (areaLightHandler_)
+    {
+        // Prepare the geometry light distribution
+        uint32_t numTriangles = model->getTriangleBuffer().numElements();
+        areaLightHandler_->prepareGeometryLightDistribution(model, numTriangles);
+        
+        // Mark it as dirty so it will be updated in the next frame
+        areaLightHandler_->markGeometryDirty(model);
+        
+        LOG(DBUG) << "Prepared light distribution for emissive geometry at slot " << geomInstSlot 
+                  << " with " << numTriangles << " triangles";
+    }
+    else
+    {
+        LOG(WARNING) << "AreaLightHandler not set, cannot compute light probabilities";
+    }
 }

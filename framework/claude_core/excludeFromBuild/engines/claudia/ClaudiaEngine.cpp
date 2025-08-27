@@ -2,7 +2,9 @@
 #include "../../RenderContext.h"
 #include "handlers/ClaudiaSceneHandler.h"
 #include "handlers/ClaudiaModelHandler.h"
+#include "handlers/ClaudiaAreaLightHandler.h"
 #include "models/ClaudiaModel.h"
+#include <cstddef>  // for offsetof
 
 ClaudiaEngine::ClaudiaEngine()
 {
@@ -56,8 +58,17 @@ void ClaudiaEngine::initialize (RenderContext* ctx)
     modelHandler_->setSceneHandler (sceneHandler_);
     modelHandler_->setEngine (this);
 
+    // Create area light handler and connect it to other handlers
+    areaLightHandler_ = ClaudiaAreaLightHandler::create (renderContext);
+    areaLightHandler_->initialize();
+    areaLightHandler_->setSceneHandler (sceneHandler_);
+    areaLightHandler_->setModelHandler (modelHandler_);
+
     // Also give model handler to scene handler
     sceneHandler_->setModelHandler (modelHandler_);
+    
+    // Connect area light handler to model handler
+    modelHandler_->setAreaLightHandler (areaLightHandler_);
 
     // Set number of ray types
     constexpr uint32_t numRayTypes = claudia_shared::maxNumRayTypes;
@@ -195,6 +206,12 @@ void ClaudiaEngine::cleanup()
     // ScreenBufferHandler cleanup is handled by RenderContext's Handlers::cleanup()
 
     // Clean up handlers
+    if (areaLightHandler_)
+    {
+        areaLightHandler_->finalize();
+        areaLightHandler_.reset();
+    }
+
     if (modelHandler_)
     {
         modelHandler_->finalize();
@@ -215,19 +232,6 @@ void ClaudiaEngine::cleanup()
         rngBuffer_.finalize();
     }
 
-    // Clean up light probability computation module
-    if (computeProbTex_.cudaModule)
-    {
-        try
-        {
-            CUDADRV_CHECK (cuModuleUnload (computeProbTex_.cudaModule));
-        }
-        catch (...)
-        {
-            LOG (WARNING) << "Failed to unload compute_light_probs module";
-        }
-        computeProbTex_.cudaModule = nullptr;
-    }
 
     // TODO: Clean up Claudia-specific resources
     // - Temporal buffers
@@ -327,6 +331,23 @@ void ClaudiaEngine::render (const mace::InputEvent& input, bool updateMotion, ui
 
     // Update launch parameters (keeping as-is for now)
     updateLaunchParameters (input);
+
+    // Update area light distributions if needed (only if we have emissive instances)
+    if (areaLightHandler_ && areaLightHandler_->hasDirtyDistributions() && 
+        sceneHandler_ && sceneHandler_->getNumEmissiveInstances() > 0)
+    {
+        timer->computePDFTexture.start (stream);
+        areaLightHandler_->updateDirtyDistributions (stream, 0);
+        timer->computePDFTexture.stop (stream);
+    }
+    
+    // Setup scene light sampling for this frame
+    if (areaLightHandler_ && static_plp_.numLightInsts > 0)
+    {
+        CUdeviceptr lightInstDistAddr = static_plp_on_device_ + 
+            offsetof(claudia_shared::StaticPipelineLaunchParameters, lightInstDist);
+        areaLightHandler_->setupSceneLightSampling (stream, lightInstDistAddr, 0);
+    }
 
     // Get PipelineHandler from RenderContext
     auto& handlers = renderContext_->getHandlers();
@@ -482,69 +503,8 @@ void ClaudiaEngine::setupPipelines()
         LOG (INFO) << "Scene set on PipelineHandler after pipeline setup";
     }
 
-    // Initialize light probability computation kernels (still needed)
-    initializeLightProbabilityKernels();
-
     // SBT setup is handled by PipelineHandler
     LOG (INFO) << "ClaudiaEngine pipelines setup complete with PipelineHandler";
-}
-
-void ClaudiaEngine::initializeLightProbabilityKernels()
-{
-    LOG (INFO) << "ClaudiaEngine::initializeLightProbabilityKernels()";
-
-    if (!ptxManager_ || !renderContext_)
-    {
-        LOG (WARNING) << "PTXManager or RenderContext not ready";
-        return;
-    }
-
-    // Load PTX for compute_light_probs kernels
-    std::vector<char> probPtxData = ptxManager_->getPTXData ("compute_light_probs");
-    if (probPtxData.empty())
-    {
-        LOG (WARNING) << "Failed to load PTX for compute_light_probs";
-        return;
-    }
-
-    // Create null-terminated string for cuModuleLoadData
-    probPtxData.push_back ('\0');
-
-    // Load CUDA module
-    CUDADRV_CHECK (cuModuleLoadData (&computeProbTex_.cudaModule, probPtxData.data()));
-
-    // Initialize all kernels
-    computeProbTex_.computeFirstMip = cudau::Kernel (
-        computeProbTex_.cudaModule, "computeProbabilityTextureFirstMip", cudau::dim3 (32), 0);
-
-    computeProbTex_.computeTriangleProbTexture = cudau::Kernel (
-        computeProbTex_.cudaModule, "computeTriangleProbTexture", cudau::dim3 (32), 0);
-
-    computeProbTex_.computeGeomInstProbTexture = cudau::Kernel (
-        computeProbTex_.cudaModule, "computeGeomInstProbTexture", cudau::dim3 (32), 0);
-
-    computeProbTex_.computeInstProbTexture = cudau::Kernel (
-        computeProbTex_.cudaModule, "computeInstProbTexture", cudau::dim3 (32), 0);
-
-    computeProbTex_.computeMip = cudau::Kernel (
-        computeProbTex_.cudaModule, "computeProbabilityTextureMip", cudau::dim3 (8, 8), 0);
-
-    computeProbTex_.computeTriangleProbBuffer = cudau::Kernel (
-        computeProbTex_.cudaModule, "computeTriangleProbBuffer", cudau::dim3 (32), 0);
-
-    computeProbTex_.computeGeomInstProbBuffer = cudau::Kernel (
-        computeProbTex_.cudaModule, "computeGeomInstProbBuffer", cudau::dim3 (32), 0);
-
-    computeProbTex_.computeInstProbBuffer = cudau::Kernel (
-        computeProbTex_.cudaModule, "computeInstProbBuffer", cudau::dim3 (32), 0);
-
-    computeProbTex_.finalizeDiscreteDistribution1D = cudau::Kernel (
-        computeProbTex_.cudaModule, "finalizeDiscreteDistribution1D", cudau::dim3 (32), 0);
-
-    computeProbTex_.test = cudau::Kernel (
-        computeProbTex_.cudaModule, "testProbabilityTexture", cudau::dim3 (32), 0);
-
-    LOG (INFO) << "Light probability computation kernels initialized successfully";
 }
 
 void ClaudiaEngine::updateMaterialHitGroups (ClaudiaModelPtr model)
@@ -691,15 +651,32 @@ void ClaudiaEngine::updateLaunchParameters (const mace::InputEvent& input)
         static_plp_.geometryInstanceDataBuffer = shared::ROBuffer<shared::GeometryInstanceData>();
     }
 
-    // Set light distribution from scene handler
-    if (sceneHandler_)
+    // Set light distribution from area light handler
+    if (sceneHandler_ && areaLightHandler_)
     {
-        // Update emissive instances and build light distribution
+        // Update emissive instances first
         sceneHandler_->updateEmissiveInstances();
-        sceneHandler_->buildLightInstanceDistribution();
-
-        // Get the device representation of the light distribution
-        sceneHandler_->getLightInstDistribution().getDeviceType (&static_plp_.lightInstDist);
+        
+        // Only prepare light distributions if there are emissive instances
+        if (sceneHandler_->getNumEmissiveInstances() > 0)
+        {
+            // Prepare and update scene light distribution through AreaLightHandler
+            uint32_t numInstances = sceneHandler_->getInstanceCount();
+            areaLightHandler_->prepareSceneLightDistribution(numInstances);
+            areaLightHandler_->updateSceneLightDistribution(renderContext_->getCudaStream(), 0);
+            
+            // Get the device representation of the light distribution
+            const auto* sceneDist = areaLightHandler_->getSceneLightDistribution();
+            if (sceneDist)
+            {
+                sceneDist->getDeviceType(&static_plp_.lightInstDist);
+            }
+        }
+        else
+        {
+            // No emissive instances, use empty distribution
+            static_plp_.lightInstDist = shared::LightDistribution();
+        }
     }
     else
     {

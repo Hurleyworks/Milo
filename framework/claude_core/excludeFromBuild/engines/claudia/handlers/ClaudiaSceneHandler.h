@@ -164,11 +164,10 @@ class ClaudiaSceneHandler
         return expiredIndices.size();
     }
 
-    // Area light support methods
+    // Area light support methods - delegated to AreaLightHandler
     void updateEmissiveInstances();
-    void buildLightInstanceDistribution();
-    const LightDistribution& getLightInstDistribution() const { return lightInstDistribution_; }
     uint32_t getNumEmissiveInstances() const { return static_cast<uint32_t> (emissiveInstances_.size()); }
+    const std::vector<uint32_t>& getEmissiveInstances() const { return emissiveInstances_; }
 
  private:
     // Reference to the render context for OptiX operations
@@ -226,8 +225,7 @@ class ClaudiaSceneHandler
     // Populate instance data for a given instance index
     void populateInstanceData (uint32_t instanceIndex, const RenderableNode& node);
 
-    // Area light tracking
+    // Area light tracking - only track indices, distribution managed by AreaLightHandler
     std::vector<uint32_t> emissiveInstances_; // Track emissive instance indices
-    LightDistribution lightInstDistribution_; // Distribution for sampling light instances (host side)
-    bool lightDistributionDirty_ = true;      // Flag for rebuild
+    size_t lastEmissiveCount_ = SIZE_MAX; // Track last count to avoid log spam
 };

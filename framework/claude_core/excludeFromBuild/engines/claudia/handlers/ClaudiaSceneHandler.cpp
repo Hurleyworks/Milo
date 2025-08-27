@@ -993,11 +993,11 @@ void ClaudiaSceneHandler::updateEmissiveInstances()
         // Check if the model has any emissive materials
         bool hasEmissive = false;
 
-        // For ClaudiaTriangleModel, check if emitter distribution has non-zero integral
+        // For ClaudiaTriangleModel, check if it has emissive materials
         if (auto triModel = std::dynamic_pointer_cast<ClaudiaTriangleModel> (model))
         {
-            const LightDistribution& emitterDist = triModel->getEmitterPrimDistribution();
-            if (emitterDist.getIntengral() > 0.0f)
+            // Check the emissive flag that was set when materials were created
+            if (triModel->hasEmissiveMaterials())
             {
                 hasEmissive = true;
             }
@@ -1021,61 +1021,11 @@ void ClaudiaSceneHandler::updateEmissiveInstances()
         }
     }
 
-    lightDistributionDirty_ = true;
-    // LOG(DBUG) << "Found " << emissiveInstances_.size() << " emissive instances";
-}
-
-void ClaudiaSceneHandler::buildLightInstanceDistribution()
-{
-    if (!lightDistributionDirty_) return;
-
-    if (emissiveInstances_.empty())
+    // Note: Light distribution building is now handled by ClaudiaAreaLightHandler
+    // Only log when the count changes to avoid spam
+    if (emissiveInstances_.size() != lastEmissiveCount_)
     {
-        // Initialize empty distribution
-        lightInstDistribution_.initialize (ctx->getCudaContext(), cudau::BufferType::Device, nullptr, 0);
-        lightDistributionDirty_ = false;
-        return;
+        LOG(DBUG) << "Found " << emissiveInstances_.size() << " emissive instances";
+        lastEmissiveCount_ = emissiveInstances_.size();
     }
-
-    // Collect importances for all emissive instances
-    std::vector<float> importances;
-    importances.reserve (emissiveInstances_.size());
-
-    for (uint32_t instIdx : emissiveInstances_)
-    {
-        float importance = 0.0f;
-
-        // Get node and model
-        auto it = nodeMap.find (instIdx);
-        if (it != nodeMap.end() && !it->second.expired())
-        {
-            auto node = it->second.lock();
-            auto model = modelHandler_->getModel (node);
-
-            if (auto triModel = std::dynamic_pointer_cast<ClaudiaTriangleModel> (model))
-            {
-                // Get importance from the model's emitter distribution
-                importance = triModel->getEmitterPrimDistribution().getIntengral();
-
-                // Account for instance scaling
-                const auto& spaceTime = node->getSpaceTime();
-                float uniformScale = spaceTime.scale.norm() / std::sqrt (3.0f); // Approximate uniform scale
-                importance *= uniformScale * uniformScale;                      // Area scales by square of scale
-            }
-        }
-
-        importances.push_back (std::max (importance, 1e-6f)); // Avoid zero importance
-    }
-
-    // Build CDF for sampling
-    // Initialize light distribution with CUDA context, buffer type, and importance data
-    lightInstDistribution_.initialize (
-        ctx->getCudaContext(),
-        cudau::BufferType::Device,
-        importances.data(),
-        static_cast<uint32_t> (importances.size()));
-    lightDistributionDirty_ = false;
-
-    LOG (DBUG) << "Built light instance distribution with " << importances.size()
-               << " lights, total importance: " << lightInstDistribution_.getIntengral();
 }
