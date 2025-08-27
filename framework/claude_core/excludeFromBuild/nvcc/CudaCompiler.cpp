@@ -69,7 +69,7 @@ std::vector<std::filesystem::path> CudaCompiler::getCudaFilesForEngine (
                 }
             }
         }
-        
+#endif  
         // Claudia engine files
         std::filesystem::path claudiaPath = baseFolder / "engines" / "claudia" / "cuda";
         if (std::filesystem::exists(claudiaPath)) {
@@ -79,7 +79,7 @@ std::vector<std::filesystem::path> CudaCompiler::getCudaFilesForEngine (
                 }
             }
         }
-#endif
+
         // RiPR engine files
         std::filesystem::path riprEnginePath = baseFolder / "engines" / "ripr" / "cuda";
         if (std::filesystem::exists (riprEnginePath))
@@ -186,33 +186,33 @@ std::vector<std::filesystem::path> CudaCompiler::getCudaFilesForEngine (
             }
         }
     }
-    else if (engineFilter == "ripr")
-    {
-        // Only RiPR engine files
-        std::filesystem::path riprEnginePath = baseFolder / "engines" / "ripr" / "cuda";
-        if (std::filesystem::exists (riprEnginePath))
-        {
-            for (const auto& entry : std::filesystem::directory_iterator (riprEnginePath))
-            {
-                if (entry.path().extension() == ".cu")
-                {
-                    result.push_back (entry.path());
-                }
-            }
-        }
+    //else if (engineFilter == "ripr")
+    //{
+    //    // Only RiPR engine files
+    //    std::filesystem::path riprEnginePath = baseFolder / "engines" / "ripr" / "cuda";
+    //    if (std::filesystem::exists (riprEnginePath))
+    //    {
+    //        for (const auto& entry : std::filesystem::directory_iterator (riprEnginePath))
+    //        {
+    //            if (entry.path().extension() == ".cu")
+    //            {
+    //                result.push_back (entry.path());
+    //            }
+    //        }
+    //    }
 
-        // Add common files that RiPR uses
-        std::filesystem::path commonPath = baseFolder / "common" / "gpu_kernels";
-        if (std::filesystem::exists (commonPath))
-        {
-            // Add compute_light_probs.cu if it exists (used by RiPR)
-            auto lightProbs = commonPath / "compute_light_probs.cu";
-            if (std::filesystem::exists (lightProbs))
-            {
-                result.push_back (lightProbs);
-            }
-        }
-    }
+    //    // Add common files that RiPR uses
+    //    std::filesystem::path commonPath = baseFolder / "common" / "gpu_kernels";
+    //    if (std::filesystem::exists (commonPath))
+    //    {
+    //        // Add compute_light_probs.cu if it exists (used by RiPR)
+    //        auto lightProbs = commonPath / "compute_light_probs.cu";
+    //        if (std::filesystem::exists (lightProbs))
+    //        {
+    //            result.push_back (lightProbs);
+    //        }
+    //    }
+    //}
     else if (engineFilter == "shocker")
     {
         // Only Shocker engine files

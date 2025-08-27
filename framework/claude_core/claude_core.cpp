@@ -37,12 +37,18 @@
 #include "excludeFromBuild/engines/ripr/handlers/RiPRModelHandler.cpp"
 #include "excludeFromBuild/engines/ripr/handlers/RiPRSceneHandler.cpp"
 
+// claudia handlers  
+#include "excludeFromBuild/engines/claudia/handlers/ClaudiaModelHandler.cpp"
+#include "excludeFromBuild/engines/claudia/handlers/ClaudiaSceneHandler.cpp"
+
 // engines
 #include "excludeFromBuild/engines/base/BaseRenderingEngine.cpp"
 #include "excludeFromBuild/engines/RenderEngineManager.cpp"
 #include "excludeFromBuild/engines/shocker/ShockerEngine.cpp"
 #include "excludeFromBuild/engines/ripr/RiPREngine.cpp"
+#include "excludeFromBuild/engines/claudia/ClaudiaEngine.cpp"
 
 // models
 #include "excludeFromBuild/engines/shocker/models/ShockerModel.cpp"
 #include "excludeFromBuild/engines/ripr/models/RiPRModel.cpp"
+#include "excludeFromBuild/engines/claudia/models/ClaudiaModel.cpp"

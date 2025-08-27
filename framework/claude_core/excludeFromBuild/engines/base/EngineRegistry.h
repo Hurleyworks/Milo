@@ -6,8 +6,9 @@
 #include "../RenderEngineManager.h"
 #include "../shocker/ShockerEngine.h"
 #include "../ripr/RiPREngine.h"
+#include "../claudia/ClaudiaEngine.h"
 
-// Register all built-in rendering engines
+    // Register all built-in rendering engines
 inline void registerBuiltInEngines(RenderEngineManager& manager)
 {
 
@@ -26,6 +27,15 @@ inline void registerBuiltInEngines(RenderEngineManager& manager)
                           []() -> std::unique_ptr<IRenderingEngine> {
                               return std::make_unique<RiPREngine>();
                           });
+
+    // Register Claudia engine
+    manager.registerEngine ("claudia",
+                            "Claudia Engine",
+                            "Claudia path tracing engine with area light support and improved handlers",
+                            []() -> std::unique_ptr<IRenderingEngine>
+                            {
+                                return std::make_unique<ClaudiaEngine>();
+                            });
     
     // TODO: Register more engines as they are implemented
     // manager.registerEngine("svgf", []() {

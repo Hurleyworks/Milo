@@ -120,9 +120,9 @@ class Application : public Jahley::App
         std::string camera = "E:/common_content/glTF-Sample-Models/2.0/AntiqueCamera/glTF/AntiqueCamera.gltf";
         std::string ground = "E:/common_content/models/static_gound/static_ground.gltf";
         //  model.loadGLTF (ground);
-        model.loadGLTF (helmet);
+      //  model.loadGLTF (helmet);
       // model.loadGLTF (testModel);
-    // model.loadGLTF (box);
+       model.loadGLTF (box);
        // model.loadGLTF (cash);
         // model.loadGLTF (phone);
         //  model.loadGLTF (scifi);

@@ -103,18 +103,20 @@ View::View (const DesktopWindowSettings& settings) :
     // Engine selection combo box
     new Label (engineWindow, "Render Engine:", "sans-bold");
     m_engineCombo = new ComboBox (engineWindow,
-                                  {"Shocker Engine", "RiPR Engine"});
+                                  {"Shocker Engine", "RiPR Engine", "Claudia Engine"});
     m_engineCombo->set_selected_index (0); // Default to Shocker Engine
     m_engineCombo->set_tooltip ("Select the rendering engine to use");
     m_engineCombo->set_callback ([this] (int index)
                                  {
         const std::vector<std::string> engineNames = {
             "shocker",
-            "ripr"
+            "ripr",
+            "claudia"
         };
         const std::vector<std::string> engineDescriptions = {
             "Next-generation path tracing engine with optimized performance",
-            "RiPR path tracing engine with adaptive sampling and improved convergence"
+            "RiPR path tracing engine with adaptive sampling and improved convergence",
+            "Claudia path tracing engine with adaptive sampling and improved convergence"
         };
         if (index >= 0 && index < engineNames.size()) {
             LOG(INFO) << "Switching to engine: " << engineNames[index];
