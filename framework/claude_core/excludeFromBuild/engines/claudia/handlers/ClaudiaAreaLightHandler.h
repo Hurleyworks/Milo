@@ -93,6 +93,12 @@ private:
     void computeInstProbabilities(CUstream stream, uint32_t numInsts);
     void finalizeLightDistribution(CUstream stream, LightDistribution& dist, uint32_t numElements);
     
+public:
+    // Finalize emitter distribution after computing triangle probabilities
+    void finalizeEmitterDistribution(CUstream stream, ClaudiaModelPtr model, uint32_t geomInstSlot);
+    
+private:
+    
     // Compute probability texture dimensions
     uint2 computeProbabilityTextureDimensions(uint32_t numElements) const;
     

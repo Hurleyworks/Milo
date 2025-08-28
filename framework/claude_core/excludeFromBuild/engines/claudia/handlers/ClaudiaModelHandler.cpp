@@ -5,6 +5,7 @@
 #include "../models/ClaudiaModel.h"
 #include "../../../handlers/Handlers.h"
 
+
 // Constructor initializes the model handler with the render context
 ClaudiaModelHandler::ClaudiaModelHandler(RenderContextPtr ctx) :
     ctx_(ctx)
@@ -549,13 +550,29 @@ void ClaudiaModelHandler::computeLightProbabilities(ClaudiaTriangleModel* model,
     CUstream stream = ctx_->getCudaStream();
     areaLightHandler_->updateGeometryLightDistribution(stream, model, geomInstSlot, materialSlot);
     
-    // TODO: Trigger engine to rebuild light distributions if needed
-    // if (engine_)
-    // {
-    //     ClaudiaEngine* claudiaEngine = dynamic_cast<ClaudiaEngine*>(engine_);
-    //     if (claudiaEngine)
-    //     {
-    //         claudiaEngine->buildLightDistributions();
-    //     }
-    // }
+    // Finalize the emitter distribution (compute CDF from weights)
+    // This is critical for proper light sampling in the path tracer
+    LightDistribution* emitterDist = model->getTriLightImportance();
+    
+#if USE_PROBABILITY_TEXTURE
+    // For probability texture, generate mip levels
+    uint2 dims = shared::computeProbabilityTextureDimentions(numTriangles);
+    uint32_t numMipLevels = shared::nextPowOf2Exponent(dims.x) + 1;
+    
+    // Generate mip levels for hierarchical sampling
+    for (int dstMipLevel = 1; dstMipLevel < numMipLevels; ++dstMipLevel) {
+        dims = (dims + uint2(1, 1)) / 2;
+        // TODO: Call computeMip kernel when available
+        // areaLightHandler_->computeMip(stream, emitterDist, dstMipLevel, dims);
+    }
+#else
+    // For discrete distribution, finalize to compute the integral
+    // The CDF computation will be done by the finalizeEmitterDistribution method
+    // Model is already a raw pointer to ClaudiaTriangleModel, we need to wrap it
+    // Since we don't own the model, use a non-owning shared_ptr
+    ClaudiaModelPtr modelPtr(model, [](ClaudiaModel*){});  // Empty deleter since we don't own it
+    areaLightHandler_->finalizeEmitterDistribution(stream, modelPtr, geomInstSlot);
+#endif
+    
+    LOG(DBUG) << "Completed light probability computation for geometry instance";
 }

@@ -483,17 +483,57 @@ void ClaudiaAreaLightHandler::computeGeomInstProbabilities(
     uint32_t numGeomInsts,
     LightDistribution& dist)
 {
-    if (!modelHandler_)
+    if (!modelHandler_ || !sceneHandler_)
         return;
-        
+    
+    // Get the instance data buffer
+    auto instDataBuffer = sceneHandler_->getInstanceDataBuffer();
+    if (!instDataBuffer)
+    {
+        LOG(WARNING) << "Instance data buffer not available";
+        return;
+    }
+    
+    // Get the geometry instance data buffer
+    auto geomInstDataBuffer = modelHandler_->getGeometryInstanceDataBuffer();
+    if (!geomInstDataBuffer)
+    {
+        LOG(WARNING) << "Geometry instance data buffer not available";
+        return;
+    }
+    
+    shared::InstanceData* instData = instDataBuffer->getDevicePointerAt(instSlot);
+    
 #if USE_PROBABILITY_TEXTURE
     // Implementation for texture-based computation
-    LOG(DBUG) << "Computing geometry instance probabilities for " << numGeomInsts << " instances";
-    // TODO: Implement kernel invocation when kernels are set
+    if (computeProbTex_.cudaModule && computeProbTex_.computeGeomInstProbTexture.isInitialized())
+    {
+        uint2 dims = shared::computeProbabilityTextureDimentions(numGeomInsts);
+        computeProbTex_.computeGeomInstProbTexture(
+            stream,
+            computeProbTex_.computeGeomInstProbTexture.calcGridDim(dims.x * dims.y),
+            instData,
+            instSlot,
+            numGeomInsts,
+            geomInstDataBuffer->getDevicePointer(),
+            dist.getSurfaceObject(0)
+        );
+        LOG(DBUG) << "Computed geometry instance probabilities for " << numGeomInsts << " instances";
+    }
 #else
     // Implementation for buffer-based computation
-    LOG(DBUG) << "Computing geometry instance probabilities for " << numGeomInsts << " instances";
-    // TODO: Implement kernel invocation when kernels are set
+    if (computeProbTex_.cudaModule)
+    {
+        computeProbTex_.computeGeomInstProbBuffer(
+            stream,
+            computeProbTex_.computeGeomInstProbBuffer.calcGridDim(numGeomInsts),
+            instData,
+            instSlot,
+            numGeomInsts,
+            geomInstDataBuffer->getDevicePointer()
+        );
+        LOG(DBUG) << "Computed geometry instance probabilities for " << numGeomInsts << " instances";
+    }
 #endif
 }
 
@@ -509,13 +549,75 @@ void ClaudiaAreaLightHandler::computeInstProbabilities(CUstream stream, uint32_t
         LOG(DBUG) << "Computing instance probabilities for " << numInsts << " instances";
         lastLoggedNumInsts = numInsts;
     }
-        
+    
+    // Get the instance data buffer
+    auto instDataBuffer = sceneHandler_->getInstanceDataBuffer();
+    if (!instDataBuffer)
+    {
+        LOG(WARNING) << "Instance data buffer not available";
+        return;
+    }
+    
 #if USE_PROBABILITY_TEXTURE
     // Implementation for texture-based computation
-    // TODO: Implement kernel invocation when kernels are set
+    if (computeProbTex_.cudaModule && computeProbTex_.computeInstProbTexture.isInitialized())
+    {
+        uint2 dims = shared::computeProbabilityTextureDimentions(numInsts);
+        computeProbTex_.computeInstProbTexture(
+            stream,
+            computeProbTex_.computeInstProbTexture.calcGridDim(dims.x * dims.y),
+            &sceneLightDist_,
+            numInsts,
+            instDataBuffer->getDevicePointer(),
+            sceneLightDist_.getSurfaceObject(0)
+        );
+        
+        // Generate mip levels for hierarchical sampling
+        uint2 curDims = dims;
+        uint32_t numMipLevels = shared::nextPowOf2Exponent(dims.x) + 1;
+        for (int dstMipLevel = 1; dstMipLevel < numMipLevels; ++dstMipLevel)
+        {
+            curDims = (curDims + uint2(1, 1)) / 2;
+            computeProbTex_.computeMip(
+                stream,
+                computeProbTex_.computeMip.calcGridDim(curDims.x, curDims.y),
+                &sceneLightDist_,
+                dstMipLevel,
+                sceneLightDist_.getSurfaceObject(dstMipLevel - 1),
+                sceneLightDist_.getSurfaceObject(dstMipLevel)
+            );
+        }
+    }
 #else
     // Implementation for buffer-based computation
-    // TODO: Implement kernel invocation when kernels are set
+    if (computeProbTex_.cudaModule)
+    {
+        // First compute the weights for all instances
+        computeProbTex_.computeInstProbBuffer(
+            stream,
+            computeProbTex_.computeInstProbBuffer.calcGridDim(numInsts),
+            &sceneLightDist_,
+            numInsts,
+            instDataBuffer->getDevicePointer()
+        );
+        
+        // Then compute CDF using exclusive sum
+        if (scanScratchMem_.isInitialized())
+        {
+            CUDADRV_CHECK(cubd::DeviceScan::ExclusiveSum(
+                scanScratchMem_.getDevicePointer(), scanScratchSize_,
+                sceneLightDist_.weightsOnDevice(),
+                sceneLightDist_.cdfOnDevice(),
+                numInsts, stream));
+            
+            // Finally, finalize the distribution
+            computeProbTex_.finalizeDiscreteDistribution1D(
+                stream,
+                computeProbTex_.finalizeDiscreteDistribution1D.calcGridDim(1),
+                &sceneLightDist_
+            );
+        }
+    }
 #endif
 }
 
@@ -533,6 +635,83 @@ void ClaudiaAreaLightHandler::finalizeLightDistribution(
     LOG(DBUG) << "Finalizing discrete distribution for " << numElements << " elements";
     // TODO: Implement kernel invocation when kernels are set
 #endif
+}
+
+void ClaudiaAreaLightHandler::finalizeEmitterDistribution(
+    CUstream stream,
+    ClaudiaModelPtr model, 
+    uint32_t geomInstSlot)
+{
+    if (!model || !modelHandler_)
+    {
+        LOG(WARNING) << "Model or handler is null in finalizeEmitterDistribution";
+        return;
+    }
+    
+    // Cast to triangle model to access triangle-specific methods
+    auto triangleModel = std::dynamic_pointer_cast<ClaudiaTriangleModel>(model);
+    if (!triangleModel)
+    {
+        LOG(WARNING) << "Model is not a triangle model";
+        return;
+    }
+    
+    // Get the emitter distribution from the model
+    LightDistribution* emitterDist = triangleModel->getTriLightImportance();
+    if (!emitterDist || !emitterDist->isInitialized())
+    {
+        LOG(WARNING) << "Emitter distribution not initialized";
+        return;
+    }
+    
+    uint32_t numTriangles = triangleModel->getTriangleBuffer().numElements();
+    
+#if !USE_PROBABILITY_TEXTURE
+    // For discrete distribution, we need to compute the CDF using exclusive sum
+    // Use the pre-allocated scan scratch memory
+    if (scanScratchMem_.isInitialized())
+    {
+        CUDADRV_CHECK(cubd::DeviceScan::ExclusiveSum(
+            scanScratchMem_.getDevicePointer(), scanScratchSize_,
+            emitterDist->weightsOnDevice(),
+            emitterDist->cdfOnDevice(),
+            numTriangles, stream));
+        
+        LOG(DBUG) << "Computed CDF for " << numTriangles << " triangles";
+    }
+    else
+    {
+        LOG(WARNING) << "Scan scratch memory not initialized";
+        return;
+    }
+#endif
+    
+    // Get the geometry instance data buffer from model handler
+    auto geometryInstanceDataBuffer = modelHandler_->getGeometryInstanceDataBuffer();
+    if (!geometryInstanceDataBuffer)
+    {
+        LOG(WARNING) << "Geometry instance data buffer is null";
+        return;
+    }
+    
+    // Get device pointer to the specific geometry instance
+    shared::GeometryInstanceData* geomInstData = geometryInstanceDataBuffer->getDevicePointerAt(geomInstSlot);
+    
+    if (computeProbTex_.cudaModule)
+    {
+        // Finalize the discrete distribution to compute the integral
+        computeProbTex_.finalizeDiscreteDistribution1D(
+            stream,
+            computeProbTex_.finalizeDiscreteDistribution1D.calcGridDim(1),
+            &geomInstData->emitterPrimDist
+        );
+        
+        LOG(DBUG) << "Finalized emitter distribution for geometry instance " << geomInstSlot;
+    }
+    else
+    {
+        LOG(WARNING) << "finalizeDiscreteDistribution1D kernel not initialized";
+    }
 }
 
 uint2 ClaudiaAreaLightHandler::computeProbabilityTextureDimensions(uint32_t numElements) const
