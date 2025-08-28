@@ -84,7 +84,9 @@
       "Read(//mnt/e/1Shocker/GfxExp/**)",
       "Read(//mnt/e/1Shocker/OptiX_Utility/**)",
       "Bash(git checkout:*)",
-      "Read(//mnt/e/1Shocker/GfxExp/**)"
+      "Read(//mnt/e/1Shocker/GfxExp/**)",
+      "WebSearch",
+      "WebFetch(domain:github.com)"
     ],
     "deny": []
   },

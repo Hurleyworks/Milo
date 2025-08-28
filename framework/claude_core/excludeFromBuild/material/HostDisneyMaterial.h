@@ -8,7 +8,7 @@
 //                 arrays that can be accessed from both host and device code. These are
 //                 typically used to store parameter values or lookup tables for materials.
 // CUtexObject   - CUDA texture object handle (unsigned long long). References texture
-//                 data on the GPU for efficient sampling in kernels. A value of 0 
+//                 data on the GPU for efficient sampling in kernels. A value of 0
 //                 indicates no texture is bound. Used for mapping images to material
 //                 properties with hardware-accelerated filtering and caching.
 
@@ -66,7 +66,7 @@ struct DisneyMaterial
     const cudau::Array* ior;
     CUtexObject texIOR;
 
-     // Emissive properties
+    // Emissive properties
     const cudau::Array* emissive;
     CUtexObject texEmissive;
     const cudau::Array* emissiveStrength;
@@ -76,7 +76,7 @@ struct DisneyMaterial
     const cudau::Array* normal;
     CUtexObject texNormal;
 
-       bool useAlphaForTransparency = false;
+    bool useAlphaForTransparency = false;
 
     // Default constructor initializes all pointers and handles to null/zero
     DisneyMaterial() :

@@ -273,8 +273,11 @@ std::tuple<optixu::Material, uint32_t> DisneyMaterialHandler::createDisneyMateri
     processTextureInfo (material.emission.luminousTexture, hostDisney.get(),
                         &hostDisney->emissive, &hostDisney->texEmissive,
                         materialFolder, model,
-                        material.emission.luminousColor * material.emission.luminous);
+                        material.emission.luminousColor);
 
+    // Debug: Log the emission luminous value before processing
+    LOG(INFO) << "Processing emissiveStrength with material.emission.luminous = " << material.emission.luminous;
+    
     processTextureInfo (std::nullopt, hostDisney.get(),
                         &hostDisney->emissiveStrength, &hostDisney->texEmissiveStrength,
                         materialFolder, model,
@@ -442,8 +445,18 @@ void DisneyMaterialHandler::processTextureInfo (
             defaultVector.z(),
             1.0f);
 
-        ctx->getHandlers().textureHandler->createImmTexture (immValue, true, targetArray);
-        needsDegamma = true;
+        // Debug logging for emissive strength
+        if (targetArray == &hostDisney->emissiveStrength)
+        {
+            LOG(INFO) << "Creating immediate texture for emissiveStrength:";
+            LOG(INFO) << "  defaultVector = (" << defaultVector.x() << ", " << defaultVector.y() << ", " << defaultVector.z() << ")";
+            LOG(INFO) << "  immValue = (" << immValue.x << ", " << immValue.y << ", " << immValue.z << ", " << immValue.w << ")";
+        }
+
+        // For emissive strength, use unnormalized (HDR) texture to preserve values > 1.0
+        bool shouldNormalize = (targetArray != &hostDisney->emissiveStrength);
+        ctx->getHandlers().textureHandler->createImmTexture (immValue, shouldNormalize, targetArray);
+        needsDegamma = shouldNormalize;
     }
 
     if (!*targetArray)
@@ -452,7 +465,12 @@ void DisneyMaterialHandler::processTextureInfo (
         return;
     }
 
-    *targetTexObject = needsDegamma ? sampler_sRGB.createTextureObject (**targetArray) : sampler_normFloat.createTextureObject (**targetArray);
+    // For emissive strength, always use float sampler for HDR values
+    if (targetArray == &hostDisney->emissiveStrength) {
+        *targetTexObject = sampler_float.createTextureObject (**targetArray);
+    } else {
+        *targetTexObject = needsDegamma ? sampler_sRGB.createTextureObject (**targetArray) : sampler_normFloat.createTextureObject (**targetArray);
+    }
 
     // Check for alpha in base color texture
     if (targetArray == &hostDisney->baseColor && requestedInput == "Color")

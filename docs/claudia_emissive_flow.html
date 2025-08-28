@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ClaudiaEngine Emissive Properties Flow Analysis</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #fff;
+            padding: 40px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        
+        h2 {
+            color: #34495e;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+            border-left: 4px solid #3498db;
+            padding-left: 15px;
+        }
+        
+        h3 {
+            color: #555;
+            margin-top: 25px;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        
+        .code-block, pre {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 20px;
+            margin: 24px 0;
+            overflow-x: auto;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #000;
+        }
+        
+        .inline-code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #000;
+        }
+        
+        .flow-section {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 25px;
+            margin: 30px 0;
+        }
+        
+        .variable-trace {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .variable-trace h4 {
+            color: #2980b9;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+        
+        .pipeline-stage {
+            background: linear-gradient(to right, #ecf0f1, #fff);
+            border-left: 4px solid #e74c3c;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 0 4px 4px 0;
+        }
+        
+        .note {
+            background: #fffbdd;
+            border: 1px solid #f0e68c;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px 0;
+            font-style: italic;
+        }
+        
+        .important {
+            background: #ffe6e6;
+            border: 1px solid #ffcccc;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        
+        ul {
+            margin-left: 30px;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+        
+        li {
+            margin: 8px 0;
+        }
+        
+        .file-path {
+            color: #7f8c8d;
+            font-size: 0.9em;
+            font-style: italic;
+            margin-bottom: 10px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        
+        th {
+            background: #3498db;
+            color: white;
+        }
+        
+        tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    <h1>ClaudiaEngine Emissive Properties Flow Analysis</h1>
+    
+    <div class="note">
+        This document traces the complete flow of <span class="inline-code">CgMaterial::EmissiveProperties</span> through the ClaudiaEngine rendering pipeline, from material definition to GPU light sampling computation.
+    </div>
+
+    <h2>1. EmissiveProperties Definition</h2>
+    
+    <div class="flow-section">
+        <h3>Source Structure</h3>
+        <div class="file-path">modules/sabi_core/excludeFromBuild/cgmodel/CgMaterial.h:165-170</div>
+        <pre class="code-block">struct EmissionProperties
+{
+    float luminous = 0.0f;                        // Emission intensity multiplier
+    Eigen::Vector3f luminousColor = {0.5f, 0.5f, 0.5f};  // RGB emission color
+    std::optional&lt;CgTextureInfo&gt; luminousTexture;  // Optional emission texture
+};</pre>
+        
+        <div class="variable-trace">
+            <h4>Key Variables:</h4>
+            <ul>
+                <li><strong>luminous</strong>: Scalar multiplier for emission strength (0.0 = no emission)</li>
+                <li><strong>luminousColor</strong>: Base RGB color of emitted light</li>
+                <li><strong>luminousTexture</strong>: Optional texture map for spatially-varying emission</li>
+            </ul>
+        </div>
+    </div>
+
+    <h2>2. Pipeline Stage 1: Model Loading</h2>
+    
+    <div class="pipeline-stage">
+        <h3>ClaudiaModelHandler::addCgModel</h3>
+        <div class="file-path">framework/claude_core/excludeFromBuild/engines/claudia/handlers/ClaudiaModelHandler.cpp:222-225</div>
+        
+        <p>When a model is added to the scene, the handler checks if materials are emissive:</p>
+        
+        <pre class="code-block">// Check if material is emissive - both luminous and luminousColor must be non-zero
+float luminousSum = model->S[i].cgMaterial.emission.luminousColor.x() +
+                    model->S[i].cgMaterial.emission.luminousColor.y() +
+                    model->S[i].cgMaterial.emission.luminousColor.z();
+bool matEmissive = (model->S[i].cgMaterial.emission.luminous > 0.0f && luminousSum > 0.0f);</pre>
+        
+        <div class="important">
+            Important: A material is only considered emissive if BOTH conditions are met:
+            <ul>
+                <li>luminous > 0.0f</li>
+                <li>At least one color component is non-zero</li>
+            </ul>
+        </div>
+    </div>
+
+    <h2>3. Pipeline Stage 2: Material Processing</h2>
+    
+    <div class="pipeline-stage">
+        <h3>ClaudiaMaterialHandler::processAndUploadMaterial</h3>
+        <div class="file-path">framework/engine_core/excludeFromBuild/engines/claudia/handlers/ClaudiaMaterialHandler.cpp:280-288</div>
+        
+        <p>The emission properties are processed and uploaded to GPU textures:</p>
+        
+        <pre class="code-block">// Process emission texture with combined color and intensity
+processTextureInfo(material.emission.luminousTexture, hostDisney.get(),
+                  &hostDisney->emissive, &hostDisney->texEmissive,
+                  materialFolder, model,
+                  material.emission.luminousColor * material.emission.luminous);
+
+// Process emission strength as a separate channel
+processTextureInfo(std::nullopt, hostDisney.get(),
+                  &hostDisney->emissiveStrength, &hostDisney->texEmissiveStrength,
+                  materialFolder, model,
+                  Eigen::Vector3f::Constant(material.emission.luminous));</pre>
+        
+        <div class="variable-trace">
+            <h4>Variable Transformation:</h4>
+            <ul>
+                <li><strong>Input:</strong> <span class="inline-code">emission.luminousColor * emission.luminous</span></li>
+                <li><strong>Output:</strong> <span class="inline-code">hostDisney->texEmissive</span> (CUtexObject)</li>
+                <li><strong>Strength:</strong> <span class="inline-code">hostDisney->texEmissiveStrength</span> (separate texture)</li>
+            </ul>
+        </div>
+    </div>
+
+    <h2>4. Pipeline Stage 3: GPU Material Data</h2>
+    
+    <div class="pipeline-stage">
+        <h3>MaterialData Structure</h3>
+        <div class="file-path">framework/claude_core/excludeFromBuild/common/common_shared.h:1166-1189</div>
+        
+        <p>The GPU-side material structure contains the emittance texture handle:</p>
+        
+        <pre class="code-block">struct MaterialData {
+    union {
+        // ... other material types ...
+    };
+    CUtexObject normal;
+    CUtexObject emittance;  // ← Emission texture handle
+    TexDimInfo normalDimInfo;
+    
+    // ... BSDF function pointers ...
+};</pre>
+        
+        <div class="note">
+            The <span class="inline-code">emittance</span> field is a CUDA texture object that can be sampled in GPU kernels.
+        </div>
+    </div>
+
+    <h2>5. Pipeline Stage 4: Light Probability Computation</h2>
+    
+    <div class="pipeline-stage">
+        <h3>compute_light_probs.cu::computeTriangleImportance</h3>
+        <div class="file-path">framework/claude_core/excludeFromBuild/common/gpu_kernels/compute_light_probs.cu:22-46</div>
+        
+        <p>The GPU kernel computes importance values for each triangle based on emission:</p>
+        
+        <pre class="code-block">CUDA_DEVICE_FUNCTION float computeTriangleImportance(
+    GeometryInstanceData* geomInst, uint32_t triIndex,
+    const MaterialData* materialDataBuffer) {
+    
+    const MaterialData &mat = materialDataBuffer[geomInst->materialSlot];
+    const Triangle &tri = geomInst->triangleBuffer[triIndex];
+    
+    // Get triangle vertices
+    const Vertex (&v)[3] = {
+        geomInst->vertexBuffer[tri.index0],
+        geomInst->vertexBuffer[tri.index1],
+        geomInst->vertexBuffer[tri.index2]
+    };
+    
+    // Calculate triangle area
+    Normal3D normal(cross(v[1].position - v[0].position, 
+                         v[2].position - v[0].position));
+    float area = 0.5f * length(normal);
+    
+    // Sample emittance at triangle vertices
+    RGB emittanceEstimate(0.0f, 0.0f, 0.0f);
+    emittanceEstimate += RGB(getXYZ(tex2DLod&lt;float4&gt;(mat.emittance, 
+                                                      v[0].texCoord.x, 
+                                                      v[0].texCoord.y, 0)));
+    emittanceEstimate += RGB(getXYZ(tex2DLod&lt;float4&gt;(mat.emittance, 
+                                                      v[1].texCoord.x, 
+                                                      v[1].texCoord.y, 0)));
+    emittanceEstimate += RGB(getXYZ(tex2DLod&lt;float4&gt;(mat.emittance, 
+                                                      v[2].texCoord.x, 
+                                                      v[2].texCoord.y, 0)));
+    emittanceEstimate /= 3;  // Average of three vertices
+    
+    // Calculate importance: luminance × area
+    float importance = sRGB_calcLuminance(emittanceEstimate) * area;
+    return importance;
+}</pre>
+        
+        <div class="variable-trace">
+            <h4>Importance Calculation:</h4>
+            <ul>
+                <li><strong>Step 1:</strong> Sample emission texture at each vertex UV coordinate</li>
+                <li><strong>Step 2:</strong> Average the three emission values</li>
+                <li><strong>Step 3:</strong> Convert to luminance using sRGB formula</li>
+                <li><strong>Step 4:</strong> Multiply by triangle area for final importance</li>
+            </ul>
+        </div>
+    </div>
+
+    <h2>6. Data Flow Summary</h2>
+    
+    <div class="flow-section">
+        <h3>Complete Variable Transformation Chain</h3>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Stage</th>
+                    <th>Location</th>
+                    <th>Variable</th>
+                    <th>Type</th>
+                    <th>Value/Transformation</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>1. Definition</td>
+                    <td>CgMaterial</td>
+                    <td>emission.luminous</td>
+                    <td>float</td>
+                    <td>Intensity multiplier</td>
+                </tr>
+                <tr>
+                    <td></td>
+                    <td>CgMaterial</td>
+                    <td>emission.luminousColor</td>
+                    <td>Vector3f</td>
+                    <td>RGB color</td>
+                </tr>
+                <tr>
+                    <td>2. Material Check</td>
+                    <td>ClaudiaModelHandler</td>
+                    <td>matEmissive</td>
+                    <td>bool</td>
+                    <td>(luminous > 0) && (color.sum() > 0)</td>
+                </tr>
+                <tr>
+                    <td>3. Processing</td>
+                    <td>ClaudiaMaterialHandler</td>
+                    <td>combined</td>
+                    <td>Vector3f</td>
+                    <td>luminousColor * luminous</td>
+                </tr>
+                <tr>
+                    <td>4. GPU Upload</td>
+                    <td>DisneyMaterial</td>
+                    <td>texEmissive</td>
+                    <td>CUtexObject</td>
+                    <td>CUDA texture handle</td>
+                </tr>
+                <tr>
+                    <td>5. GPU Material</td>
+                    <td>MaterialData</td>
+                    <td>emittance</td>
+                    <td>CUtexObject</td>
+                    <td>Texture for sampling</td>
+                </tr>
+                <tr>
+                    <td>6. Sampling</td>
+                    <td>compute_light_probs</td>
+                    <td>emittanceEstimate</td>
+                    <td>RGB</td>
+                    <td>Average of vertex samples</td>
+                </tr>
+                <tr>
+                    <td>7. Final</td>
+                    <td>compute_light_probs</td>
+                    <td>importance</td>
+                    <td>float</td>
+                    <td>luminance * area</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h2>7. Light Distribution Building</h2>
+    
+    <div class="flow-section">
+        <h3>Hierarchical Distribution Structure</h3>
+        
+        <p>The importance values computed for emissive triangles are used to build a hierarchical probability distribution:</p>
+        
+        <ol>
+            <li><strong>Triangle Level:</strong> Each emissive triangle gets an importance value based on <span class="inline-code">emittance × area</span></li>
+            <li><strong>Geometry Instance Level:</strong> Sum of all triangle importances in a geometry instance</li>
+            <li><strong>Instance Level:</strong> Geometry instance importance scaled by instance transform</li>
+            <li><strong>Scene Level:</strong> Distribution over all emissive instances</li>
+        </ol>
+        
+        <pre class="code-block">// Triangle distribution for a geometry instance
+GeometryInstanceData::emitterPrimDist  // Distribution over triangles
+
+// Instance distribution for light geometry instances  
+InstanceData::lightGeomInstDist        // Distribution over geometry instances
+
+// Scene-level distribution
+SceneLightDist                         // Distribution over all instances</pre>
+    </div>
+
+    <h2>8. Key Insights and Optimizations</h2>
+    
+    <div class="flow-section">
+        <h3>Design Decisions</h3>
+        
+        <ul>
+            <li><strong>Separated Color and Strength:</strong> The engine separates emission color from strength, allowing for independent control and optimization</li>
+            <li><strong>Vertex Sampling:</strong> Triangle importance is estimated by sampling at vertices rather than integrating over the surface</li>
+            <li><strong>Area Weighting:</strong> Larger triangles contribute more to the light distribution, ensuring proper importance sampling</li>
+            <li><strong>Hierarchical Structure:</strong> The multi-level distribution allows efficient sampling at different granularities</li>
+        </ul>
+        
+        <h3>Performance Considerations</h3>
+        
+        <ul>
+            <li><strong>Texture Caching:</strong> Using CUDA texture objects provides hardware-accelerated caching</li>
+            <li><strong>Parallel Computation:</strong> Each triangle's importance is computed independently in parallel</li>
+            <li><strong>Mip-Level 0:</strong> The kernel uses mip-level 0 for precise emission values</li>
+            <li><strong>Pre-computed Distributions:</strong> Light distributions are pre-computed and updated only when geometry changes</li>
+        </ul>
+    </div>
+
+    <h2>9. Integration Points</h2>
+    
+    <div class="flow-section">
+        <h3>Where Emissive Properties Connect</h3>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Component</th>
+                    <th>File</th>
+                    <th>Purpose</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Material Definition</td>
+                    <td>CgMaterial.h</td>
+                    <td>Stores emission properties from scene files</td>
+                </tr>
+                <tr>
+                    <td>Model Handler</td>
+                    <td>ClaudiaModelHandler.cpp</td>
+                    <td>Identifies emissive materials for light sampling</td>
+                </tr>
+                <tr>
+                    <td>Material Handler</td>
+                    <td>ClaudiaMaterialHandler.cpp</td>
+                    <td>Processes and uploads emission textures</td>
+                </tr>
+                <tr>
+                    <td>Area Light Handler</td>
+                    <td>ClaudiaAreaLightHandler.cpp</td>
+                    <td>Manages light distributions</td>
+                </tr>
+                <tr>
+                    <td>GPU Kernels</td>
+                    <td>compute_light_probs.cu</td>
+                    <td>Computes importance from emission</td>
+                </tr>
+                <tr>
+                    <td>Path Tracer</td>
+                    <td>optix_claudia_kernels.cu</td>
+                    <td>Samples lights using distributions</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h2>10. Debugging Checklist</h2>
+    
+    <div class="important">
+        <h3>Common Issues and Solutions</h3>
+        
+        <ul>
+            <li>✓ Ensure <span class="inline-code">luminous > 0</span> AND <span class="inline-code">luminousColor</span> has non-zero components</li>
+            <li>✓ Verify emission texture is properly loaded and has valid CUtexObject handle</li>
+            <li>✓ Check that material slot indices are correctly mapped</li>
+            <li>✓ Confirm triangle UVs are valid for texture sampling</li>
+            <li>✓ Validate that area calculation produces non-zero values</li>
+            <li>✓ Ensure light distributions are finalized after computation</li>
+        </ul>
+    </div>
+
+</body>
+</html>
