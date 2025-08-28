@@ -57,7 +57,7 @@ public:
 
     // Geometry-level light distribution management
     void prepareGeometryLightDistribution(ClaudiaTriangleModel* triModel, uint32_t numTriangles);
-    void updateGeometryLightDistribution(CUstream stream, ClaudiaTriangleModel* triModel, uint32_t geomInstSlot);
+    void updateGeometryLightDistribution(CUstream stream, ClaudiaTriangleModel* triModel, uint32_t geomInstSlot, uint32_t materialSlot);
     void markGeometryDirty(ClaudiaTriangleModel* triModel);
 
     // Full hierarchy update methods
@@ -88,7 +88,7 @@ public:
 
 private:
     // Helper methods for distribution updates
-    void computeTriangleProbabilities(CUstream stream, uint32_t geomInstSlot, uint32_t numTriangles, LightDistribution& dist);
+    void computeTriangleProbabilities(CUstream stream, uint32_t geomInstSlot, uint32_t numTriangles, uint32_t materialSlot, LightDistribution& dist);
     void computeGeomInstProbabilities(CUstream stream, uint32_t instSlot, uint32_t numGeomInsts, LightDistribution& dist);
     void computeInstProbabilities(CUstream stream, uint32_t numInsts);
     void finalizeLightDistribution(CUstream stream, LightDistribution& dist, uint32_t numElements);
@@ -127,7 +127,7 @@ private:
     // Light distributions at each hierarchy level
     LightDistribution sceneLightDist_;                              // Scene-level instance distribution
     std::map<ClaudiaModel*, LightDistribution> instanceLightDists_; // Instance-level geometry distributions
-    std::map<ClaudiaTriangleModel*, LightDistribution> geomLightDists_; // Geometry-level primitive distributions
+    // Note: Geometry-level distributions are now owned by the models themselves
 
     // Scratch memory for GPU operations
     cudau::Buffer scanScratchMem_;

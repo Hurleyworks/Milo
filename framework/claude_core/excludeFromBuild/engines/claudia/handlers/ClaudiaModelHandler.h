@@ -115,6 +115,9 @@ public:
     {
         modelMgr.setAllVisibility(mask);
     }
+    
+    // Compute light probabilities for a triangle model with emissive material
+    void computeLightProbabilities(ClaudiaTriangleModel* model, uint32_t geomInstSlot, uint32_t materialSlot);
 
     // Get all models for updating materials
     const std::map<ItemID, ClaudiaModelPtr>& getModels() const 

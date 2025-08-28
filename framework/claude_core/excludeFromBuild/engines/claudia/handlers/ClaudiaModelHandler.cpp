@@ -198,6 +198,9 @@ void ClaudiaModelHandler::addCgModel(RenderableWeakRef weakNode)
 
         // Now create materials for each surface
         ClaudiaTriangleModel* triangleModel = dynamic_cast<ClaudiaTriangleModel*>(claudiaModel.get());
+        std::vector<uint32_t> materialSlots;
+        std::vector<bool> isEmissiveMat;
+        
         if (triangleModel)
         {
             sabi::CgModelPtr model = node->getModel();
@@ -205,6 +208,7 @@ void ClaudiaModelHandler::addCgModel(RenderableWeakRef weakNode)
             
             uint32_t materialCount = model->S.size();
             bool hasEmissive = false;
+            
             if (materialCount > 1)
             {
                 for (int i = 0; i < materialCount; ++i)
@@ -212,12 +216,15 @@ void ClaudiaModelHandler::addCgModel(RenderableWeakRef weakNode)
                     auto [mat, slot] = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
                         model->S[i].cgMaterial, contentFolder, model);
                     triangleModel->getGeometryInstance()->setMaterial(0, i, mat);
+                    materialSlots.push_back(slot);
                     
                     // Check if material is emissive - both luminous and luminousColor must be non-zero
                     float luminousSum = model->S[i].cgMaterial.emission.luminousColor.x() +
                                         model->S[i].cgMaterial.emission.luminousColor.y() +
                                         model->S[i].cgMaterial.emission.luminousColor.z();
-                    if (model->S[i].cgMaterial.emission.luminous > 0.0f && luminousSum > 0.0f)
+                    bool matEmissive = (model->S[i].cgMaterial.emission.luminous > 0.0f && luminousSum > 0.0f);
+                    isEmissiveMat.push_back(matEmissive);
+                    if (matEmissive)
                     {
                         hasEmissive = true;
                     }
@@ -228,12 +235,15 @@ void ClaudiaModelHandler::addCgModel(RenderableWeakRef weakNode)
                 auto [mat, slot] = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
                     model->S[0].cgMaterial, contentFolder, model);
                 triangleModel->getGeometryInstance()->setMaterial(0, 0, mat);
+                materialSlots.push_back(slot);
                 
                 // Check if material is emissive - both luminous and luminousColor must be non-zero
                 float luminousSum = model->S[0].cgMaterial.emission.luminousColor.x() +
                                     model->S[0].cgMaterial.emission.luminousColor.y() +
                                     model->S[0].cgMaterial.emission.luminousColor.z();
-                if (model->S[0].cgMaterial.emission.luminous > 0.0f && luminousSum > 0.0f)
+                bool matEmissive = (model->S[0].cgMaterial.emission.luminous > 0.0f && luminousSum > 0.0f);
+                isEmissiveMat.push_back(matEmissive);
+                if (matEmissive)
                 {
                     hasEmissive = true;
                 }
@@ -241,24 +251,33 @@ void ClaudiaModelHandler::addCgModel(RenderableWeakRef weakNode)
             
             // Mark the model as having emissive materials
             triangleModel->setHasEmissiveMaterials(hasEmissive);
-            
-            // If model has emissive materials, compute light probabilities
-            if (hasEmissive)
-            {
-                computeLightProbabilities(triangleModel, geomInstSlot);
-            }
         }
 
         // Create a Geometry Acceleration Structure (GAS) for ray tracing
         claudiaModel->createGAS (ctx_, scene, claudia_shared::maxNumRayTypes, scratchMem);
         
-        // Populate geometry instance data in the global buffer
+        // Populate geometry instance data in the global buffer BEFORE computing light probabilities
         if (geomInstSlot != SlotFinder::InvalidSlotIndex)
         {
             shared::GeometryInstanceData* geomInstDataOnHost = geometryInstanceDataBuffer_.map();
             claudiaModel->populateGeometryInstanceData(&geomInstDataOnHost[geomInstSlot]);
             geometryInstanceDataBuffer_.unmap();
             LOG(DBUG) << "Populated geometry instance data for slot " << geomInstSlot;
+        }
+        
+        // Now that buffers are populated, compute light probabilities if model has emissive materials
+        if (triangleModel && triangleModel->hasEmissiveMaterials())
+        {
+            // Find first emissive material and compute probabilities for it
+            // TODO: Handle multiple emissive materials properly
+            for (size_t i = 0; i < materialSlots.size(); ++i)
+            {
+                if (isEmissiveMat[i])
+                {
+                    computeLightProbabilities(triangleModel, geomInstSlot, materialSlots[i]);
+                    break; // TODO: Handle multiple emissive materials
+                }
+            }
         }
 
         // Create a regular instance in the scene
@@ -351,6 +370,9 @@ void ClaudiaModelHandler::addCgModelList(const WeakRenderableList& weakNodeList)
 
             // Now create materials for each surface
             ClaudiaTriangleModel* triangleModel = dynamic_cast<ClaudiaTriangleModel*>(claudiaModel.get());
+            std::vector<uint32_t> materialSlots;
+            std::vector<bool> isEmissiveMat;
+            
             if (triangleModel)
             {
                 sabi::CgModelPtr model = node->getModel();
@@ -358,6 +380,7 @@ void ClaudiaModelHandler::addCgModelList(const WeakRenderableList& weakNodeList)
                 
                 uint32_t materialCount = model->S.size();
                 bool hasEmissive = false;
+                
                 if (materialCount > 1)
                 {
                     for (int i = 0; i < materialCount; ++i)
@@ -365,12 +388,15 @@ void ClaudiaModelHandler::addCgModelList(const WeakRenderableList& weakNodeList)
                         auto [mat, slot] = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
                             model->S[i].cgMaterial, contentFolder, model);
                         triangleModel->getGeometryInstance()->setMaterial(0, i, mat);
+                        materialSlots.push_back(slot);
                         
                         // Check if material is emissive - both luminous and luminousColor must be non-zero
                         float luminousSum = model->S[i].cgMaterial.emission.luminousColor.x() +
                                             model->S[i].cgMaterial.emission.luminousColor.y() +
                                             model->S[i].cgMaterial.emission.luminousColor.z();
-                        if (model->S[i].cgMaterial.emission.luminous > 0.0f && luminousSum > 0.0f)
+                        bool matEmissive = (model->S[i].cgMaterial.emission.luminous > 0.0f && luminousSum > 0.0f);
+                        isEmissiveMat.push_back(matEmissive);
+                        if (matEmissive)
                         {
                             hasEmissive = true;
                         }
@@ -381,12 +407,15 @@ void ClaudiaModelHandler::addCgModelList(const WeakRenderableList& weakNodeList)
                     auto [mat, slot] = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
                         model->S[0].cgMaterial, contentFolder, model);
                     triangleModel->getGeometryInstance()->setMaterial(0, 0, mat);
+                    materialSlots.push_back(slot);
                     
                     // Check if material is emissive - both luminous and luminousColor must be non-zero
                     float luminousSum = model->S[0].cgMaterial.emission.luminousColor.x() +
                                         model->S[0].cgMaterial.emission.luminousColor.y() +
                                         model->S[0].cgMaterial.emission.luminousColor.z();
-                    if (model->S[0].cgMaterial.emission.luminous > 0.0f && luminousSum > 0.0f)
+                    bool matEmissive = (model->S[0].cgMaterial.emission.luminous > 0.0f && luminousSum > 0.0f);
+                    isEmissiveMat.push_back(matEmissive);
+                    if (matEmissive)
                     {
                         hasEmissive = true;
                     }
@@ -395,23 +424,33 @@ void ClaudiaModelHandler::addCgModelList(const WeakRenderableList& weakNodeList)
                 // Mark the model as having emissive materials
                 triangleModel->setHasEmissiveMaterials(hasEmissive);
                 
-                // If model has emissive materials, compute light probabilities
-                if (hasEmissive)
-                {
-                    computeLightProbabilities(triangleModel, geomInstSlot);
-                }
             }
 
             // Create a Geometry Acceleration Structure (GAS) for ray tracing
             optixu::Scene sceneForGAS = sceneHandler_->getScene();
             claudiaModel->createGAS (ctx_, sceneForGAS, claudia_shared::maxNumRayTypes, scratchMem);
             
-            // Populate geometry instance data in the global buffer
+            // Populate geometry instance data in the global buffer BEFORE computing light probabilities
             if (geomInstSlot != SlotFinder::InvalidSlotIndex)
             {
                 shared::GeometryInstanceData* geomInstDataOnHost = geometryInstanceDataBuffer_.map();
                 claudiaModel->populateGeometryInstanceData(&geomInstDataOnHost[geomInstSlot]);
                 geometryInstanceDataBuffer_.unmap();
+            }
+            
+            // Now that buffers are populated, compute light probabilities if model has emissive materials
+            if (triangleModel && triangleModel->hasEmissiveMaterials())
+            {
+                // Find first emissive material and compute probabilities for it
+                // TODO: Handle multiple emissive materials properly
+                for (size_t i = 0; i < materialSlots.size(); ++i)
+                {
+                    if (isEmissiveMat[i])
+                    {
+                        computeLightProbabilities(triangleModel, geomInstSlot, materialSlots[i]);
+                        break; // TODO: Handle multiple emissive materials
+                    }
+                }
             }
         }
     }
@@ -451,7 +490,9 @@ void ClaudiaModelHandler::setAreaLightHandler(std::shared_ptr<ClaudiaAreaLightHa
     areaLightHandler_ = areaLightHandler;
 }
 
-void ClaudiaModelHandler::computeLightProbabilities(ClaudiaTriangleModel* model, uint32_t geomInstSlot)
+// Compute light probabilities for a triangle model with emissive material
+// Similar to RiPRModelHandler::computeLightProbabilities
+void ClaudiaModelHandler::computeLightProbabilities(ClaudiaTriangleModel* model, uint32_t geomInstSlot, uint32_t materialSlot)
 {
     if (!model || !engine_ || geomInstSlot == SlotFinder::InvalidSlotIndex)
     {
@@ -459,21 +500,62 @@ void ClaudiaModelHandler::computeLightProbabilities(ClaudiaTriangleModel* model,
         return;
     }
     
-    // Use area light handler if available
-    if (areaLightHandler_)
+    // Get area light handler from engine
+    if (!areaLightHandler_)
     {
-        // Prepare the geometry light distribution
-        uint32_t numTriangles = model->getTriangleBuffer().numElements();
-        areaLightHandler_->prepareGeometryLightDistribution(model, numTriangles);
-        
-        // Mark it as dirty so it will be updated in the next frame
-        areaLightHandler_->markGeometryDirty(model);
-        
-        LOG(DBUG) << "Prepared light distribution for emissive geometry at slot " << geomInstSlot 
-                  << " with " << numTriangles << " triangles";
+        LOG(WARNING) << "AreaLightHandler not available";
+        return;
     }
-    else
+    
+    // Get number of triangles from the model's triangle buffer
+    uint32_t numTriangles = model->getTriangleBuffer().numElements();
+    if (numTriangles == 0)
     {
-        LOG(WARNING) << "AreaLightHandler not set, cannot compute light probabilities";
+        LOG(WARNING) << "No triangles in model";
+        return;
     }
+    
+    LOG(INFO) << "Computing light probabilities for " << numTriangles << " triangles with material slot " << materialSlot;
+    
+    // Initialize the emitter distribution if not already initialized
+    if (!model->getEmitterPrimDistribution().isInitialized())
+    {
+        // Get non-const reference through the model's public method
+        LightDistribution* emitterDist = model->getTriLightImportance();
+        emitterDist->initialize(
+            ctx_->getCudaContext(), cudau::BufferType::Device, nullptr, numTriangles);
+        LOG(DBUG) << "Initialized emitter distribution for " << numTriangles << " triangles";
+        
+        // Update the device buffer with the newly initialized distribution
+        shared::GeometryInstanceData* geomInstDataOnHost = geometryInstanceDataBuffer_.map();
+        
+        // Debug: Check the distribution before copying
+        LOG(INFO) << "Before getDeviceType:";
+        LOG(INFO) << "  emitterDist isInitialized: " << emitterDist->isInitialized();
+        
+        emitterDist->getDeviceType(&geomInstDataOnHost[geomInstSlot].emitterPrimDist);
+        
+        // The device struct members are private, so we can't directly access them from host
+        LOG(INFO) << "Called getDeviceType to update device struct";
+        
+        geometryInstanceDataBuffer_.unmap();
+        LOG(DBUG) << "Updated geometry instance data with emitter distribution";
+    }
+    
+    // Prepare geometry light distribution if not already done
+    areaLightHandler_->prepareGeometryLightDistribution(model, numTriangles);
+    
+    // Update geometry light distribution with the material slot
+    CUstream stream = ctx_->getCudaStream();
+    areaLightHandler_->updateGeometryLightDistribution(stream, model, geomInstSlot, materialSlot);
+    
+    // TODO: Trigger engine to rebuild light distributions if needed
+    // if (engine_)
+    // {
+    //     ClaudiaEngine* claudiaEngine = dynamic_cast<ClaudiaEngine*>(engine_);
+    //     if (claudiaEngine)
+    //     {
+    //         claudiaEngine->buildLightDistributions();
+    //     }
+    // }
 }

@@ -34,6 +34,17 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float computeTriangleImportance(
     Normal3D normal(cross(v[1].position - v[0].position, v[2].position - v[0].position));
     float area = 0.5f * length(normal);
 
+    // Debug: Print first few triangles
+    if (triIndex < 3) {
+        printf("computeTriangleImportance: triIndex=%u, area=%f\n", triIndex, area);
+        printf("  Material ptr=%p, emissive tex=%llu, emissiveStrength tex=%llu\n", 
+               material, (unsigned long long)mat.emissive, (unsigned long long)mat.emissiveStrength);
+        printf("  Triangle vertices: v0=(%f,%f,%f), v1=(%f,%f,%f), v2=(%f,%f,%f)\n",
+               v[0].position.x, v[0].position.y, v[0].position.z,
+               v[1].position.x, v[1].position.y, v[1].position.z,
+               v[2].position.x, v[2].position.y, v[2].position.z);
+    }
+
     // TODO: もっと正確な、少なくとも保守的な推定の実装。テクスチャー空間中の面積に応じてMIPレベルを選択する？
     RGB emittanceEstimate(0.0f, 0.0f, 0.0f);
     
@@ -43,10 +54,17 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float computeTriangleImportance(
         emittanceEstimate += RGB(getXYZ(tex2DLod<float4>(mat.emissive, v[1].texCoord.x, v[1].texCoord.y, 0)));
         emittanceEstimate += RGB(getXYZ(tex2DLod<float4>(mat.emissive, v[2].texCoord.x, v[2].texCoord.y, 0)));
         emittanceEstimate /= 3;
+        if (triIndex < 3) {
+            printf("  Has emissive texture, sampled emittance=(%f,%f,%f)\n", 
+                   emittanceEstimate.r, emittanceEstimate.g, emittanceEstimate.b);
+        }
     } else {
         // No emissive texture - use a default emittance
         // This is crucial for area lights without textures
         emittanceEstimate = RGB(1.0f, 1.0f, 1.0f);
+        if (triIndex < 3) {
+            printf("  No emissive texture, using default emittance=(1,1,1)\n");
+        }
     }
     
     // Apply emissive strength if available
@@ -57,9 +75,17 @@ CUDA_DEVICE_FUNCTION CUDA_INLINE float computeTriangleImportance(
         strengthEstimate += tex2DLod<float>(mat.emissiveStrength, v[2].texCoord.x, v[2].texCoord.y, 0);
         strengthEstimate /= 3;
         emittanceEstimate *= strengthEstimate;
+        if (triIndex < 3) {
+            printf("  Has emissiveStrength texture, strength=%f, final emittance=(%f,%f,%f)\n",
+                   strengthEstimate, emittanceEstimate.r, emittanceEstimate.g, emittanceEstimate.b);
+        }
     }
 
     float importance = sRGB_calcLuminance(emittanceEstimate) * area;
+    if (triIndex < 3) {
+        printf("  Final importance=%f (luminance=%f * area=%f)\n", 
+               importance, sRGB_calcLuminance(emittanceEstimate), area);
+    }
     Assert(stc::isfinite(importance), "imp: %g, area: %g", importance, area);
     return importance;
 }
@@ -89,13 +115,35 @@ CUDA_DEVICE_KERNEL void computeTriangleProbBuffer(
     const DisneyData* material) {
     if constexpr (!USE_PROBABILITY_TEXTURE) {
         uint32_t linearIndex = blockDim.x * blockIdx.x + threadIdx.x;
+        
+        // Debug: Print kernel launch info from thread 0
+        if (linearIndex == 0) {
+            printf("computeTriangleProbBuffer: Starting kernel with %u triangles\n", numTriangles);
+            printf("  GeometryInstanceData ptr=%p\n", geomInst);
+            printf("  DisneyData material ptr=%p\n", material);
+            printf("  emitterPrimDist ptr=%p\n", &geomInst->emitterPrimDist);
+            // Cannot access private members directly - they are initialized via setNumValues and setWeightAt
+        }
+        
 #if !USE_PROBABILITY_TEXTURE
-        if (linearIndex == 0)
+        if (linearIndex == 0) {
             geomInst->emitterPrimDist.setNumValues(numTriangles);
+            printf("  Set emitterPrimDist numValues to %u\n", numTriangles);
+        }
 #endif
         if (linearIndex < numTriangles) {
             float importance = computeTriangleImportance(geomInst, linearIndex, material);
             geomInst->emitterPrimDist.setWeightAt(linearIndex, importance);
+            
+            // Debug: Print importance for first few triangles
+            if (linearIndex < 3) {
+                printf("  Triangle %u: importance=%f set in distribution\n", linearIndex, importance);
+            }
+        }
+        
+        // Debug: Print completion from last thread
+        if (linearIndex == numTriangles - 1) {
+            printf("computeTriangleProbBuffer: Completed processing %u triangles\n", numTriangles);
         }
     }
 }

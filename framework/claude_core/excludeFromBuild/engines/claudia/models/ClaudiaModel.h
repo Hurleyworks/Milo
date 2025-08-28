@@ -180,7 +180,8 @@ public:
         geomInstData->vertexBuffer = vertexBuffer.getROBuffer<shared::enableBufferOobCheck>();
         geomInstData->triangleBuffer = triangleBuffer.getROBuffer<shared::enableBufferOobCheck>();
         
-        // Convert light distribution to device format
+        // Always call getDeviceType to ensure the device struct is properly initialized
+        // Even if emitterPrimDist is not initialized, this will set proper null values
         emitterPrimDist.getDeviceType(&geomInstData->emitterPrimDist);
         
         // Material slot will be set separately when materials are assigned

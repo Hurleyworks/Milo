@@ -4,6 +4,7 @@
 #include "ClaudiaModelHandler.h"
 #include "ClaudiaSceneHandler.h"
 #include "../../../handlers/Handlers.h"
+#include "../../../handlers/DisneyMaterialHandler.h"
 #include "../../../common/common_shared.h"
 
 ClaudiaAreaLightHandler::ClaudiaAreaLightHandler(RenderContextPtr ctx)
@@ -99,18 +100,14 @@ void ClaudiaAreaLightHandler::finalize()
         // Clean up light distributions
         sceneLightDist_.finalize();
         
-        // Clear instance and geometry distributions
+        // Clear instance distributions
         for (auto& pair : instanceLightDists_)
         {
             pair.second.finalize();
         }
         instanceLightDists_.clear();
         
-        for (auto& pair : geomLightDists_)
-        {
-            pair.second.finalize();
-        }
-        geomLightDists_.clear();
+        // We don't manage geometry distributions anymore - they're owned by models
         
         // Clean up scratch memory
         if (scanScratchMem_.isInitialized())
@@ -252,55 +249,35 @@ void ClaudiaAreaLightHandler::prepareGeometryLightDistribution(ClaudiaTriangleMo
         return;
     }
     
-    // Check if we already have a distribution for this geometry
-    auto it = geomLightDists_.find(triModel);
-    if (it == geomLightDists_.end())
-    {
-        // Create new distribution for this geometry
-        CUcontext cuContext = ctx_->getCudaContext();
-        LightDistribution dist;
-        
-#if USE_PROBABILITY_TEXTURE
-        dist.initialize(cuContext, numTriangles);
-#else
-        std::vector<float> initialWeights(numTriangles, 0.0f);
-        dist.initialize(cuContext, cudau::BufferType::Device,
-                       initialWeights.data(), numTriangles);
-#endif
-        
-        geomLightDists_[triModel] = std::move(dist);
-        LOG(DBUG) << "Created geometry light distribution for " << numTriangles << " triangles";
-    }
-    else
-    {
-        // For existing distributions, we can't check the number of elements easily
-        // so we'll trust it's correct or recreate if needed
-        LOG(DBUG) << "Using existing geometry light distribution";
-    }
+    // We don't create a new distribution here - the model already has one
+    // initialized in ClaudiaModelHandler::computeLightProbabilities
+    // Just mark it as dirty so we know to compute probabilities for it
+    LOG(DBUG) << "Marking geometry for probability computation: " << numTriangles << " triangles";
     
     dirtyGeometries_.insert(triModel);
 }
 
-void ClaudiaAreaLightHandler::updateGeometryLightDistribution(CUstream stream, ClaudiaTriangleModel* triModel, uint32_t geomInstSlot)
+void ClaudiaAreaLightHandler::updateGeometryLightDistribution(CUstream stream, ClaudiaTriangleModel* triModel, uint32_t geomInstSlot, uint32_t materialSlot)
 {
     if (!triModel)
         return;
         
-    auto it = geomLightDists_.find(triModel);
-    if (it == geomLightDists_.end())
+    // Get the model's emitter distribution (not creating a new one)
+    LightDistribution* modelDist = triModel->getTriLightImportance();
+    if (!modelDist || !modelDist->isInitialized())
     {
-        LOG(WARNING) << "No geometry light distribution found for model";
+        LOG(WARNING) << "Model's emitter distribution not initialized";
         return;
     }
     
     // Get triangle count
     uint32_t numTriangles = triModel->getTriangleBuffer().numElements();
     
-    // Compute triangle probabilities
-    computeTriangleProbabilities(stream, geomInstSlot, numTriangles, it->second);
+    // Compute triangle probabilities with material slot using the model's distribution
+    computeTriangleProbabilities(stream, geomInstSlot, numTriangles, materialSlot, *modelDist);
     
     // Finalize the distribution (compute CDF)
-    finalizeLightDistribution(stream, it->second, numTriangles);
+    finalizeLightDistribution(stream, *modelDist, numTriangles);
 }
 
 void ClaudiaAreaLightHandler::markGeometryDirty(ClaudiaTriangleModel* triModel)
@@ -315,16 +292,14 @@ void ClaudiaAreaLightHandler::rebuildAllDistributions(CUstream stream)
 {
     LOG(INFO) << "Rebuilding all light distributions";
     
-    // Mark all distributions as dirty
+    // Mark all instance distributions as dirty
     for (auto& pair : instanceLightDists_)
     {
         dirtyInstances_.insert(pair.first);
     }
     
-    for (auto& pair : geomLightDists_)
-    {
-        dirtyGeometries_.insert(pair.first);
-    }
+    // Note: Geometry distributions are handled by models themselves now
+    // We just need to mark them dirty if we're tracking them
     
     // Update all dirty distributions
     updateDirtyDistributions(stream);
@@ -335,19 +310,13 @@ void ClaudiaAreaLightHandler::rebuildAllDistributions(CUstream stream)
 void ClaudiaAreaLightHandler::updateDirtyDistributions(CUstream stream, uint32_t bufferIndex)
 {
     // Process dirty geometries first (lowest level)
-    for (auto* triModel : dirtyGeometries_)
+    // Since geometry distributions are now owned by models and computed
+    // via updateGeometryLightDistribution, we just clear the dirty set
+    if (!dirtyGeometries_.empty())
     {
-        auto it = geomLightDists_.find(triModel);
-        if (it != geomLightDists_.end())
-        {
-            uint32_t numTriangles = triModel->getTriangleBuffer().numElements();
-            uint32_t geomInstSlot = triModel->getGeomInstSlot();
-            
-            computeTriangleProbabilities(stream, geomInstSlot, numTriangles, it->second);
-            finalizeLightDistribution(stream, it->second, numTriangles);
-        }
+        LOG(DBUG) << "Clearing " << dirtyGeometries_.size() << " dirty geometry flags";
+        dirtyGeometries_.clear();
     }
-    dirtyGeometries_.clear();
     
     // Process dirty instances (middle level)
     for (auto* model : dirtyInstances_)
@@ -397,19 +366,114 @@ void ClaudiaAreaLightHandler::computeTriangleProbabilities(
     CUstream stream, 
     uint32_t geomInstSlot,
     uint32_t numTriangles,
+    uint32_t materialSlot,
     LightDistribution& dist)
 {
     if (!modelHandler_)
+    {
+        LOG(WARNING) << "ModelHandler not available";
         return;
-        
+    }
+    
+    // Get DisneyMaterialHandler from RenderContext
+    auto materialHandler = ctx_->getHandlers().disneyMaterialHandler;
+    if (!materialHandler)
+    {
+        LOG(WARNING) << "DisneyMaterialHandler not available";
+        return;
+    }
+    
+    // Get material buffer
+    auto* materialBuffer = materialHandler->getMaterialDataBuffer();
+    if (!materialBuffer)
+    {
+        LOG(WARNING) << "Material buffer not available";
+        return;
+    }
+    
+    shared::DisneyData* materialData = materialBuffer->getDevicePointer();
+    if (!materialData)
+    {
+        LOG(WARNING) << "Material buffer device pointer not available";
+        return;
+    }
+    
+    // Get specific material pointer
+    shared::DisneyData* specificMaterial = &materialData[materialSlot];
+    
+    // Get geometry instance data from model handler
+    auto* geomInstBuffer = modelHandler_->getGeometryInstanceDataBuffer();
+    shared::GeometryInstanceData* geomInstData = geomInstBuffer->getDevicePointer();
+    if (!geomInstData)
+    {
+        LOG(WARNING) << "Geometry instance buffer device pointer not available";
+        return;
+    }
+    
 #if USE_PROBABILITY_TEXTURE
     // Implementation for texture-based computation
-    LOG(DBUG) << "Computing triangle probabilities for " << numTriangles << " triangles";
-    // TODO: Implement kernel invocation when kernels are set
+    LOG(DBUG) << "Computing triangle probabilities for " << numTriangles << " triangles with material slot " << materialSlot;
+    
+    // Call the kernel with the material pointer and the output buffer
+    // Note: cudau::Kernel doesn't have isValid(), we check if the module is loaded
+    if (computeProbTex_.cudaModule)
+    {
+        // Get the mip buffer where probabilities will be written
+        float* mipBuffer = dist.getMipBuffer(0);  // First mip level
+        if (!mipBuffer)
+        {
+            LOG(WARNING) << "Mip buffer not available";
+            return;
+        }
+        
+        computeProbTex_.computeTriangleProbTexture(
+            stream,
+            computeProbTex_.computeTriangleProbTexture.calcGridDim(numTriangles),
+            &geomInstData[geomInstSlot],
+            numTriangles,
+            specificMaterial,
+            mipBuffer
+        );
+    }
+    else
+    {
+        LOG(WARNING) << "compute_light_probs module not loaded";
+    }
 #else
     // Implementation for buffer-based computation
-    LOG(DBUG) << "Computing triangle probabilities for " << numTriangles << " triangles";
-    // TODO: Implement kernel invocation when kernels are set
+    LOG(INFO) << "Computing triangle probabilities for " << numTriangles << " triangles with material slot " << materialSlot;
+    LOG(INFO) << "  GeomInstData ptr: " << &geomInstData[geomInstSlot] 
+              << ", Material ptr: " << specificMaterial;
+    
+    // Call the kernel with the material pointer AND the distribution buffer
+    // Note: cudau::Kernel doesn't have isValid(), we check if the module is loaded
+    if (computeProbTex_.cudaModule)
+    {
+        LOG(INFO) << "Launching computeTriangleProbBuffer kernel...";
+        
+        // Get the distribution's weight buffer where probabilities will be written
+        float* probBuffer = dist.weightsOnDevice();
+        if (!probBuffer)
+        {
+            LOG(WARNING) << "Distribution buffer not available";
+            return;
+        }
+        
+        computeProbTex_.computeTriangleProbBuffer(
+            stream,
+            computeProbTex_.computeTriangleProbBuffer.calcGridDim(numTriangles),
+            &geomInstData[geomInstSlot],
+            numTriangles,
+            specificMaterial
+        );
+        // Sync to see debug output immediately
+        CUDADRV_CHECK(cuStreamSynchronize(stream));
+        LOG(INFO) << "computeTriangleProbBuffer kernel completed";
+    }
+    else
+    {
+        LOG(WARNING) << "compute_light_probs module not loaded";
+    }
 #endif
 }
 

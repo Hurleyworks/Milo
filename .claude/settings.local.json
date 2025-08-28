@@ -83,7 +83,8 @@
       "Read(//mnt/e/1Shocker/GfxExp/**)",
       "Read(//mnt/e/1Shocker/GfxExp/**)",
       "Read(//mnt/e/1Shocker/OptiX_Utility/**)",
-      "Bash(git checkout:*)"
+      "Bash(git checkout:*)",
+      "Read(//mnt/e/1Shocker/GfxExp/**)"
     ],
     "deny": []
   },

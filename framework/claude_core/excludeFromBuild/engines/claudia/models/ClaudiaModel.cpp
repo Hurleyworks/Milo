@@ -91,8 +91,10 @@ void ClaudiaTriangleModel::createGeometry(RenderContextPtr ctx, RenderableNode& 
 
     // Materials will be created separately by ClaudiaMaterialHandler in ClaudiaModelHandler::addCgModel
     
-    emitterPrimDist.initialize(
-        ctx->getCudaContext(), cudau::BufferType::Device, nullptr, static_cast<uint32_t>(triangles.size()));
+    // Don't initialize emitterPrimDist here - it will be initialized in computeLightProbabilities
+    // when we know if the model has emissive materials
+    // emitterPrimDist.initialize(
+    //     ctx->getCudaContext(), cudau::BufferType::Device, nullptr, static_cast<uint32_t>(triangles.size()));
 
     geomInst.setGeometryFlags(0, OPTIX_GEOMETRY_FLAG_NONE);
     
