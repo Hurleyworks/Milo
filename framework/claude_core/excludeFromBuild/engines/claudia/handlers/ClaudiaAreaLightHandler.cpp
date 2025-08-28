@@ -140,7 +140,7 @@ void ClaudiaAreaLightHandler::prepareSceneLightDistribution(uint32_t maxInstance
     // Only log on first preparation or when count changes
     if (!sceneDistributionPrepared_)
     {
-        LOG(DBUG) << "Scene light distribution prepared for " << maxInstances << " instances";
+        LOG(DBUG) << "Scene light distribution prepared with capacity for up to " << maxInstances << " instances";
         sceneDistributionPrepared_ = true;
     }
 }

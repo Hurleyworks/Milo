@@ -122,7 +122,7 @@ class Application : public Jahley::App
         //  model.loadGLTF (ground);
       //  model.loadGLTF (helmet);
       // model.loadGLTF (testModel);
-       //model.loadGLTF (box);
+       model.loadGLTF (box);
        // model.loadGLTF (cash);
         // model.loadGLTF (phone);
         //  model.loadGLTF (scifi);
@@ -162,7 +162,7 @@ class Application : public Jahley::App
             groundPlane->setClientID (groundPlane->getID());
             sabi::SpaceTime& st = groundPlane->getSpaceTime();
             st.worldTransform.translation() = Eigen::Vector3f (0.0f, 0.0f, 0.0f);
-         // model.addNodeToRenderer (groundPlane);
+        model.addNodeToRenderer (groundPlane);
         }
         /*  CgModelPtr c = sabi::MeshOps::createCube();
 

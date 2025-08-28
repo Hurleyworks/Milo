@@ -213,8 +213,11 @@ void ClaudiaModelHandler::addCgModel(RenderableWeakRef weakNode)
                         model->S[i].cgMaterial, contentFolder, model);
                     triangleModel->getGeometryInstance()->setMaterial(0, i, mat);
                     
-                    // Check if material is emissive
-                    if (model->S[i].cgMaterial.emission.luminous > 0.0f)
+                    // Check if material is emissive - both luminous and luminousColor must be non-zero
+                    float luminousSum = model->S[i].cgMaterial.emission.luminousColor.x() +
+                                        model->S[i].cgMaterial.emission.luminousColor.y() +
+                                        model->S[i].cgMaterial.emission.luminousColor.z();
+                    if (model->S[i].cgMaterial.emission.luminous > 0.0f && luminousSum > 0.0f)
                     {
                         hasEmissive = true;
                     }
@@ -226,8 +229,11 @@ void ClaudiaModelHandler::addCgModel(RenderableWeakRef weakNode)
                     model->S[0].cgMaterial, contentFolder, model);
                 triangleModel->getGeometryInstance()->setMaterial(0, 0, mat);
                 
-                // Check if material is emissive
-                if (model->S[0].cgMaterial.emission.luminous > 0.0f)
+                // Check if material is emissive - both luminous and luminousColor must be non-zero
+                float luminousSum = model->S[0].cgMaterial.emission.luminousColor.x() +
+                                    model->S[0].cgMaterial.emission.luminousColor.y() +
+                                    model->S[0].cgMaterial.emission.luminousColor.z();
+                if (model->S[0].cgMaterial.emission.luminous > 0.0f && luminousSum > 0.0f)
                 {
                     hasEmissive = true;
                 }
@@ -351,6 +357,7 @@ void ClaudiaModelHandler::addCgModelList(const WeakRenderableList& weakNodeList)
                 fs::path contentFolder = ctx_->getPropertyService().renderProps->getVal<std::string>(RenderKey::ContentFolder);
                 
                 uint32_t materialCount = model->S.size();
+                bool hasEmissive = false;
                 if (materialCount > 1)
                 {
                     for (int i = 0; i < materialCount; ++i)
@@ -358,6 +365,15 @@ void ClaudiaModelHandler::addCgModelList(const WeakRenderableList& weakNodeList)
                         auto [mat, slot] = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
                             model->S[i].cgMaterial, contentFolder, model);
                         triangleModel->getGeometryInstance()->setMaterial(0, i, mat);
+                        
+                        // Check if material is emissive - both luminous and luminousColor must be non-zero
+                        float luminousSum = model->S[i].cgMaterial.emission.luminousColor.x() +
+                                            model->S[i].cgMaterial.emission.luminousColor.y() +
+                                            model->S[i].cgMaterial.emission.luminousColor.z();
+                        if (model->S[i].cgMaterial.emission.luminous > 0.0f && luminousSum > 0.0f)
+                        {
+                            hasEmissive = true;
+                        }
                     }
                 }
                 else
@@ -365,6 +381,24 @@ void ClaudiaModelHandler::addCgModelList(const WeakRenderableList& weakNodeList)
                     auto [mat, slot] = ctx_->getHandlers().disneyMaterialHandler->createDisneyMaterial(
                         model->S[0].cgMaterial, contentFolder, model);
                     triangleModel->getGeometryInstance()->setMaterial(0, 0, mat);
+                    
+                    // Check if material is emissive - both luminous and luminousColor must be non-zero
+                    float luminousSum = model->S[0].cgMaterial.emission.luminousColor.x() +
+                                        model->S[0].cgMaterial.emission.luminousColor.y() +
+                                        model->S[0].cgMaterial.emission.luminousColor.z();
+                    if (model->S[0].cgMaterial.emission.luminous > 0.0f && luminousSum > 0.0f)
+                    {
+                        hasEmissive = true;
+                    }
+                }
+                
+                // Mark the model as having emissive materials
+                triangleModel->setHasEmissiveMaterials(hasEmissive);
+                
+                // If model has emissive materials, compute light probabilities
+                if (hasEmissive)
+                {
+                    computeLightProbabilities(triangleModel, geomInstSlot);
                 }
             }
 

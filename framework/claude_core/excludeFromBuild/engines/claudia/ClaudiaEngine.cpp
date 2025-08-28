@@ -654,28 +654,51 @@ void ClaudiaEngine::updateLaunchParameters (const mace::InputEvent& input)
     // Set light distribution from area light handler
     if (sceneHandler_ && areaLightHandler_)
     {
-        // Update emissive instances first
-        sceneHandler_->updateEmissiveInstances();
+        // Only update if there are dirty distributions or the scene has changed
+        uint32_t currentInstanceCount = sceneHandler_->getInstanceCount();
+        static uint32_t lastInstanceCount = 0;
+        static bool firstUpdate = true;
         
-        // Only prepare light distributions if there are emissive instances
-        if (sceneHandler_->getNumEmissiveInstances() > 0)
+        bool needsUpdate = firstUpdate || 
+                          (currentInstanceCount != lastInstanceCount) || 
+                          areaLightHandler_->hasDirtyDistributions();
+        
+        if (needsUpdate)
         {
-            // Prepare and update scene light distribution through AreaLightHandler
-            uint32_t numInstances = sceneHandler_->getInstanceCount();
-            areaLightHandler_->prepareSceneLightDistribution(numInstances);
-            areaLightHandler_->updateSceneLightDistribution(renderContext_->getCudaStream(), 0);
+            // Update emissive instances first
+            sceneHandler_->updateEmissiveInstances();
             
-            // Get the device representation of the light distribution
-            const auto* sceneDist = areaLightHandler_->getSceneLightDistribution();
-            if (sceneDist)
+            // Only prepare light distributions if there are emissive instances
+            uint32_t numEmissiveInstances = sceneHandler_->getNumEmissiveInstances();
+            if (numEmissiveInstances > 0)
             {
-                sceneDist->getDeviceType(&static_plp_.lightInstDist);
+                // Only log when actually updating
+                if (firstUpdate || currentInstanceCount != lastInstanceCount)
+                {
+                    LOG(DBUG) << "Preparing light distribution for " << numEmissiveInstances 
+                              << " emissive instances out of " << currentInstanceCount << " total instances";
+                }
+                
+                // Prepare and update scene light distribution through AreaLightHandler
+                // Note: We still pass total instance count as capacity, but only emissive ones will be used
+                areaLightHandler_->prepareSceneLightDistribution(currentInstanceCount);
+                areaLightHandler_->updateSceneLightDistribution(renderContext_->getCudaStream(), 0);
+                
+                // Get the device representation of the light distribution
+                const auto* sceneDist = areaLightHandler_->getSceneLightDistribution();
+                if (sceneDist)
+                {
+                    sceneDist->getDeviceType(&static_plp_.lightInstDist);
+                }
             }
-        }
-        else
-        {
-            // No emissive instances, use empty distribution
-            static_plp_.lightInstDist = shared::LightDistribution();
+            else
+            {
+                // No emissive instances, use empty distribution
+                static_plp_.lightInstDist = shared::LightDistribution();
+            }
+            
+            lastInstanceCount = currentInstanceCount;
+            firstUpdate = false;
         }
     }
     else
