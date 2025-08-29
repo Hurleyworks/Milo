@@ -99,6 +99,10 @@ public:
     
     // Set the engine pointer for accessing compute kernels
     void setEngine(RiPREngine* engine) { engine_ = engine; }
+    
+    // Set the area light handler
+    void setAreaLightHandler(std::shared_ptr<class RiPRAreaLightHandler> areaLightHandler);
+    std::shared_ptr<class RiPRAreaLightHandler> getAreaLightHandler() { return areaLightHandler_; }
 
     // Adds a single model from a renderable node to the RiPR scene
     void addCgModel(RenderableWeakRef weakNode);
@@ -111,6 +115,9 @@ public:
     {
         modelMgr.setAllVisibility(mask);
     }
+    
+    // Compute light probabilities for a triangle model with emissive material
+    void computeLightProbabilities(RiPRTriangleModel* model, uint32_t geomInstSlot, uint32_t materialSlot);
 
     // Get all models for updating materials
     const std::map<ItemID, RiPRModelPtr>& getModels() const 
@@ -160,7 +167,7 @@ public:
     }
     
     // Compute light probabilities for emissive geometry
-    void computeLightProbabilities(RiPRTriangleModel* model, uint32_t geomInstSlot, uint32_t materialSlot);
+    void computeLightProbabilities(RiPRTriangleModel* model, uint32_t geomInstSlot);
 
 private:
     RenderContextPtr ctx_ = nullptr;  // Render context for OptiX operations
@@ -168,6 +175,7 @@ private:
     
     // Handler references (not owned)
     std::shared_ptr<RiPRSceneHandler> sceneHandler_;
+    std::shared_ptr<class RiPRAreaLightHandler> areaLightHandler_;
     RiPREngine* engine_ = nullptr;  // Engine for accessing compute kernels
 
     // Slot management for geometry instances

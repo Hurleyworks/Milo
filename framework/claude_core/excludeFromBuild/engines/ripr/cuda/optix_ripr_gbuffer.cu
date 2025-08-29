@@ -130,11 +130,11 @@ CUDA_DEVICE_KERNEL void RT_CH_NAME (setupGBuffers)()
     
     // Debug output to check what OptiX is returning for instance ID
     const float3 rayOrigin = optixGetWorldRayOrigin();
-    //if ((rayOrigin.x > 0.0f && abs(rayOrigin.y) < 0.1f) ||  // Ray hitting right side
-    //    (rayOrigin.x < 0.0f && abs(rayOrigin.y) < 0.1f)) {   // Ray hitting left side
-    //    printf("GBuffer CH: Ray origin x=%f, OptiX instanceId = %u, geomInstSlot = %u\n", 
-    //           rayOrigin.x, instanceId, sbtr.geomInstSlot);
-    //}
+    if ((rayOrigin.x > 0.0f && abs(rayOrigin.y) < 0.1f) ||  // Ray hitting right side
+        (rayOrigin.x < 0.0f && abs(rayOrigin.y) < 0.1f)) {   // Ray hitting left side
+        printf("GBuffer CH: Ray origin x=%f, OptiX instanceId = %u, geomInstSlot = %u\n", 
+               rayOrigin.x, instanceId, sbtr.geomInstSlot);
+    }
     
     hitPointParams->instSlot = instanceId;
     hitPointParams->geomInstSlot = sbtr.geomInstSlot;

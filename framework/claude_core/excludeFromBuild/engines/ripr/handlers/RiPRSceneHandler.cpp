@@ -53,32 +53,6 @@ void RiPRSceneHandler::finalize()
             {
                 instanceDataBuffer_[i].finalize();
             }
-            
-            // Clean up per-instance geometry slot buffers
-            for (auto& [instIdx, buffer] : geomInstSlotsBuffers_[i])
-            {
-                if (buffer.isInitialized())
-                {
-                    buffer.finalize();
-                }
-            }
-            geomInstSlotsBuffers_[i].clear();
-            
-            // Clean up per-instance light distributions
-            for (auto& [instIdx, dist] : perInstanceLightDists_[i])
-            {
-                if (dist.isInitialized())
-                {
-                    dist.finalize();
-                }
-            }
-            perInstanceLightDists_[i].clear();
-        }
-        
-        // Finalize light instance distribution
-        if (lightInstDistribution_.isInitialized())
-        {
-            lightInstDistribution_.finalize();
         }
 
         // Release displacement buffer
@@ -523,9 +497,6 @@ void RiPRSceneHandler::createInstance (RenderableWeakRef& weakNode)
 
     // Populate instance data for GPU access
     populateInstanceData (index, node);
-    
-    // Don't build light distributions here - they should be built after
-    // the geometry distributions are computed in RiPRModelHandler::computeLightProbabilities
 }
 
 void RiPRSceneHandler::populateInstanceData (uint32_t instanceIndex, const RenderableNode& node)
@@ -571,110 +542,12 @@ void RiPRSceneHandler::populateInstanceData (uint32_t instanceIndex, const Rende
         );
         instData.normalMatrix = transpose (invert (upperLeft));
 
-        // Compute uniform scale from the transform
-        float uniformScale = node->getSpaceTime().scale.norm() / std::sqrt(3.0f);
-        instData.uniformScale = uniformScale;
+        // Set uniform scale (for now, assume 1.0)
+        instData.uniformScale = 1.0f;
 
-        // Get the model to check if it has emissive geometry
-        if (modelHandler_)
-        {
-            auto model = modelHandler_->getModel(node);
-            if (auto triModel = std::dynamic_pointer_cast<RiPRTriangleModel>(model))
-            {
-                // Check if this model has emissive materials
-                if (triModel->hasEmissiveMaterials())
-                {
-                    // For now, populate with the single geometry instance slot
-                    // In a full implementation, we'd need to handle multiple geometry instances
-                    uint32_t geomInstSlot = triModel->getGeometryInstanceSlot();
-                    
-                    if (geomInstSlot != SlotFinder::InvalidSlotIndex)
-                    {
-                        // Create a buffer for the geometry instance slots
-                        // For single geometry, we just have one slot
-                        if (!geomInstSlotsBuffers_[bufferIdx][instanceIndex].isInitialized())
-                        {
-                            geomInstSlotsBuffers_[bufferIdx][instanceIndex].initialize(
-                                ctx->getCudaContext(), cudau::BufferType::Device, 1);
-                        }
-                        uint32_t* slotPtr = geomInstSlotsBuffers_[bufferIdx][instanceIndex].map();
-                        slotPtr[0] = geomInstSlot;
-                        geomInstSlotsBuffers_[bufferIdx][instanceIndex].unmap();
-                        
-                        instData.geomInstSlots = geomInstSlotsBuffers_[bufferIdx][instanceIndex].getROBuffer<shared::enableBufferOobCheck>();
-                        
-                        // Create a simple distribution with one geometry (weight = 1.0)
-                        float geomImportance = 1.0f;
-                        if (!perInstanceLightDists_[bufferIdx][instanceIndex].isInitialized())
-                        {
-                            perInstanceLightDists_[bufferIdx][instanceIndex].initialize(
-                                ctx->getCudaContext(), cudau::BufferType::Device, &geomImportance, 1);
-                        }
-                        perInstanceLightDists_[bufferIdx][instanceIndex].getDeviceType(&instData.lightGeomInstDist);
-                        
-                        // Mark as emissive
-                        instData.isEmissive = 1;
-                        instData.emissiveScale = 1.0f;
-                    }
-                    else
-                    {
-                        // No valid geometry slot
-                        instData.geomInstSlots = shared::ROBuffer<uint32_t>();
-                        instData.lightGeomInstDist = shared::LightDistribution();
-                        instData.isEmissive = 0;
-                    }
-                }
-                else
-                {
-                    // Not emissive - clean up any existing buffers
-                    // Clean up buffers if they exist from a previous emissive state
-                    if (geomInstSlotsBuffers_[bufferIdx][instanceIndex].isInitialized())
-                    {
-                        geomInstSlotsBuffers_[bufferIdx][instanceIndex].finalize();
-                    }
-                    if (perInstanceLightDists_[bufferIdx][instanceIndex].isInitialized())
-                    {
-                        perInstanceLightDists_[bufferIdx][instanceIndex].finalize();
-                    }
-                    
-                    instData.geomInstSlots = shared::ROBuffer<uint32_t>();
-                    instData.lightGeomInstDist = shared::LightDistribution();
-                    instData.isEmissive = 0;
-                }
-            }
-            else
-            {
-                // Not a triangle model or no model - clean up any existing buffers
-                if (geomInstSlotsBuffers_[bufferIdx][instanceIndex].isInitialized())
-                {
-                    geomInstSlotsBuffers_[bufferIdx][instanceIndex].finalize();
-                }
-                if (perInstanceLightDists_[bufferIdx][instanceIndex].isInitialized())
-                {
-                    perInstanceLightDists_[bufferIdx][instanceIndex].finalize();
-                }
-                
-                instData.geomInstSlots = shared::ROBuffer<uint32_t>();
-                instData.lightGeomInstDist = shared::LightDistribution();
-                instData.isEmissive = 0;
-            }
-        }
-        else
-        {
-            // No model handler - clean up any existing buffers
-            if (geomInstSlotsBuffers_[bufferIdx][instanceIndex].isInitialized())
-            {
-                geomInstSlotsBuffers_[bufferIdx][instanceIndex].finalize();
-            }
-            if (perInstanceLightDists_[bufferIdx][instanceIndex].isInitialized())
-            {
-                perInstanceLightDists_[bufferIdx][instanceIndex].finalize();
-            }
-            
-            instData.geomInstSlots = shared::ROBuffer<uint32_t>();
-            instData.lightGeomInstDist = shared::LightDistribution();
-            instData.isEmissive = 0;
-        }
+        // Empty buffers for now - these would be populated if the instance has geometry slots
+        instData.geomInstSlots = shared::ROBuffer<uint32_t>();
+        instData.lightGeomInstDist = shared::LightDistribution();
 
         instanceDataBuffer_[bufferIdx].unmap();
     }
@@ -753,9 +626,6 @@ void RiPRSceneHandler::createGeometryInstance (RenderableWeakRef& weakNode)
 
     // Populate instance data for GPU access
     populateInstanceData (index, node);
-    
-    // Don't build light distributions here - they should be built after
-    // the geometry distributions are computed in RiPRModelHandler::computeLightProbabilities
 }
 
 void RiPRSceneHandler::createPhysicsPhantom (RenderableWeakRef& weakNode)
@@ -909,9 +779,6 @@ void RiPRSceneHandler::createInstanceList (const WeakRenderableList& weakNodeLis
 
 
     rebuild();
-    
-    // Don't build light distributions here - they should be built after
-    // the geometry distributions are computed in RiPRModelHandler::computeLightProbabilities
 }
 
 bool RiPRSceneHandler::updateMotion()
@@ -1126,10 +993,14 @@ void RiPRSceneHandler::updateEmissiveInstances()
         // Check if the model has any emissive materials
         bool hasEmissive = false;
 
-        // For RiPRTriangleModel, check if it was marked as having emissive materials
+        // For RiPRTriangleModel, check if it has emissive materials
         if (auto triModel = std::dynamic_pointer_cast<RiPRTriangleModel> (model))
         {
-            hasEmissive = triModel->hasEmissiveMaterials();
+            // Check the emissive flag that was set when materials were created
+            if (triModel->hasEmissiveMaterials())
+            {
+                hasEmissive = true;
+            }
         }
 
         if (hasEmissive)
@@ -1150,92 +1021,11 @@ void RiPRSceneHandler::updateEmissiveInstances()
         }
     }
 
-    lightDistributionDirty_ = true;
-    // LOG(DBUG) << "Found " << emissiveInstances_.size() << " emissive instances";
-}
-
-void RiPRSceneHandler::buildLightInstanceDistribution()
-{
-    if (!lightDistributionDirty_) return;
-
-    if (emissiveInstances_.empty())
+    // Note: Light distribution building is now handled by RiPRAreaLightHandler
+    // Only log when the count changes to avoid spam
+    if (emissiveInstances_.size() != lastEmissiveCount_)
     {
-        // Initialize empty distribution (finalize first if already initialized)
-        if (lightInstDistribution_.isInitialized())
-        {
-            lightInstDistribution_.finalize();
-        }
-        // Don't initialize with nullptr - leave it uninitialized so integral() returns 0
-        // The DiscreteDistribution1D class should handle uninitialized state properly
-        lightDistributionDirty_ = false;
-        LOG(DBUG) << "No emissive instances found - light distribution left uninitialized";
-        return;
+        LOG(DBUG) << "Found " << emissiveInstances_.size() << " emissive instances";
+        lastEmissiveCount_ = emissiveInstances_.size();
     }
-
-    // Get engine and kernels through model handler
-    if (!modelHandler_) {
-        LOG(WARNING) << "Model handler not set";
-        return;
-    }
-    
-    // The model handler should have the engine set
-    // We need to add a getter to access it - for now use a workaround
-    // by calling computeLightProbabilities on the model handler
-    // which will handle the kernel calls internally
-    
-    // Since we can't easily access the engine from here, let's simplify:
-    // Just build a simple distribution for now
-   // LOG(INFO) << "Building light instance distribution (simplified)";
-    
-    // Collect importances for all emissive instances
-    std::vector<float> importances;
-    importances.reserve(emissiveInstances_.size());
-    
-    for (uint32_t instIdx : emissiveInstances_)
-    {
-        float importance = 1.0f;  // Default importance
-        
-        // Get node and model to get actual importance if available
-        auto it = nodeMap.find(instIdx);
-        if (it != nodeMap.end() && !it->second.expired())
-        {
-            auto node = it->second.lock();
-            auto model = modelHandler_->getModel(node);
-            
-            if (auto triModel = std::dynamic_pointer_cast<RiPRTriangleModel>(model))
-            {
-                // Get importance from the model's emitter distribution
-                const LightDistribution& emitterDist = triModel->getEmitterPrimDistribution();
-                importance = emitterDist.getIntengral();
-                
-                // If importance is still 0, use a default value
-                if (importance == 0.0f)
-                {
-                    importance = 1.0f;
-                }
-                
-                // Account for instance scaling
-                const auto& spaceTime = node->getSpaceTime();
-                float uniformScale = spaceTime.scale.norm() / std::sqrt(3.0f);
-                importance *= uniformScale * uniformScale;  // Area scales by square
-            }
-        }
-        
-        importances.push_back(std::max(importance, 1e-6f));
-    }
-    
-    // Build distribution (finalize first if already initialized)
-    if (lightInstDistribution_.isInitialized())
-    {
-        lightInstDistribution_.finalize();
-    }
-    lightInstDistribution_.initialize(
-        ctx->getCudaContext(),
-        cudau::BufferType::Device,
-        importances.data(),
-        static_cast<uint32_t>(importances.size()));
-    
-    lightDistributionDirty_ = false;
-   // LOG(INFO) << "Built light instance distribution with " << importances.size()
-      //        << " lights, total importance: " << lightInstDistribution_.getIntengral();
 }

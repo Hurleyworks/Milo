@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OptiX 9.0 Shader Binding Table Technical Guide</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f8f9fa;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #1a472a;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            border-bottom: 3px solid #28a745;
+            padding-bottom: 10px;
+        }
+
+        h2 {
+            color: #2c3e50;
+            font-size: 1.8em;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007bff;
+            padding-left: 15px;
+        }
+
+        h3 {
+            color: #495057;
+            font-size: 1.3em;
+            margin-top: 30px;
+            margin-bottom: 15px;
+        }
+
+        p {
+            margin-bottom: 15px;
+            text-align: justify;
+        }
+
+        .intro {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .highlight {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .warning {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .code-block {
+            background-color: #2d3748;
+            color: #e2e8f0;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+
+        .inline-code {
+            background-color: #e9ecef;
+            color: #e83e8c;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        ul, ol {
+            margin: 15px 0;
+            padding-left: 30px;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        .performance-tip {
+            background: linear-gradient(45deg, #ff6b6b, #ffa500);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+
+        .section-nav {
+            background-color: #f1f3f4;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+
+        .section-nav h3 {
+            color: #1a472a;
+            margin-top: 0;
+        }
+
+        .section-nav ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+
+        .section-nav a {
+            color: #007bff;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .section-nav a:hover {
+            text-decoration: underline;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
+            color: #6c757d;
+        }
+
+        strong {
+            color: #2c3e50;
+        }
+
+        .formula {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            text-align: center;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>OptiX 9.0 Shader Binding Table Technical Guide</h1>
+        
+        <div class="intro">
+            The Shader Binding Table (SBT) serves as the cornerstone of NVIDIA OptiX 9.0's ray tracing pipeline, enabling dynamic shader dispatch and data binding for every ray-geometry intersection. This mechanism answers the fundamental question of which shader executes when a ray hits geometry, while providing the flexibility needed for complex rendering scenarios on RTX hardware.
+        </div>
+
+        <div class="section-nav">
+            <h3>Table of Contents</h3>
+            <ul>
+                <li><a href="#architecture">Core Architecture and Purpose</a></li>
+                <li><a href="#memory-layout">Memory Layout and Data Structure</a></li>
+                <li><a href="#creation">Creating and Managing SBTs</a></li>
+                <li><a href="#optimization">Performance Optimization</a></li>
+                <li><a href="#optix90">OptiX 9.0 Specific Improvements</a></li>
+                <li><a href="#implementation">Implementation Patterns</a></li>
+                <li><a href="#performance">Performance Considerations</a></li>
+            </ul>
+        </div>
+
+        <h2 id="architecture">Core Architecture and Purpose in OptiX Ray Tracing</h2>
+        
+        <p>The SBT functions as a device memory data structure containing all shaders and associated parameters that may be invoked during ray tracing execution. Unlike rasterization pipelines where shaders are predetermined at draw time, ray tracing requires all potential shaders to be accessible since ray-geometry intersections are inherently unpredictable. This unified execution model, shared across RTX APIs including OptiX, DXR, and Vulkan Ray Tracing, enables efficient shader selection without CPU intervention during ray traversal.</p>
+
+        <p>When OptiX traces a ray through the scene, it uses a sophisticated indexing formula to determine which shader record to execute. For hit groups, this calculation follows the pattern:</p>
+
+        <div class="formula">
+            HG[0] + (HG_stride × (R_offset + R_stride × G_ID + I_offset))
+        </div>
+
+        <p>Where:</p>
+        <ul>
+            <li><span class="inline-code">HG[0]</span> represents the base address of hit group records</li>
+            <li><span class="inline-code">HG_stride</span> defines the stride between records in bytes</li>
+            <li><span class="inline-code">R_offset</span> specifies the ray type</li>
+            <li><span class="inline-code">R_stride</span> indicates the number of ray types</li>
+            <li><span class="inline-code">G_ID</span> identifies the geometry within the bottom-level acceleration structure</li>
+            <li><span class="inline-code">I_offset</span> provides the instance-specific SBT offset</li>
+        </ul>
+
+        <p>This multi-level dispatch mechanism supports differentiation between ray types (primary vs. shadow rays), geometry types (triangles, curves, custom primitives), material variations, and instance-level customization.</p>
+
+        <h2 id="memory-layout">Memory Layout and Data Structure Organization</h2>
+
+        <p>Each SBT record consists of two distinct components: a <strong>32-byte header section</strong> that remains opaque to the application and contains shader program handles, and a <strong>variable-size data section</strong> for application-defined parameters. The header must align to <span class="inline-code">OPTIX_SBT_RECORD_ALIGNMENT</span> (16 bytes) and gets populated using <span class="inline-code">optixSbtRecordPackHeader()</span>. The data section can contain arbitrary structures, CUDA device pointers, and texture handles, with a practical maximum size of 4096 bytes due to platform limitations.</p>
+
+        <div class="code-block">
+template&lt;typename T&gt;
+struct SbtRecord {
+    __align__(OPTIX_SBT_RECORD_ALIGNMENT) 
+    char header[OPTIX_SBT_RECORD_HEADER_SIZE];  // 32 bytes
+    T data;  // Variable size, application-defined
+};
+        </div>
+
+        <p>The complete SBT organizes into separate sections: ray generation records (single record per program), miss records (array for miss shaders), hit group records (array combining intersection, any-hit, and closest-hit programs), and callable records (array for callable programs). Each section maintains its own base address, stride, and count, enabling flexible memory layouts tailored to specific scene requirements.</p>
+
+        <h2 id="creation">Creating and Managing SBTs in OptiX 9.0 Applications</h2>
+
+        <p>Building an SBT follows a systematic process beginning with defining properly aligned record structures. Developers first create program groups for different shader types using <span class="inline-code">optixProgramGroupCreate()</span>, then allocate device memory and pack SBT records with shader handles and application data. The <span class="inline-code">OptixShaderBindingTable</span> structure ties everything together:</p>
+
+        <div class="code-block">
+// Step 1: Define record structures with proper alignment
+struct HitGroupData {
+    float3* vertices;
+    uint3* indices;
+    cudaTextureObject_t texture;
+    float3 diffuse_color;
+    float roughness;
+};
+
+// Step 2: Create and pack records
+HitGroupRecord record;
+optixSbtRecordPackHeader(hitgroupPG, &record);
+record.data.vertices = d_vertices;
+record.data.diffuse_color = material.color;
+
+// Step 3: Configure SBT structure
+OptixShaderBindingTable sbt = {};
+sbt.raygenRecord = d_raygenRecord;
+sbt.hitgroupRecordBase = d_hitgroupRecord;
+sbt.hitgroupRecordStrideInBytes = sizeof(HitGroupRecord);
+sbt.hitgroupRecordCount = numGeometries;
+        </div>
+
+        <p>Shaders access their SBT data through OptiX intrinsics like <span class="inline-code">optixGetSbtDataPointer()</span>, which returns a pointer to the data section. Additional functions like <span class="inline-code">optixGetInstanceId()</span>, <span class="inline-code">optixGetPrimitiveIndex()</span>, and <span class="inline-code">optixGetSbtGASIndex()</span> provide context information for indexing into global data arrays.</p>
+
+        <h2 id="optimization">Performance Optimization and Best Practices</h2>
+
+        <div class="performance-tip">
+            The most critical optimization strategy involves <strong>eliminating redundancy</strong> through strategic design patterns rather than storing identical data multiple times.
+        </div>
+
+        <p>A naive approach storing per-instance SBT records can consume 6MB+ for 100,000 instances, while an optimized implementation using material-based organization with global data arrays reduces this to under 1MB, independent of instance count.</p>
+
+        <p>NVIDIA engineers recommend a three-stage optimization approach:</p>
+
+        <ol>
+            <li><strong>Eliminate data section redundancy</strong> by storing shading parameters in global memory arrays indexed by instance ID</li>
+            <li><strong>Separate geometry parameters</strong> using <span class="inline-code">optixGetGASPointerFromHandle()</span> to store per-GAS data, reducing storage from per-instance to per-geometry</li>
+            <li><strong>Minimize shader program redundancy</strong> by storing one SBT record per material type rather than per instance, using the SBT offset to select material shaders</li>
+        </ol>
+
+        <div class="highlight">
+            <strong>Memory Alignment Best Practices:</strong><br>
+            Records must align to 16-byte boundaries with the 32-byte header always present. <strong>Target header-only records</strong> (32 bytes total) for optimal cache performance, or use minimal data sections (48 bytes total) when necessary. Avoid large data sections exceeding 64 bytes per record, as these significantly impact cache locality and memory bandwidth utilization.
+        </div>
+
+        <p>For complex material systems, organize SBT records by material families rather than individual instances. Store texture handles and resource references in global arrays accessed via material parameter indexing. This approach enables dynamic material updates without rebuilding the SBT, separating static shader binding from dynamic parameter changes.</p>
+
+        <h2 id="optix90">OptiX 9.0 Specific Improvements and Changes</h2>
+
+        <p>OptiX 9.0 maintains backward compatibility with existing SBT implementations while introducing significant enhancements:</p>
+
+        <h3>Cluster Acceleration Structures (CLAS)</h3>
+        <p>The new <strong>Cluster Acceleration Structures</strong> dramatically reduce SBT record count for high-density geometry, achieving 100x fewer entries when using clusters versus direct microtriangles. Cluster Templates enable reuse of common topology patterns, further optimizing memory usage and traversal performance.</p>
+
+        <h3>Cooperative Vectors Support</h3>
+        <p><strong>Cooperative Vectors support</strong> adds new SBT record data types for neural network inference operations within shaders. This feature requires enhanced memory alignment for Tensor Core operations and optimized layouts for cooperative vector operations, enabling AI-enhanced shading and neural rendering workflows.</p>
+
+        <div class="warning">
+            <strong>Important Deprecations:</strong><br>
+            1. Calling <span class="inline-code">optixTrace</span> within direct callables is no longer supported; applications must transition to the <span class="inline-code">optixTraverse</span> + <span class="inline-code">optixInvoke</span> pattern.<br>
+            2. Displaced Micro-Mesh (DMM) functionality is deprecated in favor of the Clusters API.
+        </div>
+
+        <p>Migration from OptiX 8.x requires minimal immediate changes to SBT code. The core API structure remains compatible, with new features being opt-in. Developers should update callable implementations to use the new traversal pattern and evaluate opportunities to adopt Clusters API for high-density dynamic geometry scenarios.</p>
+
+        <h2 id="implementation">Implementation Patterns and Code Examples</h2>
+
+        <h3>Multi-Ray Type Configuration</h3>
+        <p>Multi-ray type configurations require careful SBT organization to maintain performance while supporting different ray behaviors:</p>
+
+        <div class="code-block">
+enum RayType { PRIMARY = 0, SHADOW = 1, RAY_TYPE_COUNT };
+
+// Configure SBT with ray type stride
+size_t numRecords = numGeometries * RAY_TYPE_COUNT;
+std::vector&lt;HitGroupRecord&gt; hgRecords(numRecords);
+
+for (int geom = 0; geom &lt; numGeometries; ++geom) {
+    int primaryIdx = geom * RAY_TYPE_COUNT + PRIMARY;
+    optixSbtRecordPackHeader(primaryHitPG, &hgRecords[primaryIdx]);
+    hgRecords[primaryIdx].data = primaryMaterials[geom];
+    
+    int shadowIdx = geom * RAY_TYPE_COUNT + SHADOW;
+    optixSbtRecordPackHeader(shadowHitPG, &hgRecords[shadowIdx]);
+    hgRecords[shadowIdx].data = shadowMaterials[geom];
+}
+
+// Device code traces with appropriate offsets
+optixTrace(traversable, ray_origin, ray_direction,
+           0.0f, 1e16f, 0.0f, OptixVisibilityMask(255),
+           OPTIX_RAY_FLAG_NONE,
+           PRIMARY,           // SBT offset (ray type)
+           RAY_TYPE_COUNT,    // SBT stride
+           PRIMARY);          // Miss index
+        </div>
+
+        <h3>Memory-Efficient Layout</h3>
+        <p>For memory-efficient layouts, implement a minimal SBT with global data arrays:</p>
+
+        <div class="code-block">
+// Minimal SBT record - header only
+struct OptimalSBTRecord {
+    char header[32];  // OptiX managed, no data section
+};
+
+// External parameter arrays
+MaterialParams material_array[num_unique_materials];
+GeometryParams* geometry_data;  // Stored with GAS
+
+// Device code accesses data via instance indexing
+__device__ void __closesthit__ch() {
+    uint32_t material_idx = instance_to_material_map[optixGetInstanceId()];
+    MaterialParams& material = material_array[material_idx];
+    // Process using material parameters from global memory
+}
+        </div>
+
+        <p>Dynamic SBT updates benefit from separating static shader binding from mutable parameters. Maintain host-side records synchronized with device memory, updating only changed parameters rather than rebuilding the entire SBT. This pattern proves especially valuable for interactive applications requiring real-time material adjustments.</p>
+
+        <h2 id="performance">Performance Considerations and Limitations</h2>
+
+        <p>SBT performance directly impacts overall ray tracing efficiency through memory bandwidth utilization and cache behavior. Large SBTs cause incoherent memory accesses leading to cache misses and reduced effective memory bandwidth.</p>
+
+        <div class="performance-tip">
+            Target L2 cache hit rates above 90% for SBT accesses by minimizing record count and optimizing data layout.
+        </div>
+
+        <h3>Memory Access Patterns</h3>
+        <p>Memory access patterns significantly affect performance. Sequential SBT record access within warps promotes coalescing, while scattered reads dramatically reduce throughput. The GPU memory hierarchy imposes access costs ranging from single-cycle register access to 300-600 cycles for global memory. Optimize by minimizing global memory roundtrips and maximizing L2 cache residency for frequently accessed SBT data.</p>
+
+        <h3>Profiling and Debugging</h3>
+        <p>Profiling with NVIDIA Nsight Compute reveals critical metrics including:</p>
+        <ul>
+            <li>Memory throughput (target >80% theoretical bandwidth)</li>
+            <li>Warp occupancy (maintain >80% active warps)</li>
+            <li>Register usage patterns</li>
+        </ul>
+
+        <p>Enable line information during compilation with <span class="inline-code">-lineinfo</span> flags to correlate performance bottlenecks with specific code locations.</p>
+
+        <h3>Common Pitfalls</h3>
+        <div class="warning">
+            <strong>Avoid These Common Mistakes:</strong>
+            <ul>
+                <li>Per-instance SBT records causing O(N) memory growth</li>
+                <li>Large data sections reducing cache efficiency</li>
+                <li>Improper alignment causing access penalties</li>
+                <li>Frequent SBT rebuilds creating CPU-side bottlenecks</li>
+            </ul>
+        </div>
+
+        <h3>Hardware Limitations</h3>
+        <p>Hardware limitations impose practical constraints:</p>
+        <ul>
+            <li>Maximum SBT record stride cannot exceed 4096 bytes</li>
+            <li>Optimal performance requires records under 64 bytes</li>
+            <li>Address alignment must meet 64-byte boundaries for base addresses</li>
+            <li>Multi-GPU configurations using NVLink require careful SBT placement to minimize cross-GPU memory access penalties</li>
+        </ul>
+
+        <h2>Conclusion</h2>
+
+        <p>The Shader Binding Table in OptiX 9.0 represents a sophisticated balance between flexibility and performance, enabling everything from simple path tracers to production renderers while maintaining the efficiency required for real-time applications. Success with SBT implementation requires understanding that <strong>SBT size should scale with material complexity rather than scene instance count</strong>, a paradigm shift that enables orders of magnitude memory savings and significant performance improvements.</p>
+
+        <p>OptiX 9.0's enhancements, particularly Cluster Acceleration Structures and Cooperative Vectors support, extend SBT capabilities while maintaining backward compatibility. The continued evolution of hardware-accelerated ray tracing through features like RTX Mega Geometry and Shader Execution Reordering demonstrates NVIDIA's commitment to providing developers with powerful tools that fully exploit RTX hardware capabilities.</p>
+
+        <p>By following the optimization strategies and best practices outlined in this guide, developers can create efficient, scalable ray tracing applications that leverage the full potential of modern GPU architectures.</p>
+
+        <div class="footer">
+            <p><em>OptiX 9.0 Shader Binding Table Technical Guide</em><br>
+            Comprehensive technical documentation for NVIDIA OptiX ray tracing development</p>
+        </div>
+    </div>
+</body>
+</html>

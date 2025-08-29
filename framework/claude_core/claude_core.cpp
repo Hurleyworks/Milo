@@ -36,6 +36,7 @@
 // ripr handlers  
 #include "excludeFromBuild/engines/ripr/handlers/RiPRModelHandler.cpp"
 #include "excludeFromBuild/engines/ripr/handlers/RiPRSceneHandler.cpp"
+#include "excludeFromBuild/engines/ripr/handlers/RiPRAreaLightHandler.cpp"
 
 // claudia handlers  
 #include "excludeFromBuild/engines/claudia/handlers/ClaudiaModelHandler.cpp"

@@ -483,6 +483,7 @@ void ClaudiaAreaLightHandler::computeGeomInstProbabilities(
     uint32_t numGeomInsts,
     LightDistribution& dist)
 {
+    #if 0
     if (!modelHandler_ || !sceneHandler_)
         return;
     
@@ -535,6 +536,8 @@ void ClaudiaAreaLightHandler::computeGeomInstProbabilities(
         LOG(DBUG) << "Computed geometry instance probabilities for " << numGeomInsts << " instances";
     }
 #endif
+
+    #endif
 }
 
 void ClaudiaAreaLightHandler::computeInstProbabilities(CUstream stream, uint32_t numInsts)
@@ -542,6 +545,7 @@ void ClaudiaAreaLightHandler::computeInstProbabilities(CUstream stream, uint32_t
     if (!sceneHandler_)
         return;
     
+    #if 0
     // Only log once when distribution is first computed or when size changes
     static uint32_t lastLoggedNumInsts = 0;
     if (numInsts != lastLoggedNumInsts)
@@ -619,6 +623,8 @@ void ClaudiaAreaLightHandler::computeInstProbabilities(CUstream stream, uint32_t
         }
     }
 #endif
+
+    #endif
 }
 
 void ClaudiaAreaLightHandler::finalizeLightDistribution(

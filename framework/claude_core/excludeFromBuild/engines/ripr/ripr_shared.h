@@ -296,13 +296,6 @@ namespace ripr_shared
         }
         else
         {
-            // Check if we have any area lights to sample
-            if (ripr_plp.s->lightInstDist.integral() == 0.0f)
-            {
-                *areaPDensity = 0.0f;
-                return;
-            }
-            
             float lightProb = 1.0f;
 
             // First, sample an instance
@@ -434,39 +427,18 @@ namespace ripr_shared
             lightSample->normal = bcA * vA.normal + bcB * vB.normal + bcC * vC.normal;
             lightSample->normal = normalize (inst.normalMatrix * lightSample->normal);
 
-            // Calculate texture coordinates for potential texture lookup
-            texCoord = bcA * vA.texCoord + bcB * vB.texCoord + bcC * vC.texCoord;
-            
             if (mat.emissive)
             {
-                // Material has an emissive texture - sample it
                 texEmittance = mat.emissive;
-                const float4 texValue = tex2DLod<float4> (texEmittance, texCoord.x, texCoord.y, 0.0f);
-                emittance = RGB (getXYZ (texValue));
-            }
-            else
-            {
-                // No emissive texture - use a default emittance value
-                // This is necessary for area lights that don't have textures
-                // The actual emission strength should be controlled by emissiveStrength
                 emittance = RGB (1.0f, 1.0f, 1.0f);
-            }
-            
-            // Apply emissive strength if available
-            if (mat.emissiveStrength)
-            {
-                const float strength = tex2DLod<float> (mat.emissiveStrength, texCoord.x, texCoord.y, 0.0f);
-                emittance *= strength;
+                texCoord = bcA * vA.texCoord + bcB * vB.texCoord + bcC * vC.texCoord;
             }
         }
-        
-        // Sample texture for both environment and area lights if texture is available
         if (texEmittance)
         {
             const float4 texValue = tex2DLod<float4> (texEmittance, texCoord.x, texCoord.y, 0.0f);
             emittance *= RGB (getXYZ (texValue));
         }
-        
         lightSample->emittance = emittance;
     }
 

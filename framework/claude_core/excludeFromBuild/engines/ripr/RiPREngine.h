@@ -21,40 +21,12 @@ public:
     void onEnvironmentChanged() override;
     std::string getName() const override { return "RiPR Engine"; }
     std::string getDescription() const override { return "RiPR Path Tracing with adaptive sampling and improved convergence"; }
-    
-    // Build light distributions for emissive geometry
-    // Call this after adding emissive geometry to the scene
-    void buildLightDistributions();
-    
-    
-    // Light probability computation kernels structure
-    struct ComputeProbTex {
-        CUmodule cudaModule = nullptr;
-        cudau::Kernel computeFirstMip;
-        cudau::Kernel computeTriangleProbTexture;
-        cudau::Kernel computeGeomInstProbTexture;
-        cudau::Kernel computeInstProbTexture;
-        cudau::Kernel computeMip;
-        cudau::Kernel computeTriangleProbBuffer;
-        cudau::Kernel computeGeomInstProbBuffer;
-        cudau::Kernel computeInstProbBuffer;
-        cudau::Kernel finalizeDiscreteDistribution1D;
-        cudau::Kernel test;
-    };
-    
-    // Accessor for light probability computation kernels
-    const ComputeProbTex& getComputeProbTex() const { return computeProbTex_; }
-    const ComputeProbTex& getLightProbKernels() const { return computeProbTex_; }
-    
-    // Check if light probability kernels are initialized
-    bool hasLightProbKernels() const { return computeProbTex_.cudaModule != nullptr; }
 
 private:
     // Pipeline setup methods
     void setupPipelines();
 
     void updateMaterialHitGroups(RiPRModelPtr model);  // Set hit groups on a specific model's materials
-    void initializeLightProbabilityKernels();  // Initialize CUDA kernels for light probability computation
     
     // GBuffer rendering
     void outputGBufferDebugInfo(CUstream stream);
@@ -72,6 +44,7 @@ private:
     // Scene management
     std::shared_ptr<class RiPRSceneHandler> sceneHandler_;
     std::shared_ptr<class RiPRModelHandler> modelHandler_;
+    std::shared_ptr<class RiPRAreaLightHandler> areaLightHandler_;
     
      // Pipeline parameter structures
     ripr_shared::StaticPipelineLaunchParameters static_plp_;
@@ -99,9 +72,6 @@ private:
     
     // Environment light state
     bool environmentDirty_ = true;
-    
-    // Light probability computation kernels
-    ComputeProbTex computeProbTex_;
     
     // Debug settings
     bool enableGBufferDebug_ = false;

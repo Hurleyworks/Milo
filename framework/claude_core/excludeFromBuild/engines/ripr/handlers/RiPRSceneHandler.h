@@ -164,11 +164,10 @@ class RiPRSceneHandler
         return expiredIndices.size();
     }
 
-    // Area light support methods
+    // Area light support methods - delegated to AreaLightHandler
     void updateEmissiveInstances();
-    void buildLightInstanceDistribution();
-    const LightDistribution& getLightInstDistribution() const { return lightInstDistribution_; }
     uint32_t getNumEmissiveInstances() const { return static_cast<uint32_t> (emissiveInstances_.size()); }
+    const std::vector<uint32_t>& getEmissiveInstances() const { return emissiveInstances_; }
 
  private:
     // Reference to the render context for OptiX operations
@@ -226,13 +225,7 @@ class RiPRSceneHandler
     // Populate instance data for a given instance index
     void populateInstanceData (uint32_t instanceIndex, const RenderableNode& node);
 
-    // Area light tracking
+    // Area light tracking - only track indices, distribution managed by AreaLightHandler
     std::vector<uint32_t> emissiveInstances_; // Track emissive instance indices
-    LightDistribution lightInstDistribution_; // Distribution for sampling light instances (host side)
-    bool lightDistributionDirty_ = true;      // Flag for rebuild
-    
-    // Per-instance light distribution buffers
-    // These store the geometry slot buffers and light distributions for each emissive instance
-    std::unordered_map<uint32_t, cudau::TypedBuffer<uint32_t>> geomInstSlotsBuffers_[2];
-    std::unordered_map<uint32_t, DiscreteDistribution1D> perInstanceLightDists_[2];
+    size_t lastEmissiveCount_ = SIZE_MAX; // Track last count to avoid log spam
 };

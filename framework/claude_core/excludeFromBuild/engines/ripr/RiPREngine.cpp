@@ -2,7 +2,9 @@
 #include "../../RenderContext.h"
 #include "handlers/RiPRSceneHandler.h"
 #include "handlers/RiPRModelHandler.h"
+#include "handlers/RiPRAreaLightHandler.h"
 #include "models/RiPRModel.h"
+#include <cstddef>  // for offsetof
 
 RiPREngine::RiPREngine()
 {
@@ -56,8 +58,17 @@ void RiPREngine::initialize (RenderContext* ctx)
     modelHandler_->setSceneHandler (sceneHandler_);
     modelHandler_->setEngine (this);
 
+    // Create area light handler and connect it to other handlers
+    areaLightHandler_ = RiPRAreaLightHandler::create (renderContext);
+    areaLightHandler_->initialize();
+    areaLightHandler_->setSceneHandler (sceneHandler_);
+    areaLightHandler_->setModelHandler (modelHandler_);
+
     // Also give model handler to scene handler
     sceneHandler_->setModelHandler (modelHandler_);
+    
+    // Connect area light handler to model handler
+    modelHandler_->setAreaLightHandler (areaLightHandler_);
 
     // Set number of ray types
     constexpr uint32_t numRayTypes = ripr_shared::maxNumRayTypes;
@@ -195,6 +206,12 @@ void RiPREngine::cleanup()
     // ScreenBufferHandler cleanup is handled by RenderContext's Handlers::cleanup()
 
     // Clean up handlers
+    if (areaLightHandler_)
+    {
+        areaLightHandler_->finalize();
+        areaLightHandler_.reset();
+    }
+
     if (modelHandler_)
     {
         modelHandler_->finalize();
@@ -215,19 +232,6 @@ void RiPREngine::cleanup()
         rngBuffer_.finalize();
     }
 
-    // Clean up light probability computation module
-    if (computeProbTex_.cudaModule)
-    {
-        try
-        {
-            CUDADRV_CHECK (cuModuleUnload (computeProbTex_.cudaModule));
-        }
-        catch (...)
-        {
-            LOG (WARNING) << "Failed to unload compute_light_probs module";
-        }
-        computeProbTex_.cudaModule = nullptr;
-    }
 
     // TODO: Clean up RiPR-specific resources
     // - Temporal buffers
@@ -328,6 +332,23 @@ void RiPREngine::render (const mace::InputEvent& input, bool updateMotion, uint3
     // Update launch parameters (keeping as-is for now)
     updateLaunchParameters (input);
 
+    // Update area light distributions if needed (only if we have emissive instances)
+    if (areaLightHandler_ && areaLightHandler_->hasDirtyDistributions() && 
+        sceneHandler_ && sceneHandler_->getNumEmissiveInstances() > 0)
+    {
+        timer->computePDFTexture.start (stream);
+        areaLightHandler_->updateDirtyDistributions (stream, 0);
+        timer->computePDFTexture.stop (stream);
+    }
+    
+    // Setup scene light sampling for this frame
+    if (areaLightHandler_ && static_plp_.numLightInsts > 0)
+    {
+        CUdeviceptr lightInstDistAddr = static_plp_on_device_ + 
+            offsetof(ripr_shared::StaticPipelineLaunchParameters, lightInstDist);
+        areaLightHandler_->setupSceneLightSampling (stream, lightInstDistAddr, 0);
+    }
+
     // Get PipelineHandler from RenderContext
     auto& handlers = renderContext_->getHandlers();
     auto pipelineHandler = handlers.pipelineHandler;
@@ -409,22 +430,6 @@ void RiPREngine::onEnvironmentChanged()
     LOG (INFO) << "Environment changed - accumulation reset";
 }
 
-void RiPREngine::buildLightDistributions()
-{
-    if (!sceneHandler_)
-    {
-        LOG (WARNING) << "No scene handler available to build light distributions";
-        return;
-    }
-    
-    // Update emissive instances and build distributions
-    sceneHandler_->updateEmissiveInstances();
-    sceneHandler_->buildLightInstanceDistribution();
-    
-    LOG (INFO) << "Light distributions built with " 
-              << sceneHandler_->getNumEmissiveInstances() << " emissive instances";
-}
-
 // setupPipelines() using PipelineHandler
 void RiPREngine::setupPipelines()
 {
@@ -498,69 +503,8 @@ void RiPREngine::setupPipelines()
         LOG (INFO) << "Scene set on PipelineHandler after pipeline setup";
     }
 
-    // Initialize light probability computation kernels (still needed)
-    initializeLightProbabilityKernels();
-
     // SBT setup is handled by PipelineHandler
     LOG (INFO) << "RiPREngine pipelines setup complete with PipelineHandler";
-}
-
-void RiPREngine::initializeLightProbabilityKernels()
-{
-    LOG (INFO) << "RiPREngine::initializeLightProbabilityKernels()";
-
-    if (!ptxManager_ || !renderContext_)
-    {
-        LOG (WARNING) << "PTXManager or RenderContext not ready";
-        return;
-    }
-
-    // Load PTX for compute_light_probs kernels
-    std::vector<char> probPtxData = ptxManager_->getPTXData ("compute_light_probs");
-    if (probPtxData.empty())
-    {
-        LOG (WARNING) << "Failed to load PTX for compute_light_probs";
-        return;
-    }
-
-    // Create null-terminated string for cuModuleLoadData
-    probPtxData.push_back ('\0');
-
-    // Load CUDA module
-    CUDADRV_CHECK (cuModuleLoadData (&computeProbTex_.cudaModule, probPtxData.data()));
-
-    // Initialize all kernels
-    computeProbTex_.computeFirstMip = cudau::Kernel (
-        computeProbTex_.cudaModule, "computeProbabilityTextureFirstMip", cudau::dim3 (32), 0);
-
-    computeProbTex_.computeTriangleProbTexture = cudau::Kernel (
-        computeProbTex_.cudaModule, "computeTriangleProbTexture", cudau::dim3 (32), 0);
-
-    computeProbTex_.computeGeomInstProbTexture = cudau::Kernel (
-        computeProbTex_.cudaModule, "computeGeomInstProbTexture", cudau::dim3 (32), 0);
-
-    computeProbTex_.computeInstProbTexture = cudau::Kernel (
-        computeProbTex_.cudaModule, "computeInstProbTexture", cudau::dim3 (32), 0);
-
-    computeProbTex_.computeMip = cudau::Kernel (
-        computeProbTex_.cudaModule, "computeProbabilityTextureMip", cudau::dim3 (8, 8), 0);
-
-    computeProbTex_.computeTriangleProbBuffer = cudau::Kernel (
-        computeProbTex_.cudaModule, "computeTriangleProbBuffer", cudau::dim3 (32), 0);
-
-    computeProbTex_.computeGeomInstProbBuffer = cudau::Kernel (
-        computeProbTex_.cudaModule, "computeGeomInstProbBuffer", cudau::dim3 (32), 0);
-
-    computeProbTex_.computeInstProbBuffer = cudau::Kernel (
-        computeProbTex_.cudaModule, "computeInstProbBuffer", cudau::dim3 (32), 0);
-
-    computeProbTex_.finalizeDiscreteDistribution1D = cudau::Kernel (
-        computeProbTex_.cudaModule, "finalizeDiscreteDistribution1D", cudau::dim3 (32), 0);
-
-    computeProbTex_.test = cudau::Kernel (
-        computeProbTex_.cudaModule, "testProbabilityTexture", cudau::dim3 (32), 0);
-
-    LOG (INFO) << "Light probability computation kernels initialized successfully";
 }
 
 void RiPREngine::updateMaterialHitGroups (RiPRModelPtr model)
@@ -707,24 +651,54 @@ void RiPREngine::updateLaunchParameters (const mace::InputEvent& input)
         static_plp_.geometryInstanceDataBuffer = shared::ROBuffer<shared::GeometryInstanceData>();
     }
 
-    // Set light distribution from scene handler
-    if (sceneHandler_)
+    // Set light distribution from area light handler
+    if (sceneHandler_ && areaLightHandler_)
     {
-        // Update emissive instances and build light distribution
-        sceneHandler_->updateEmissiveInstances();
-        sceneHandler_->buildLightInstanceDistribution();
-
-        // Get the device representation of the light distribution
-        // Only if it's initialized (has emissive instances)
-        const auto& lightDist = sceneHandler_->getLightInstDistribution();
-        if (lightDist.isInitialized())
+        // Only update if there are dirty distributions or the scene has changed
+        uint32_t currentInstanceCount = sceneHandler_->getInstanceCount();
+        static uint32_t lastInstanceCount = 0;
+        static bool firstUpdate = true;
+        
+        bool needsUpdate = firstUpdate || 
+                          (currentInstanceCount != lastInstanceCount) || 
+                          areaLightHandler_->hasDirtyDistributions();
+        
+        if (needsUpdate)
         {
-            lightDist.getDeviceType (&static_plp_.lightInstDist);
-        }
-        else
-        {
-            // Set empty distribution when no emissive instances
-            static_plp_.lightInstDist = shared::LightDistribution();
+            // Update emissive instances first
+            sceneHandler_->updateEmissiveInstances();
+            
+            // Only prepare light distributions if there are emissive instances
+            uint32_t numEmissiveInstances = sceneHandler_->getNumEmissiveInstances();
+            if (numEmissiveInstances > 0)
+            {
+                // Only log when actually updating
+                if (firstUpdate || currentInstanceCount != lastInstanceCount)
+                {
+                    LOG(DBUG) << "Preparing light distribution for " << numEmissiveInstances 
+                              << " emissive instances out of " << currentInstanceCount << " total instances";
+                }
+                
+                // Prepare and update scene light distribution through AreaLightHandler
+                // Note: We still pass total instance count as capacity, but only emissive ones will be used
+                areaLightHandler_->prepareSceneLightDistribution(currentInstanceCount);
+                areaLightHandler_->updateSceneLightDistribution(renderContext_->getCudaStream(), 0);
+                
+                // Get the device representation of the light distribution
+                const auto* sceneDist = areaLightHandler_->getSceneLightDistribution();
+                if (sceneDist)
+                {
+                    sceneDist->getDeviceType(&static_plp_.lightInstDist);
+                }
+            }
+            else
+            {
+                // No emissive instances, use empty distribution
+                static_plp_.lightInstDist = shared::LightDistribution();
+            }
+            
+            lastInstanceCount = currentInstanceCount;
+            firstUpdate = false;
         }
     }
     else
