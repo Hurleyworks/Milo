@@ -56,7 +56,6 @@ void RiPREngine::initialize (RenderContext* ctx)
     modelHandler_ = RiPRModelHandler::create (renderContext);
     modelHandler_->initialize();
     modelHandler_->setSceneHandler (sceneHandler_);
-    modelHandler_->setEngine (this);
 
     // Create area light handler and connect it to other handlers
     areaLightHandler_ = RiPRAreaLightHandler::create (renderContext);

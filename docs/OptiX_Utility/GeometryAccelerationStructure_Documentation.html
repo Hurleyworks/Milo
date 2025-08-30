@@ -1,0 +1,1286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>optixu::GeometryAccelerationStructure - Comprehensive Documentation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #fff;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        
+        h2 {
+            color: #34495e;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            padding-left: 10px;
+            border-left: 4px solid #3498db;
+            font-size: 1.8em;
+        }
+        
+        h3 {
+            color: #555;
+            margin-top: 25px;
+            margin-bottom: 15px;
+            font-size: 1.4em;
+        }
+        
+        h4 {
+            color: #666;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+        }
+        
+        .code-block, pre {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 20px;
+            margin: 24px 0;
+            overflow-x: auto;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #000;
+        }
+        
+        .inline-code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 0.9em;
+            color: #d14;
+        }
+        
+        .method-signature {
+            background: #e8f4f8;
+            border-left: 4px solid #0066cc;
+            padding: 15px;
+            margin: 20px 0;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
+        }
+        
+        .parameter-list {
+            background: #f9f9f9;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        
+        .parameter-list dt {
+            font-weight: bold;
+            color: #0066cc;
+            margin-top: 10px;
+        }
+        
+        .parameter-list dd {
+            margin-left: 20px;
+            margin-top: 5px;
+            color: #555;
+        }
+        
+        .note {
+            background: #fffbf0;
+            border: 1px solid #f0d000;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .note::before {
+            content: "📝 Note: ";
+            font-weight: bold;
+            color: #d09000;
+        }
+        
+        .warning {
+            background: #fff5f5;
+            border: 1px solid #ff8080;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .warning::before {
+            content: "⚠️ Warning: ";
+            font-weight: bold;
+            color: #d00000;
+        }
+        
+        .tip {
+            background: #f0fff0;
+            border: 1px solid #80c080;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        
+        .tip::before {
+            content: "💡 Tip: ";
+            font-weight: bold;
+            color: #008000;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+        
+        th {
+            background: #f0f0f0;
+            font-weight: bold;
+        }
+        
+        tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+        
+        .toc {
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 20px;
+            margin: 30px 0;
+        }
+        
+        .toc h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        
+        .toc ul {
+            list-style: none;
+            margin-left: 20px;
+        }
+        
+        .toc a {
+            color: #0066cc;
+            text-decoration: none;
+        }
+        
+        .toc a:hover {
+            text-decoration: underline;
+        }
+        
+        .example-section {
+            background: #f8fafb;
+            border: 1px solid #d0d7de;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 30px 0;
+        }
+        
+        .example-section h4 {
+            color: #0969da;
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>optixu::GeometryAccelerationStructure</h1>
+    
+    <div class="toc">
+        <h3>Table of Contents</h3>
+        <ul>
+            <li><a href="#overview">1. Overview</a></li>
+            <li><a href="#architecture">2. Architecture and Design</a></li>
+            <li><a href="#api-reference">3. API Reference</a></li>
+            <li><a href="#usage-patterns">4. Common Usage Patterns</a></li>
+            <li><a href="#examples">5. Complete Examples</a></li>
+            <li><a href="#performance">6. Performance Considerations</a></li>
+            <li><a href="#troubleshooting">7. Troubleshooting</a></li>
+            <li><a href="#best-practices">8. Best Practices</a></li>
+        </ul>
+    </div>
+    
+    <h2 id="overview">1. Overview</h2>
+    
+    <p>The <span class="inline-code">optixu::GeometryAccelerationStructure</span> (GAS) class is a high-level wrapper around OptiX's bottom-level acceleration structure (BLAS) functionality. It manages the creation, configuration, and maintenance of acceleration structures for ray tracing operations on geometry data.</p>
+    
+    <h3>Key Concepts</h3>
+    
+    <p>A GeometryAccelerationStructure represents a collection of geometric primitives (triangles, curves, or custom primitives) organized in a spatial data structure optimized for ray intersection queries. It serves as the fundamental building block for ray tracing scenes in OptiX.</p>
+    
+    <h3>Primary Responsibilities</h3>
+    
+    <ul style="margin: 20px 0; padding-left: 40px;">
+        <li>Managing collections of GeometryInstance objects</li>
+        <li>Building and updating acceleration structures</li>
+        <li>Handling memory allocation for acceleration data</li>
+        <li>Supporting motion blur through temporal geometry</li>
+        <li>Enabling compaction for memory optimization</li>
+        <li>Managing material sets and ray type configurations</li>
+    </ul>
+    
+    <h2 id="architecture">2. Architecture and Design</h2>
+    
+    <h3>Class Hierarchy</h3>
+    
+    <pre class="code-block">
+optixu::Object&lt;GeometryAccelerationStructure&gt;
+    └── optixu::GeometryAccelerationStructure
+</pre>
+    
+    <h3>Dependencies and Relationships</h3>
+    
+    <div class="example-section">
+        <h4>Required Components</h4>
+        <ul style="padding-left: 20px;">
+            <li><strong>optixu::Context</strong> - OptiX device context for GPU operations</li>
+            <li><strong>optixu::Scene</strong> - Parent scene that creates and manages GAS instances</li>
+            <li><strong>optixu::GeometryInstance</strong> - Individual geometry primitives added as children</li>
+            <li><strong>cudau::Buffer</strong> - GPU memory buffers for acceleration structure storage</li>
+        </ul>
+    </div>
+    
+    <h3>Memory Layout</h3>
+    
+    <p>The GAS manages two primary types of GPU memory:</p>
+    
+    <table>
+        <tr>
+            <th>Buffer Type</th>
+            <th>Purpose</th>
+            <th>Lifetime</th>
+            <th>Size Calculation</th>
+        </tr>
+        <tr>
+            <td>Acceleration Buffer</td>
+            <td>Stores the built acceleration structure</td>
+            <td>Persistent during rendering</td>
+            <td><code>OptixAccelBufferSizes::outputSizeInBytes</code></td>
+        </tr>
+        <tr>
+            <td>Scratch Buffer</td>
+            <td>Temporary workspace for build operations</td>
+            <td>Only during build/update</td>
+            <td><code>OptixAccelBufferSizes::tempSizeInBytes</code></td>
+        </tr>
+    </table>
+    
+    <h2 id="api-reference">3. API Reference</h2>
+    
+    <h3>Creation and Destruction</h3>
+    
+    <div class="method-signature">
+// Creation (through Scene)
+optixu::GeometryAccelerationStructure gas = scene.createGeometryAccelerationStructure();
+
+// Creation with geometry type hint
+optixu::GeometryAccelerationStructure gas = scene.createGeometryAccelerationStructure(
+    optixu::GeometryType::Triangles
+);
+
+// Destruction
+gas.destroy();
+</div>
+    
+    <h3>Configuration Methods</h3>
+    
+    <h4>setConfiguration()</h4>
+    
+    <div class="method-signature">
+void setConfiguration(
+    ASTradeoff tradeoff,
+    AllowUpdate allowUpdate,
+    AllowCompaction allowCompaction,
+    AllowRandomVertexAccess allowRandomVertexAccess,
+    AllowOpacityMicroMapUpdate allowOpacityMicroMapUpdate = No,
+    AllowDisableOpacityMicroMaps allowDisableOpacityMicroMaps = No
+);
+</div>
+    
+    <div class="parameter-list">
+        <dl>
+            <dt>tradeoff</dt>
+            <dd>Build/trace performance trade-off:
+                <ul style="margin-top: 5px;">
+                    <li><code>PreferFastBuild</code> - Optimize for faster build times</li>
+                    <li><code>PreferFastTrace</code> - Optimize for faster ray traversal</li>
+                </ul>
+            </dd>
+            
+            <dt>allowUpdate</dt>
+            <dd>Enable dynamic updates to vertex positions:
+                <ul style="margin-top: 5px;">
+                    <li><code>Yes</code> - Allow vertex updates without full rebuild</li>
+                    <li><code>No</code> - Static geometry only</li>
+                </ul>
+            </dd>
+            
+            <dt>allowCompaction</dt>
+            <dd>Enable memory compaction after build:
+                <ul style="margin-top: 5px;">
+                    <li><code>Yes</code> - Allow post-build compaction</li>
+                    <li><code>No</code> - Keep original size</li>
+                </ul>
+            </dd>
+            
+            <dt>allowRandomVertexAccess</dt>
+            <dd>Enable random access to vertex data from GPU kernels</dd>
+            
+            <dt>allowOpacityMicroMapUpdate</dt>
+            <dd>Enable updates to opacity micro-maps (OptiX 7.6+)</dd>
+            
+            <dt>allowDisableOpacityMicroMaps</dt>
+            <dd>Allow disabling opacity micro-maps at runtime</dd>
+        </dl>
+    </div>
+    
+    <div class="note">
+        Calling setConfiguration() automatically marks the GAS as dirty, requiring a rebuild before use.
+    </div>
+    
+    <h4>setMotionOptions()</h4>
+    
+    <div class="method-signature">
+void setMotionOptions(
+    uint32_t numKeys,
+    float timeBegin,
+    float timeEnd,
+    OptixMotionFlags flags
+);
+</div>
+    
+    <div class="parameter-list">
+        <dl>
+            <dt>numKeys</dt>
+            <dd>Number of motion samples (2 or more for motion blur)</dd>
+            
+            <dt>timeBegin</dt>
+            <dd>Start time of motion (typically 0.0)</dd>
+            
+            <dt>timeEnd</dt>
+            <dd>End time of motion (typically 1.0)</dd>
+            
+            <dt>flags</dt>
+            <dd>Motion interpolation flags:
+                <ul style="margin-top: 5px;">
+                    <li><code>OPTIX_MOTION_FLAG_NONE</code> - Default linear interpolation</li>
+                    <li><code>OPTIX_MOTION_FLAG_START_VANISH</code> - Geometry vanishes at start</li>
+                    <li><code>OPTIX_MOTION_FLAG_END_VANISH</code> - Geometry vanishes at end</li>
+                </ul>
+            </dd>
+        </dl>
+    </div>
+    
+    <h3>Child Management</h3>
+    
+    <h4>addChild()</h4>
+    
+    <div class="method-signature">
+// Basic child addition
+void addChild(GeometryInstance geomInst);
+
+// With pre-transform
+void addChild(
+    GeometryInstance geomInst,
+    CUdeviceptr preTransform
+);
+
+// With user data
+template &lt;typename T&gt;
+void addChild(
+    GeometryInstance geomInst,
+    CUdeviceptr preTransform,
+    const T& userData
+);
+</div>
+    
+    <div class="example-section">
+        <h4>Example: Adding Children with User Data</h4>
+        <pre class="code-block">
+struct PerChildData {
+    uint32_t materialID;
+    float emissiveStrength;
+    uint32_t flags;
+};
+
+PerChildData childData = {
+    .materialID = 5,
+    .emissiveStrength = 1.5f,
+    .flags = 0x01
+};
+
+gas.addChild(geomInst, 0, childData);
+</pre>
+    </div>
+    
+    <h4>Child Manipulation Methods</h4>
+    
+    <div class="method-signature">
+// Remove child at specific index
+void removeChildAt(uint32_t index);
+
+// Clear all children
+void clearChildren();
+
+// Get child count
+uint32_t getChildCount() const;
+
+// Find child index
+int32_t findChildIndex(GeometryInstance geomInst) const;
+</div>
+    
+    <h3>Material and Ray Type Configuration</h3>
+    
+    <h4>setMaterialSetCount()</h4>
+    
+    <div class="method-signature">
+void setMaterialSetCount(uint32_t count);
+</div>
+    
+    <p>Sets the number of material sets this GAS supports. Each geometry instance can reference materials from these sets.</p>
+    
+    <h4>setRayTypeCount()</h4>
+    
+    <div class="method-signature">
+void setRayTypeCount(uint32_t materialSetIdx, uint32_t count);
+</div>
+    
+    <p>Sets the number of ray types for a specific material set. This affects shader binding table layout.</p>
+    
+    <div class="example-section">
+        <h4>Example: Multi-Ray Type Setup</h4>
+        <pre class="code-block">
+// Configure for shadow rays, primary rays, and ambient occlusion
+gas.setMaterialSetCount(1);
+gas.setRayTypeCount(0, 3);  // Material set 0: 3 ray types
+
+// Ray type 0: Primary rays
+// Ray type 1: Shadow rays  
+// Ray type 2: Ambient occlusion rays
+</pre>
+    </div>
+    
+    <h3>Build Operations</h3>
+    
+    <h4>markDirty()</h4>
+    
+    <div class="method-signature">
+void markDirty();
+</div>
+    
+    <p>Marks the GAS as requiring rebuild. This must be called after structural changes.</p>
+    
+    <div class="warning">
+        Always call markDirty() after:
+        <ul style="margin-top: 10px; padding-left: 20px;">
+            <li>Adding or removing children</li>
+            <li>Changing configuration</li>
+            <li>Modifying material or ray type counts</li>
+        </ul>
+    </div>
+    
+    <h4>prepareForBuild()</h4>
+    
+    <div class="method-signature">
+void prepareForBuild(OptixAccelBufferSizes* memoryRequirement);
+</div>
+    
+    <p>Calculates memory requirements for building the acceleration structure.</p>
+    
+    <div class="example-section">
+        <h4>Example: Memory Calculation</h4>
+        <pre class="code-block">
+OptixAccelBufferSizes memReq;
+gas.prepareForBuild(&memReq);
+
+std::cout << "Output buffer size: " << memReq.outputSizeInBytes << " bytes\n";
+std::cout << "Temp buffer size: " << memReq.tempSizeInBytes << " bytes\n";
+std::cout << "Update buffer size: " << memReq.tempUpdateSizeInBytes << " bytes\n";
+</pre>
+    </div>
+    
+    <h4>rebuild()</h4>
+    
+    <div class="method-signature">
+OptixTraversableHandle rebuild(
+    CUstream stream,
+    const cudau::Buffer& accelBuffer,
+    const cudau::Buffer& scratchBuffer
+);
+</div>
+    
+    <p>Performs a full rebuild of the acceleration structure.</p>
+    
+    <div class="parameter-list">
+        <dl>
+            <dt>stream</dt>
+            <dd>CUDA stream for asynchronous execution</dd>
+            
+            <dt>accelBuffer</dt>
+            <dd>Buffer to store the built acceleration structure</dd>
+            
+            <dt>scratchBuffer</dt>
+            <dd>Temporary workspace buffer</dd>
+            
+            <dt>Returns</dt>
+            <dd>Traversable handle for use in ray tracing</dd>
+        </dl>
+    </div>
+    
+    <h4>update()</h4>
+    
+    <div class="method-signature">
+void update(
+    CUstream stream,
+    const cudau::Buffer& scratchBuffer
+);
+</div>
+    
+    <p>Updates the acceleration structure after vertex modifications. Only available when <code>AllowUpdate::Yes</code> was set.</p>
+    
+    <div class="tip">
+        Updates are much faster than rebuilds but only work for vertex position changes, not structural modifications.
+    </div>
+    
+    <h3>Compaction</h3>
+    
+    <h4>prepareForCompact()</h4>
+    
+    <div class="method-signature">
+void prepareForCompact(size_t* compactedSize);
+</div>
+    
+    <p>Queries the size needed for a compacted acceleration structure.</p>
+    
+    <h4>compact()</h4>
+    
+    <div class="method-signature">
+OptixTraversableHandle compact(
+    CUstream stream,
+    const cudau::Buffer& compactedBuffer
+);
+</div>
+    
+    <p>Performs compaction to reduce memory usage.</p>
+    
+    <div class="example-section">
+        <h4>Example: Complete Compaction Workflow</h4>
+        <pre class="code-block">
+// 1. Configure for compaction
+gas.setConfiguration(
+    optixu::ASTradeoff::PreferFastTrace,
+    optixu::AllowUpdate::No,
+    optixu::AllowCompaction::Yes,  // Enable compaction
+    optixu::AllowRandomVertexAccess::No);
+
+// 2. Build initially
+OptixAccelBufferSizes memReq;
+gas.prepareForBuild(&memReq);
+
+cudau::Buffer accelBuffer;
+cudau::Buffer scratchBuffer;
+accelBuffer.initialize(cudaContext, cudau::BufferType::Device, 
+                      memReq.outputSizeInBytes, 1);
+scratchBuffer.initialize(cudaContext, cudau::BufferType::Device, 
+                        memReq.tempSizeInBytes, 1);
+
+OptixTraversableHandle traversable = gas.rebuild(stream, accelBuffer, scratchBuffer);
+cuStreamSynchronize(stream);
+
+// 3. Query compacted size
+size_t compactedSize;
+gas.prepareForCompact(&compactedSize);
+
+std::cout << "Compaction ratio: " 
+          << (100.0f * compactedSize / memReq.outputSizeInBytes) 
+          << "%\n";
+
+// 4. Perform compaction
+cudau::Buffer compactedBuffer;
+compactedBuffer.initialize(cudaContext, cudau::BufferType::Device, 
+                          compactedSize, 1);
+
+OptixTraversableHandle compactedHandle = gas.compact(stream, compactedBuffer);
+cuStreamSynchronize(stream);
+
+// 5. Clean up original buffer
+accelBuffer.finalize();
+
+// Use compactedHandle for ray tracing
+</pre>
+    </div>
+    
+    <h3>Query Methods</h3>
+    
+    <div class="method-signature">
+// Get configuration values
+uint32_t getMaterialSetCount() const;
+uint32_t getRayTypeCount(uint32_t materialSetIdx) const;
+uint32_t getChildCount() const;
+
+// Check state
+bool isDirty() const;
+bool isBuilt() const;
+
+// Get memory requirements
+size_t getCurrentMemorySize() const;
+</div>
+    
+    <h2 id="usage-patterns">4. Common Usage Patterns</h2>
+    
+    <h3>Pattern 1: Static Geometry</h3>
+    
+    <pre class="code-block">
+// Optimal configuration for static scenes
+optixu::GeometryAccelerationStructure createStaticGAS(
+    optixu::Scene scene,
+    const std::vector&lt;optixu::GeometryInstance&gt;& geometries)
+{
+    auto gas = scene.createGeometryAccelerationStructure();
+    
+    // Configure for best ray tracing performance
+    gas.setConfiguration(
+        optixu::ASTradeoff::PreferFastTrace,
+        optixu::AllowUpdate::No,
+        optixu::AllowCompaction::Yes,
+        optixu::AllowRandomVertexAccess::No);
+    
+    // Add all geometry
+    for (const auto& geom : geometries) {
+        gas.addChild(geom);
+    }
+    
+    gas.markDirty();
+    return gas;
+}
+</pre>
+    
+    <h3>Pattern 2: Dynamic Geometry</h3>
+    
+    <pre class="code-block">
+// Configuration for animated/deformable geometry
+optixu::GeometryAccelerationStructure createDynamicGAS(
+    optixu::Scene scene,
+    optixu::GeometryInstance animatedGeometry)
+{
+    auto gas = scene.createGeometryAccelerationStructure();
+    
+    // Configure for updates
+    gas.setConfiguration(
+        optixu::ASTradeoff::PreferFastBuild,  // Faster rebuilds
+        optixu::AllowUpdate::Yes,              // Enable updates
+        optixu::AllowCompaction::No,           // Skip compaction
+        optixu::AllowRandomVertexAccess::No);
+    
+    gas.addChild(animatedGeometry);
+    gas.markDirty();
+    return gas;
+}
+
+// Update loop
+void updateAnimation(
+    optixu::GeometryAccelerationStructure gas,
+    optixu::GeometryInstance geomInst,
+    cudau::TypedBuffer&lt;Vertex&gt;& vertexBuffer,
+    const std::vector&lt;Vertex&gt;& newVertices,
+    CUstream stream,
+    cudau::Buffer& scratchBuffer)
+{
+    // Update vertex data
+    vertexBuffer.finalize();
+    vertexBuffer.initialize(cudaContext, cudau::BufferType::Device, newVertices);
+    geomInst.setVertexBuffer(vertexBuffer);
+    
+    // Update acceleration structure
+    gas.update(stream, scratchBuffer);
+    cuStreamSynchronize(stream);
+}
+</pre>
+    
+    <h3>Pattern 3: Motion Blur</h3>
+    
+    <pre class="code-block">
+// Setup for motion blur with 2 time samples
+void setupMotionBlurGAS(
+    optixu::GeometryAccelerationStructure gas,
+    optixu::GeometryInstance geomInst,
+    const std::vector&lt;VertexBuffer&gt;& motionSamples)
+{
+    uint32_t numKeys = motionSamples.size();
+    
+    // Configure motion
+    gas.setMotionOptions(
+        numKeys,
+        0.0f,   // Time begin
+        1.0f,   // Time end
+        OPTIX_MOTION_FLAG_NONE);
+    
+    // Set motion samples
+    geomInst.setMotionStepCount(numKeys);
+    
+    for (uint32_t i = 0; i < numKeys; ++i) {
+        geomInst.setVertexBuffer(motionSamples[i], i);
+        
+        // Triangle buffer only needs to be set once
+        if (i == 0) {
+            geomInst.setTriangleBuffer(triangleBuffer, 
+                                       OPTIX_INDICES_FORMAT_UNSIGNED_INT3);
+        }
+    }
+    
+    gas.addChild(geomInst);
+    gas.markDirty();
+}
+</pre>
+    
+    <h3>Pattern 4: Multi-Material Setup</h3>
+    
+    <pre class="code-block">
+// Configure GAS for multiple materials and ray types
+void setupMultiMaterialGAS(
+    optixu::GeometryAccelerationStructure gas,
+    uint32_t numMaterials,
+    uint32_t numRayTypes)
+{
+    // Set up material sets
+    gas.setMaterialSetCount(numMaterials);
+    
+    // Configure ray types per material
+    for (uint32_t i = 0; i < numMaterials; ++i) {
+        gas.setRayTypeCount(i, numRayTypes);
+    }
+    
+    // Example ray type usage:
+    // 0: Primary rays (full shading)
+    // 1: Shadow rays (visibility only)
+    // 2: Reflection rays (simplified shading)
+    // 3: Ambient occlusion rays
+}
+</pre>
+    
+    <h2 id="examples">5. Complete Examples</h2>
+    
+    <h3>Example 1: Complete Triangle Mesh Setup</h3>
+    
+    <pre class="code-block">
+class TriangleMeshGAS {
+private:
+    optixu::GeometryAccelerationStructure gas_;
+    optixu::GeometryInstance geomInst_;
+    cudau::TypedBuffer&lt;Vertex&gt; vertexBuffer_;
+    cudau::TypedBuffer&lt;Triangle&gt; triangleBuffer_;
+    cudau::Buffer accelBuffer_;
+    OptixTraversableHandle traversable_;
+    
+public:
+    void initialize(
+        optixu::Scene scene,
+        CUcontext cudaContext,
+        const std::vector&lt;Vertex&gt;& vertices,
+        const std::vector&lt;Triangle&gt;& triangles)
+    {
+        // Create GAS and geometry instance
+        gas_ = scene.createGeometryAccelerationStructure();
+        geomInst_ = scene.createGeometryInstance();
+        
+        // Upload geometry data
+        vertexBuffer_.initialize(cudaContext, cudau::BufferType::Device, vertices);
+        triangleBuffer_.initialize(cudaContext, cudau::BufferType::Device, triangles);
+        
+        // Configure geometry instance
+        geomInst_.setVertexFormat(OPTIX_VERTEX_FORMAT_FLOAT3);
+        geomInst_.setVertexBuffer(vertexBuffer_);
+        geomInst_.setTriangleBuffer(triangleBuffer_, 
+                                    OPTIX_INDICES_FORMAT_UNSIGNED_INT3);
+        
+        // Configure GAS for optimal performance
+        gas_.setConfiguration(
+            optixu::ASTradeoff::PreferFastTrace,
+            optixu::AllowUpdate::No,
+            optixu::AllowCompaction::Yes,
+            optixu::AllowRandomVertexAccess::No);
+        
+        // Set up materials
+        gas_.setMaterialSetCount(1);
+        gas_.setRayTypeCount(0, 2);  // Primary and shadow rays
+        
+        // Add geometry
+        gas_.addChild(geomInst_);
+        gas_.markDirty();
+    }
+    
+    OptixTraversableHandle build(CUcontext cudaContext, CUstream stream)
+    {
+        // Calculate memory requirements
+        OptixAccelBufferSizes memReq;
+        gas_.prepareForBuild(&memReq);
+        
+        // Allocate buffers
+        accelBuffer_.initialize(cudaContext, cudau::BufferType::Device,
+                               memReq.outputSizeInBytes, 1);
+        
+        cudau::Buffer scratchBuffer;
+        scratchBuffer.initialize(cudaContext, cudau::BufferType::Device,
+                                memReq.tempSizeInBytes, 1);
+        
+        // Build
+        traversable_ = gas_.rebuild(stream, accelBuffer_, scratchBuffer);
+        cuStreamSynchronize(stream);
+        
+        // Optional: Compact
+        if (shouldCompact()) {
+            performCompaction(cudaContext, stream);
+        }
+        
+        // Clean up scratch
+        scratchBuffer.finalize();
+        
+        return traversable_;
+    }
+    
+private:
+    bool shouldCompact() const {
+        // Heuristic: compact if we have many triangles
+        return triangleBuffer_.numElements() > 10000;
+    }
+    
+    void performCompaction(CUcontext cudaContext, CUstream stream)
+    {
+        size_t compactedSize;
+        gas_.prepareForCompact(&compactedSize);
+        
+        // Only compact if significant savings
+        size_t currentSize = accelBuffer_.sizeInBytes();
+        if (compactedSize < currentSize * 0.8f) {
+            cudau::Buffer compactedBuffer;
+            compactedBuffer.initialize(cudaContext, cudau::BufferType::Device,
+                                      compactedSize, 1);
+            
+            traversable_ = gas_.compact(stream, compactedBuffer);
+            cuStreamSynchronize(stream);
+            
+            // Replace buffer
+            accelBuffer_.finalize();
+            accelBuffer_ = std::move(compactedBuffer);
+            
+            std::cout << "Compacted GAS: " << currentSize << " -> " 
+                     << compactedSize << " bytes\n";
+        }
+    }
+    
+public:
+    void cleanup()
+    {
+        vertexBuffer_.finalize();
+        triangleBuffer_.finalize();
+        accelBuffer_.finalize();
+        geomInst_.destroy();
+        gas_.destroy();
+    }
+};
+</pre>
+    
+    <h3>Example 2: Hierarchical GAS Management</h3>
+    
+    <pre class="code-block">
+class GASManager {
+private:
+    struct GASEntry {
+        optixu::GeometryAccelerationStructure gas;
+        cudau::Buffer accelBuffer;
+        OptixTraversableHandle handle;
+        bool needsRebuild = true;
+        bool isCompacted = false;
+    };
+    
+    std::unordered_map&lt;std::string, GASEntry&gt; gasMap_;
+    optixu::Scene scene_;
+    CUcontext cudaContext_;
+    
+public:
+    GASManager(optixu::Scene scene, CUcontext ctx) 
+        : scene_(scene), cudaContext_(ctx) {}
+    
+    optixu::GeometryAccelerationStructure createGAS(
+        const std::string& name,
+        bool allowUpdates = false,
+        bool allowCompaction = true)
+    {
+        GASEntry entry;
+        entry.gas = scene_.createGeometryAccelerationStructure();
+        
+        // Configure based on usage
+        entry.gas.setConfiguration(
+            allowUpdates ? optixu::ASTradeoff::PreferFastBuild 
+                        : optixu::ASTradeoff::PreferFastTrace,
+            allowUpdates ? optixu::AllowUpdate::Yes 
+                        : optixu::AllowUpdate::No,
+            allowCompaction ? optixu::AllowCompaction::Yes 
+                           : optixu::AllowCompaction::No,
+            optixu::AllowRandomVertexAccess::No);
+        
+        gasMap_[name] = entry;
+        return entry.gas;
+    }
+    
+    void buildAll(CUstream stream)
+    {
+        // Shared scratch buffer for all builds
+        size_t maxScratchSize = 0;
+        
+        // First pass: calculate max scratch size
+        for (auto& [name, entry] : gasMap_) {
+            if (entry.needsRebuild) {
+                OptixAccelBufferSizes memReq;
+                entry.gas.prepareForBuild(&memReq);
+                maxScratchSize = std::max(maxScratchSize, 
+                                         memReq.tempSizeInBytes);
+            }
+        }
+        
+        // Allocate shared scratch
+        cudau::Buffer scratchBuffer;
+        if (maxScratchSize > 0) {
+            scratchBuffer.initialize(cudaContext_, 
+                                    cudau::BufferType::Device,
+                                    maxScratchSize, 1);
+        }
+        
+        // Second pass: build all dirty GAS
+        for (auto& [name, entry] : gasMap_) {
+            if (entry.needsRebuild) {
+                buildGAS(name, entry, stream, scratchBuffer);
+            }
+        }
+        
+        // Clean up scratch
+        if (scratchBuffer.isInitialized()) {
+            scratchBuffer.finalize();
+        }
+    }
+    
+private:
+    void buildGAS(const std::string& name, 
+                  GASEntry& entry,
+                  CUstream stream,
+                  cudau::Buffer& scratchBuffer)
+    {
+        OptixAccelBufferSizes memReq;
+        entry.gas.prepareForBuild(&memReq);
+        
+        // Allocate or resize acceleration buffer
+        if (!entry.accelBuffer.isInitialized()) {
+            entry.accelBuffer.initialize(cudaContext_, 
+                                        cudau::BufferType::Device,
+                                        memReq.outputSizeInBytes, 1);
+        } else if (entry.accelBuffer.sizeInBytes() < memReq.outputSizeInBytes) {
+            entry.accelBuffer.resize(memReq.outputSizeInBytes, 1);
+        }
+        
+        // Build
+        entry.handle = entry.gas.rebuild(stream, entry.accelBuffer, 
+                                         scratchBuffer);
+        entry.needsRebuild = false;
+        
+        std::cout << "Built GAS '" << name << "': " 
+                 << memReq.outputSizeInBytes << " bytes\n";
+    }
+    
+public:
+    OptixTraversableHandle getHandle(const std::string& name) const
+    {
+        auto it = gasMap_.find(name);
+        return (it != gasMap_.end()) ? it->second.handle : 0;
+    }
+    
+    void markDirty(const std::string& name)
+    {
+        auto it = gasMap_.find(name);
+        if (it != gasMap_.end()) {
+            it->second.gas.markDirty();
+            it->second.needsRebuild = true;
+        }
+    }
+};
+</pre>
+    
+    <h2 id="performance">6. Performance Considerations</h2>
+    
+    <h3>Build Performance</h3>
+    
+    <table>
+        <tr>
+            <th>Factor</th>
+            <th>Impact</th>
+            <th>Recommendation</th>
+        </tr>
+        <tr>
+            <td>ASTradeoff</td>
+            <td>Build time vs. traversal speed</td>
+            <td>Use PreferFastTrace for static geometry, PreferFastBuild for dynamic</td>
+        </tr>
+        <tr>
+            <td>AllowUpdate</td>
+            <td>Enables fast vertex updates but increases memory usage</td>
+            <td>Only enable for truly dynamic geometry</td>
+        </tr>
+        <tr>
+            <td>AllowCompaction</td>
+            <td>Reduces memory but adds build overhead</td>
+            <td>Enable for large static meshes</td>
+        </tr>
+        <tr>
+            <td>Geometry Count</td>
+            <td>More children increase build time</td>
+            <td>Batch small geometries when possible</td>
+        </tr>
+    </table>
+    
+    <h3>Memory Optimization</h3>
+    
+    <div class="tip">
+        Memory optimization strategies:
+        <ul style="margin-top: 10px; padding-left: 20px;">
+            <li>Use compaction for large static meshes (typically saves 30-50%)</li>
+            <li>Share vertex buffers between multiple GeometryInstances</li>
+            <li>Use 16-bit indices when triangle count < 65536</li>
+            <li>Reuse scratch buffers across multiple GAS builds</li>
+            <li>Build multiple GAS sequentially to share scratch memory</li>
+        </ul>
+    </div>
+    
+    <h3>Update vs. Rebuild</h3>
+    
+    <pre class="code-block">
+// Performance comparison example
+class GASPerformanceMonitor {
+    cudau::Stopwatch buildTimer_;
+    cudau::Stopwatch updateTimer_;
+    
+public:
+    void measureRebuild(optixu::GeometryAccelerationStructure gas,
+                       CUstream stream,
+                       cudau::Buffer& accelBuffer,
+                       cudau::Buffer& scratchBuffer)
+    {
+        buildTimer_.start();
+        gas.rebuild(stream, accelBuffer, scratchBuffer);
+        cuStreamSynchronize(stream);
+        buildTimer_.stop();
+        
+        std::cout << "Rebuild time: " << buildTimer_.getElapsedTime() << " ms\n";
+    }
+    
+    void measureUpdate(optixu::GeometryAccelerationStructure gas,
+                      CUstream stream,
+                      cudau::Buffer& scratchBuffer)
+    {
+        updateTimer_.start();
+        gas.update(stream, scratchBuffer);
+        cuStreamSynchronize(stream);
+        updateTimer_.stop();
+        
+        std::cout << "Update time: " << updateTimer_.getElapsedTime() << " ms\n";
+    }
+    
+    float getSpeedup() const {
+        return buildTimer_.getElapsedTime() / updateTimer_.getElapsedTime();
+    }
+};
+</pre>
+    
+    <h2 id="troubleshooting">7. Troubleshooting</h2>
+    
+    <h3>Common Issues and Solutions</h3>
+    
+    <div class="warning">
+        <strong>Issue: Build fails with invalid configuration</strong><br>
+        <strong>Solution:</strong> Ensure setConfiguration() is called before adding children.
+    </div>
+    
+    <div class="warning">
+        <strong>Issue: Update fails on static GAS</strong><br>
+        <strong>Solution:</strong> AllowUpdate::Yes must be set during configuration.
+    </div>
+    
+    <div class="warning">
+        <strong>Issue: Compaction returns same size</strong><br>
+        <strong>Solution:</strong> AllowCompaction::Yes must be set, and PreferFastTrace typically yields better compaction.
+    </div>
+    
+    <div class="warning">
+        <strong>Issue: Traversable handle is 0</strong><br>
+        <strong>Solution:</strong> Check that rebuild() was called and completed successfully.
+    </div>
+    
+    <h3>Debug Helpers</h3>
+    
+    <pre class="code-block">
+class GASDebugger {
+public:
+    static void validateGAS(optixu::GeometryAccelerationStructure gas)
+    {
+        // Check basic state
+        if (gas.getChildCount() == 0) {
+            std::cerr << "Warning: GAS has no children\n";
+        }
+        
+        if (gas.getMaterialSetCount() == 0) {
+            std::cerr << "Warning: No material sets configured\n";
+        }
+        
+        // Check memory requirements
+        OptixAccelBufferSizes memReq;
+        gas.prepareForBuild(&memReq);
+        
+        std::cout << "GAS Memory Requirements:\n";
+        std::cout << "  Output: " << formatBytes(memReq.outputSizeInBytes) << "\n";
+        std::cout << "  Temp: " << formatBytes(memReq.tempSizeInBytes) << "\n";
+        std::cout << "  Update: " << formatBytes(memReq.tempUpdateSizeInBytes) << "\n";
+    }
+    
+private:
+    static std::string formatBytes(size_t bytes)
+    {
+        const char* units[] = {"B", "KB", "MB", "GB"};
+        int unitIdx = 0;
+        double size = bytes;
+        
+        while (size >= 1024 && unitIdx < 3) {
+            size /= 1024;
+            unitIdx++;
+        }
+        
+        std::stringstream ss;
+        ss << std::fixed << std::setprecision(2) << size << " " << units[unitIdx];
+        return ss.str();
+    }
+};
+</pre>
+    
+    <h2 id="best-practices">8. Best Practices</h2>
+    
+    <h3>Design Guidelines</h3>
+    
+    <ol style="margin: 20px 0; padding-left: 40px;">
+        <li><strong>Batch Geometry:</strong> Combine small meshes into larger GAS for better performance</li>
+        <li><strong>Minimize Rebuilds:</strong> Use updates for animation, rebuilds only for structural changes</li>
+        <li><strong>Profile Memory:</strong> Monitor acceleration structure sizes and compact when beneficial</li>
+        <li><strong>Reuse Resources:</strong> Share scratch buffers and vertex data when possible</li>
+        <li><strong>Plan Hierarchy:</strong> Design your GAS/IAS hierarchy based on update frequency</li>
+    </ol>
+    
+    <h3>Configuration Checklist</h3>
+    
+    <div class="example-section">
+        <h4>Static Scene Configuration</h4>
+        <ul style="padding-left: 20px;">
+            <li>✓ Use PreferFastTrace</li>
+            <li>✓ Disable AllowUpdate</li>
+            <li>✓ Enable AllowCompaction</li>
+            <li>✓ Build once at startup</li>
+            <li>✓ Compact large meshes</li>
+        </ul>
+    </div>
+    
+    <div class="example-section">
+        <h4>Dynamic Scene Configuration</h4>
+        <ul style="padding-left: 20px;">
+            <li>✓ Use PreferFastBuild</li>
+            <li>✓ Enable AllowUpdate for deformable geometry</li>
+            <li>✓ Skip compaction for frequently updated geometry</li>
+            <li>✓ Separate static and dynamic geometry</li>
+            <li>✓ Use motion blur for predictable animation</li>
+        </ul>
+    </div>
+    
+    <h3>Resource Management Pattern</h3>
+    
+    <pre class="code-block">
+class GASResourceRAII {
+private:
+    optixu::GeometryAccelerationStructure gas_;
+    std::vector&lt;optixu::GeometryInstance&gt; children_;
+    cudau::Buffer accelBuffer_;
+    bool isBuilt_ = false;
+    
+public:
+    GASResourceRAII(optixu::Scene scene) 
+        : gas_(scene.createGeometryAccelerationStructure()) {}
+    
+    ~GASResourceRAII() {
+        cleanup();
+    }
+    
+    // Prevent copying
+    GASResourceRAII(const GASResourceRAII&) = delete;
+    GASResourceRAII& operator=(const GASResourceRAII&) = delete;
+    
+    // Allow moving
+    GASResourceRAII(GASResourceRAII&& other) noexcept
+        : gas_(std::move(other.gas_)),
+          children_(std::move(other.children_)),
+          accelBuffer_(std::move(other.accelBuffer_)),
+          isBuilt_(other.isBuilt_)
+    {
+        other.isBuilt_ = false;
+    }
+    
+    void cleanup() {
+        if (accelBuffer_.isInitialized()) {
+            accelBuffer_.finalize();
+        }
+        
+        for (auto& child : children_) {
+            if (child) {
+                child.destroy();
+            }
+        }
+        children_.clear();
+        
+        if (gas_) {
+            gas_.destroy();
+        }
+        
+        isBuilt_ = false;
+    }
+    
+    optixu::GeometryAccelerationStructure get() { return gas_; }
+    bool isBuilt() const { return isBuilt_; }
+};
+</pre>
+    
+    <h3>Summary</h3>
+    
+    <p>The <span class="inline-code">optixu::GeometryAccelerationStructure</span> class provides a comprehensive interface for managing bottom-level acceleration structures in OptiX ray tracing applications. By understanding its configuration options, build strategies, and optimization techniques, developers can create efficient ray tracing applications that balance performance, memory usage, and flexibility.</p>
+    
+    <div class="note">
+        This documentation covers the core functionality of GeometryAccelerationStructure as of OptiX 7.x/8.x. Always refer to the latest OptiX documentation for version-specific features and changes.
+    </div>
+    
+</body>
+</html>

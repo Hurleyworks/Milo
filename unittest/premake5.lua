@@ -26,4 +26,6 @@ end
 	
 	include "tests/HelloTest"
 	include "tests/CgModel2Shocker"
-	include "tests/AreaLightTest"
+	include "tests/GASTest"
+	include "tests/IASTest"
+	include "tests/GASHandlerTest"

@@ -86,7 +86,13 @@
       "Bash(git checkout:*)",
       "Read(//mnt/e/1Shocker/GfxExp/**)",
       "WebSearch",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(test GASTest)",
+      "Bash(./test.bat IASTest)",
+      "Bash(test.bat IASTest)",
+      "Bash(test GASHandlerTest)",
+      "Bash(./test.bat GASHandlerTest)",
+      "Bash(builds/bin/Debug-windows-x86_64/GASHandlerTest/GASHandlerTest.exe)"
     ],
     "deny": []
   },

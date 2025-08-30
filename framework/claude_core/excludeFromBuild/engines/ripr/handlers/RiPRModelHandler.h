@@ -92,13 +92,10 @@ public:
     void finalize();
 
     // Set the scene handler (must be called before adding models)
-    void setSceneHandler(std::shared_ptr<RiPRSceneHandler> sceneHandler)
+    void setSceneHandler (std::shared_ptr<RiPRSceneHandler> sceneHandler)
     {
         sceneHandler_ = sceneHandler;
     }
-    
-    // Set the engine pointer for accessing compute kernels
-    void setEngine(RiPREngine* engine) { engine_ = engine; }
     
     // Set the area light handler
     void setAreaLightHandler(std::shared_ptr<class RiPRAreaLightHandler> areaLightHandler);
@@ -176,8 +173,7 @@ private:
     // Handler references (not owned)
     std::shared_ptr<RiPRSceneHandler> sceneHandler_;
     std::shared_ptr<class RiPRAreaLightHandler> areaLightHandler_;
-    RiPREngine* engine_ = nullptr;  // Engine for accessing compute kernels
-
+  
     // Slot management for geometry instances
     SlotFinder geomInstSlotFinder_;
 

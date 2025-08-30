@@ -184,8 +184,8 @@ public:
         // Even if emitterPrimDist is not initialized, this will set proper null values
         emitterPrimDist.getDeviceType(&geomInstData->emitterPrimDist);
         
-        // Material slot will be set separately when materials are assigned
-        // For now, use invalid slot as we don't have the material yet
+        
+        // For now, use invalid slot 
         geomInstData->materialSlot = SlotFinder::InvalidSlotIndex;
         
         // Store geometry instance slot

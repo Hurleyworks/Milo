@@ -189,7 +189,7 @@ void RiPRModelHandler::addCgModel(RenderableWeakRef weakNode)
         ItemID key = modelMgr.storeModel(riprModel, node->getClientID());
 
         // Build the geometry
-        optixu::Scene scene = sceneHandler_->getScene();
+        optixu::Scene scene = ctx_->getScene();
         if (!scene)
         {
             LOG(WARNING) << "Scene not available from scene handler";
@@ -495,7 +495,7 @@ void RiPRModelHandler::setAreaLightHandler(std::shared_ptr<RiPRAreaLightHandler>
 // Similar to RiPRModelHandler::computeLightProbabilities
 void RiPRModelHandler::computeLightProbabilities(RiPRTriangleModel* model, uint32_t geomInstSlot, uint32_t materialSlot)
 {
-    if (!model || !engine_ || geomInstSlot == SlotFinder::InvalidSlotIndex)
+    if (!model || geomInstSlot == SlotFinder::InvalidSlotIndex)
     {
         LOG(WARNING) << "Cannot compute light probabilities: invalid parameters";
         return;

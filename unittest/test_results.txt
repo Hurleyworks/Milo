@@ -1,95 +1,341 @@
 ﻿=== Unit Test Results ===
-Time: 2025-08-24 20:22:08
+Time: 2025-08-30 08:46:11
 ==================================================
 
 PASSED TESTS (1):
-  [PASS] AreaLightTest
+  [PASS] GASHandlerTest
 
 
 DETAILED OUTPUT:
 
 ======================================================================
 
-TEST: AreaLightTest
+TEST: GASHandlerTest
 
 ======================================================================
 
 		LOG format: [hh:mm:ss uuu* LEVEL THREAD_ID FILE->FUNCTION:LINE] message
 		(uuu*: microseconds fractions of the seconds value)
 
-0.000000	INFO [5596 Log.cpp->LogHandler:88]	Logger initialized
 [doctest] doctest version is "2.4.11"
 [doctest] run with "--help" for options
-0.000352	DEBUG [5596 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
-0.000425	INFO [5596 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
-0.010203	INFO [5596 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
-0.010293	INFO [5596 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
-0.010354	INFO [5596 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
-0.010384	INFO [5596 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
-0.082475	INFO [5596 GPUContext.cpp->initialize:109]	Initializing OptiX context...
+0.000000	INFO [13436 Log.cpp->LogHandler:88]	Logger initialized
+0.000328	DEBUG [13436 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
+0.000415	INFO [13436 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
+0.010330	INFO [13436 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
+0.010433	INFO [13436 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
+0.010501	INFO [13436 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
+0.010538	INFO [13436 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
+0.092270	INFO [13436 GPUContext.cpp->initialize:109]	Initializing OptiX context...
 [ 4][       KNOBS]: All knobs on default.
 
 [ 4][   DISKCACHE]: Opened database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
-[ 4][   DISKCACHE]:     Cache data size: "896.3 MiB"
-0.180516	INFO [5596 GPUContext.cpp->initialize:115]	OptiX context created successfully
-0.180579	INFO [5596 GPUContext.cpp->initialize:116]	GPU context initialized successfully
-0.180884	DEBUG [5596 SkyDomeHandler.cpp->SkyDomeHandler:8]	SkyDomeHandler
-0.180949	DEBUG [5596 DisneyMaterialHandler.cpp->DisneyMaterialHandler:16]	DisneyMaterialHandler
-0.180988	INFO [5596 DisneyMaterialHandler.cpp->initialize:56]	Initializing DisneyMaterialHandler
-0.181012	INFO [5596 DisneyMaterialHandler.cpp->initialize:73]	Initialized material slot finder with capacity: 1024
-0.181126	INFO [5596 DisneyMaterialHandler.cpp->initialize:77]	Initialized material data buffer
-0.181176	INFO [5596 DisneyMaterialHandler.cpp->initialize:80]	DisneyMaterialHandler initialized successfully
-0.182565	DEBUG [5596 DisneyMaterialHandler.cpp->createDisneyMaterial:335]	Created Disney material in slot 0
-0.182717	INFO [5596 Application.cpp->DOCTEST_ANON_FUNC_15:213]	Created GeometryInstance with 2 emitter primitives
-0.182775	INFO [5596 Application.cpp->DOCTEST_ANON_FUNC_15:214]	Light distribution with integral: 120
-0.182816	INFO [5596 Application.cpp->DOCTEST_ANON_FUNC_15:215]	Material slot: 0
-0.182918	INFO [5596 DisneyMaterialHandler.cpp->finalize:89]	Finalizing DisneyMaterialHandler
-0.183237	INFO [5596 DisneyMaterialHandler.cpp->finalize:110]	DisneyMaterialHandler finalized
-0.183300	DEBUG [5596 SkyDomeHandler.cpp->~SkyDomeHandler:14]	~SkyDomeHandler
-0.183513	INFO [5596 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+0.191678	INFO [13436 GPUContext.cpp->initialize:115]	OptiX context created successfully
+0.191739	INFO [13436 GPUContext.cpp->initialize:116]	GPU context initialized successfully
+0.191785	DEBUG [13436 GASHandler.cpp->initialize:32]	GASHandler initialization triggered
+0.192406	INFO [13436 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
 [ 4][   DISKCACHE]: Closed database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
-[ 4][   DISKCACHE]:     Cache data size: "896.3 MiB"
-0.206043	INFO [5596 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
-0.206104	DEBUG [5596 DisneyMaterialHandler.cpp->~DisneyMaterialHandler:43]	~DisneyMaterialHandler
-0.206131	DEBUG [5596 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
-0.206373	DEBUG [5596 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
-0.206436	INFO [5596 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
-0.206508	INFO [5596 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
-0.206549	INFO [5596 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
-0.206580	INFO [5596 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
-0.206602	INFO [5596 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
-0.264519	INFO [5596 GPUContext.cpp->initialize:109]	Initializing OptiX context...
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+0.218745	INFO [13436 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
+0.218820	DEBUG [13436 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
+0.218869	DEBUG [13436 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
+0.218894	INFO [13436 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
+0.218918	INFO [13436 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
+0.218942	INFO [13436 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
+0.218964	INFO [13436 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
+0.218988	INFO [13436 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
+0.274726	INFO [13436 GPUContext.cpp->initialize:109]	Initializing OptiX context...
 [ 4][       KNOBS]: All knobs on default.
 
 [ 4][   DISKCACHE]: Opened database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
-[ 4][   DISKCACHE]:     Cache data size: "896.3 MiB"
-0.319284	INFO [5596 GPUContext.cpp->initialize:115]	OptiX context created successfully
-0.319645	INFO [5596 GPUContext.cpp->initialize:116]	GPU context initialized successfully
-0.319705	DEBUG [5596 SkyDomeHandler.cpp->SkyDomeHandler:8]	SkyDomeHandler
-0.319752	DEBUG [5596 DisneyMaterialHandler.cpp->DisneyMaterialHandler:16]	DisneyMaterialHandler
-0.319845	INFO [5596 DisneyMaterialHandler.cpp->initialize:56]	Initializing DisneyMaterialHandler
-0.319873	INFO [5596 DisneyMaterialHandler.cpp->initialize:73]	Initialized material slot finder with capacity: 1024
-0.319959	INFO [5596 DisneyMaterialHandler.cpp->initialize:77]	Initialized material data buffer
-0.320076	INFO [5596 DisneyMaterialHandler.cpp->initialize:80]	DisneyMaterialHandler initialized successfully
-0.321269	DEBUG [5596 DisneyMaterialHandler.cpp->createDisneyMaterial:335]	Created Disney material in slot 0
-0.321674	DEBUG [5596 DisneyMaterialHandler.cpp->createDisneyMaterial:335]	Created Disney material in slot 1
-0.321990	DEBUG [5596 DisneyMaterialHandler.cpp->createDisneyMaterial:335]	Created Disney material in slot 2
-0.322102	INFO [5596 Application.cpp->DOCTEST_ANON_FUNC_15:357]	Created test collection with 3 instances
-0.322152	INFO [5596 Application.cpp->DOCTEST_ANON_FUNC_15:358]	Total emitter primitives: 6
-0.322183	INFO [5596 DisneyMaterialHandler.cpp->finalize:89]	Finalizing DisneyMaterialHandler
-0.322377	INFO [5596 DisneyMaterialHandler.cpp->finalize:110]	DisneyMaterialHandler finalized
-0.322426	DEBUG [5596 SkyDomeHandler.cpp->~SkyDomeHandler:14]	~SkyDomeHandler
-0.322681	INFO [5596 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+0.329282	INFO [13436 GPUContext.cpp->initialize:115]	OptiX context created successfully
+0.329342	INFO [13436 GPUContext.cpp->initialize:116]	GPU context initialized successfully
+0.329436	DEBUG [13436 GASHandler.cpp->initialize:32]	GASHandler initialization triggered
+0.329767	INFO [13436 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
 [ 4][   DISKCACHE]: Closed database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
-[ 4][   DISKCACHE]:     Cache data size: "896.3 MiB"
-0.349884	INFO [5596 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
-0.349962	DEBUG [5596 DisneyMaterialHandler.cpp->~DisneyMaterialHandler:43]	~DisneyMaterialHandler
-0.349988	DEBUG [5596 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+0.354386	INFO [13436 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
+0.354447	DEBUG [13436 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
+0.354619	DEBUG [13436 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
+0.354684	INFO [13436 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
+0.354742	INFO [13436 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
+0.354788	INFO [13436 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
+0.354816	INFO [13436 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
+0.354838	INFO [13436 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
+0.414381	INFO [13436 GPUContext.cpp->initialize:109]	Initializing OptiX context...
+[ 4][       KNOBS]: All knobs on default.
+
+[ 4][   DISKCACHE]: Opened database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+0.467497	INFO [13436 GPUContext.cpp->initialize:115]	OptiX context created successfully
+0.467566	INFO [13436 GPUContext.cpp->initialize:116]	GPU context initialized successfully
+0.467728	DEBUG [13436 GASHandler.cpp->initialize:32]	GASHandler initialization triggered
+0.468220	INFO [13436 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
+[ 4][   DISKCACHE]: Closed database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+0.490530	INFO [13436 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
+0.490592	DEBUG [13436 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
+0.490769	DEBUG [13436 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
+0.490841	INFO [13436 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
+0.490903	INFO [13436 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
+0.490946	INFO [13436 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
+0.490972	INFO [13436 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
+0.490995	INFO [13436 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
+0.550584	INFO [13436 GPUContext.cpp->initialize:109]	Initializing OptiX context...
+[ 4][       KNOBS]: All knobs on default.
+
+[ 4][   DISKCACHE]: Opened database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+0.603380	INFO [13436 GPUContext.cpp->initialize:115]	OptiX context created successfully
+0.603442	INFO [13436 GPUContext.cpp->initialize:116]	GPU context initialized successfully
+0.603544	DEBUG [13436 GASHandler.cpp->initialize:32]	GASHandler initialization triggered
+0.612163	INFO [13436 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
+[ 4][   DISKCACHE]: Closed database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+0.637934	INFO [13436 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
+0.637999	DEBUG [13436 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
+0.638170	DEBUG [13436 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
+0.638237	INFO [13436 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
+0.638299	INFO [13436 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
+0.638342	INFO [13436 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
+0.638370	INFO [13436 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
+0.638392	INFO [13436 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
+0.694618	INFO [13436 GPUContext.cpp->initialize:109]	Initializing OptiX context...
+[ 4][       KNOBS]: All knobs on default.
+
+[ 4][   DISKCACHE]: Opened database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+0.749577	INFO [13436 GPUContext.cpp->initialize:115]	OptiX context created successfully
+0.749652	INFO [13436 GPUContext.cpp->initialize:116]	GPU context initialized successfully
+0.749677	DEBUG [13436 GASHandler.cpp->initialize:32]	GASHandler initialization triggered
+0.758378	INFO [13436 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
+[ 4][   DISKCACHE]: Closed database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+0.783745	INFO [13436 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
+0.783815	DEBUG [13436 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
+0.784035	DEBUG [13436 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
+0.784081	INFO [13436 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
+0.784108	INFO [13436 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
+0.784131	INFO [13436 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
+0.784153	INFO [13436 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
+0.784178	INFO [13436 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
+0.840373	INFO [13436 GPUContext.cpp->initialize:109]	Initializing OptiX context...
+[ 4][       KNOBS]: All knobs on default.
+
+[ 4][   DISKCACHE]: Opened database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+0.895573	INFO [13436 GPUContext.cpp->initialize:115]	OptiX context created successfully
+0.895634	INFO [13436 GPUContext.cpp->initialize:116]	GPU context initialized successfully
+0.895742	DEBUG [13436 GASHandler.cpp->initialize:32]	GASHandler initialization triggered
+0.896024	INFO [13436 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
+[ 4][   DISKCACHE]: Closed database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+0.920122	INFO [13436 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
+0.920202	DEBUG [13436 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
+0.920404	DEBUG [13436 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
+0.920430	INFO [13436 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
+0.920453	INFO [13436 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
+0.920476	INFO [13436 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
+0.920498	INFO [13436 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
+0.920588	INFO [13436 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
+0.979724	INFO [13436 GPUContext.cpp->initialize:109]	Initializing OptiX context...
+[ 4][       KNOBS]: All knobs on default.
+
+[ 4][   DISKCACHE]: Opened database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+1.033804	INFO [13436 GPUContext.cpp->initialize:115]	OptiX context created successfully
+1.033955	INFO [13436 GPUContext.cpp->initialize:116]	GPU context initialized successfully
+1.033985	DEBUG [13436 GASHandler.cpp->initialize:32]	GASHandler initialization triggered
+1.042393	INFO [13436 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
+[ 4][   DISKCACHE]: Closed database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+1.067116	INFO [13436 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
+1.067182	DEBUG [13436 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
+1.067479	DEBUG [13436 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
+1.067570	INFO [13436 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
+1.067616	INFO [13436 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
+1.067641	INFO [13436 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
+1.067664	INFO [13436 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
+1.067687	INFO [13436 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
+1.132239	INFO [13436 GPUContext.cpp->initialize:109]	Initializing OptiX context...
+[ 4][       KNOBS]: All knobs on default.
+
+[ 4][   DISKCACHE]: Opened database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+1.186730	INFO [13436 GPUContext.cpp->initialize:115]	OptiX context created successfully
+1.186796	INFO [13436 GPUContext.cpp->initialize:116]	GPU context initialized successfully
+1.186820	DEBUG [13436 GASHandler.cpp->initialize:32]	GASHandler initialization triggered
+1.195708	INFO [13436 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
+[ 4][   DISKCACHE]: Closed database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+1.220066	INFO [13436 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
+1.220130	DEBUG [13436 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
+1.220315	DEBUG [13436 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
+1.220375	INFO [13436 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
+1.220426	INFO [13436 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
+1.220467	INFO [13436 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
+1.220489	INFO [13436 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
+1.220533	INFO [13436 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
+1.276895	INFO [13436 GPUContext.cpp->initialize:109]	Initializing OptiX context...
+[ 4][       KNOBS]: All knobs on default.
+
+[ 4][   DISKCACHE]: Opened database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+1.331580	INFO [13436 GPUContext.cpp->initialize:115]	OptiX context created successfully
+1.331648	INFO [13436 GPUContext.cpp->initialize:116]	GPU context initialized successfully
+1.331673	DEBUG [13436 GASHandler.cpp->initialize:32]	GASHandler initialization triggered
+1.340892	INFO [13436 GASHandler.cpp->compactGAS:356]	GAS compaction: 1152 bytes -> 1152 bytes
+1.340968	INFO [13436 Application.cpp->DOCTEST_ANON_FUNC_24:514]	GAS compaction: 3840 bytes -> 1152 bytes
+1.341178	INFO [13436 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
+[ 4][   DISKCACHE]: Closed database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+1.367620	INFO [13436 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
+1.367701	DEBUG [13436 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
+1.367855	DEBUG [13436 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
+1.367916	INFO [13436 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
+1.367944	INFO [13436 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
+1.367968	INFO [13436 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
+1.367995	INFO [13436 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
+1.368019	INFO [13436 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
+1.430600	INFO [13436 GPUContext.cpp->initialize:109]	Initializing OptiX context...
+[ 4][       KNOBS]: All knobs on default.
+
+[ 4][   DISKCACHE]: Opened database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+1.484930	INFO [13436 GPUContext.cpp->initialize:115]	OptiX context created successfully
+1.485002	INFO [13436 GPUContext.cpp->initialize:116]	GPU context initialized successfully
+1.485028	DEBUG [13436 GASHandler.cpp->initialize:32]	GASHandler initialization triggered
+1.494550	INFO [13436 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
+[ 4][   DISKCACHE]: Closed database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+1.519965	INFO [13436 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
+1.520042	DEBUG [13436 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
+1.520193	DEBUG [13436 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
+1.520255	INFO [13436 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
+1.520311	INFO [13436 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
+1.520348	INFO [13436 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
+1.520372	INFO [13436 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
+1.520395	INFO [13436 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
+1.578256	INFO [13436 GPUContext.cpp->initialize:109]	Initializing OptiX context...
+[ 4][       KNOBS]: All knobs on default.
+
+[ 4][   DISKCACHE]: Opened database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+1.632212	INFO [13436 GPUContext.cpp->initialize:115]	OptiX context created successfully
+1.632294	INFO [13436 GPUContext.cpp->initialize:116]	GPU context initialized successfully
+1.632319	DEBUG [13436 GASHandler.cpp->initialize:32]	GASHandler initialization triggered
+1.641728	INFO [13436 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
+[ 4][   DISKCACHE]: Closed database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+1.667613	INFO [13436 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
+1.667688	DEBUG [13436 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
+1.667884	DEBUG [13436 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
+1.667964	INFO [13436 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
+1.667999	INFO [13436 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
+1.668025	INFO [13436 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
+1.668047	INFO [13436 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
+1.668071	INFO [13436 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
+1.732463	INFO [13436 GPUContext.cpp->initialize:109]	Initializing OptiX context...
+[ 4][       KNOBS]: All knobs on default.
+
+[ 4][   DISKCACHE]: Opened database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+1.784931	INFO [13436 GPUContext.cpp->initialize:115]	OptiX context created successfully
+1.785002	INFO [13436 GPUContext.cpp->initialize:116]	GPU context initialized successfully
+1.785027	DEBUG [13436 GASHandler.cpp->initialize:32]	GASHandler initialization triggered
+1.785381	INFO [13436 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
+[ 4][   DISKCACHE]: Closed database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+1.807206	INFO [13436 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
+1.807269	DEBUG [13436 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
+1.807440	DEBUG [13436 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
+1.807491	INFO [13436 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
+1.807543	INFO [13436 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
+1.807577	INFO [13436 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
+1.807600	INFO [13436 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
+1.807622	INFO [13436 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
+1.872796	INFO [13436 GPUContext.cpp->initialize:109]	Initializing OptiX context...
+[ 4][       KNOBS]: All knobs on default.
+
+[ 4][   DISKCACHE]: Opened database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+1.926071	INFO [13436 GPUContext.cpp->initialize:115]	OptiX context created successfully
+1.926145	INFO [13436 GPUContext.cpp->initialize:116]	GPU context initialized successfully
+1.926180	DEBUG [13436 GASHandler.cpp->initialize:32]	GASHandler initialization triggered
+1.926313	WARNING [13436 GASHandler.cpp->removeGeometryInstanceAt:397]	GASHandler::removeGeometryInstanceAt() called with invalid index: 0
+1.926497	WARNING [13436 GASHandler.cpp->removeGeometryInstanceAt:397]	GASHandler::removeGeometryInstanceAt() called with invalid index: 10
+1.926890	INFO [13436 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
+[ 4][   DISKCACHE]: Closed database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+1.951101	INFO [13436 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
+1.951177	DEBUG [13436 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
+1.951339	DEBUG [13436 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
+1.951427	INFO [13436 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
+1.951463	INFO [13436 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
+1.951491	INFO [13436 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
+1.951514	INFO [13436 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
+1.951537	INFO [13436 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
+2.010448	INFO [13436 GPUContext.cpp->initialize:109]	Initializing OptiX context...
+[ 4][       KNOBS]: All knobs on default.
+
+[ 4][   DISKCACHE]: Opened database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+2.065499	INFO [13436 GPUContext.cpp->initialize:115]	OptiX context created successfully
+2.065590	INFO [13436 GPUContext.cpp->initialize:116]	GPU context initialized successfully
+2.065617	DEBUG [13436 GASHandler.cpp->initialize:32]	GASHandler initialization triggered
+2.074805	WARNING [13436 GASHandler.cpp->updateGAS:246]	GASHandler::updateGAS() called but updates are not enabled.
+2.074970	INFO [13436 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
+[ 4][   DISKCACHE]: Closed database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+2.099723	INFO [13436 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
+2.099793	DEBUG [13436 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
+2.100036	DEBUG [13436 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
+2.100102	INFO [13436 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
+2.100154	INFO [13436 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
+2.100177	INFO [13436 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
+2.100200	INFO [13436 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
+2.100224	INFO [13436 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
+2.156891	INFO [13436 GPUContext.cpp->initialize:109]	Initializing OptiX context...
+[ 4][       KNOBS]: All knobs on default.
+
+[ 4][   DISKCACHE]: Opened database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+2.211785	INFO [13436 GPUContext.cpp->initialize:115]	OptiX context created successfully
+2.211862	INFO [13436 GPUContext.cpp->initialize:116]	GPU context initialized successfully
+2.211887	DEBUG [13436 GASHandler.cpp->initialize:32]	GASHandler initialization triggered
+2.220848	WARNING [13436 GASHandler.cpp->compactGAS:304]	GASHandler::compactGAS() called but compaction is not enabled.
+2.221073	INFO [13436 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
+[ 4][   DISKCACHE]: Closed database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+2.247376	INFO [13436 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
+2.247460	DEBUG [13436 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
+2.247635	DEBUG [13436 GPUContext.cpp->GPUContext:6]	GPUContext constructor called
+2.247704	INFO [13436 GPUContext.cpp->initialize:89]	Initializing CUDA driver API...
+2.247755	INFO [13436 GPUContext.cpp->checkGPUCapability:49]	GPU Device: NVIDIA GeForce RTX 3090
+2.247791	INFO [13436 GPUContext.cpp->checkGPUCapability:50]	Compute Capability: 8.6
+2.247814	INFO [13436 GPUContext.cpp->checkGPUCapability:51]	Total Memory: 24575 MB
+2.247837	INFO [13436 GPUContext.cpp->checkGPUCapability:52]	CUDA Driver Version: 12.90
+2.310174	INFO [13436 GPUContext.cpp->initialize:109]	Initializing OptiX context...
+[ 4][       KNOBS]: All knobs on default.
+
+[ 4][   DISKCACHE]: Opened database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+2.365051	INFO [13436 GPUContext.cpp->initialize:115]	OptiX context created successfully
+2.365125	INFO [13436 GPUContext.cpp->initialize:116]	GPU context initialized successfully
+2.365151	DEBUG [13436 GASHandler.cpp->initialize:32]	GASHandler initialization triggered
+2.365443	WARNING [13436 GASHandler.cpp->setRayTypeCount:166]	GASHandler::setRayTypeCount() called with invalid material set index: 5
+2.365639	INFO [13436 GPUContext.cpp->cleanup:134]	Cleaning up GPU context...
+[ 4][   DISKCACHE]: Closed database: "C:\Users\Steve\AppData\Local\NVIDIA\OptixCache\optix7cache.db"
+[ 4][   DISKCACHE]:     Cache data size: "1.1 GiB"
+2.389470	INFO [13436 GPUContext.cpp->cleanup:163]	GPU context cleanup completed
+2.389556	DEBUG [13436 GPUContext.cpp->~GPUContext:11]	GPUContext destructor called
 ===============================================================================
-[doctest] test cases:  1 |  1 passed | 0 failed | 0 skipped
-[doctest] assertions: 28 | 28 passed | 0 failed |
+[doctest] test cases:  3 |  3 passed | 0 failed | 0 skipped
+[doctest] assertions: 85 | 85 passed | 0 failed |
 [doctest] Status: SUCCESS!
-AreaLightTest.exe : LOGGER NOT INITIALIZED:
+GASHandlerTest.exe : LOGGER NOT INITIALIZED:
 At E:\1Milo\Milo\unittest\scripts\claude_test_command.ps1:77 char:23
 +             $Output = & $ExePath 2>&1 | Out-String
 +                       ~~~~~~~~~~~~~~~
@@ -97,6 +343,6 @@ At E:\1Milo\Milo\unittest\scripts\claude_test_command.ps1:77 char:23
     + FullyQualifiedErrorId : NativeCommandError
  
 		
-main took 351 milliseconds
+main took 2390 milliseconds
 Press ENTER to continue...
 

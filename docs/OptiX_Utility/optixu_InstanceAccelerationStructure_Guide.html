@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OptiX Utility InstanceAccelerationStructure Guide</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #fff;
+            padding: 40px 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: #000;
+            font-size: 36px;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #76b900;
+        }
+        
+        h2 {
+            color: #000;
+            font-size: 28px;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        h3 {
+            color: #000;
+            font-size: 22px;
+            margin-top: 30px;
+            margin-bottom: 15px;
+        }
+        
+        h4 {
+            color: #000;
+            font-size: 18px;
+            margin-top: 25px;
+            margin-bottom: 12px;
+        }
+        
+        p {
+            margin-bottom: 16px;
+        }
+        
+        .code-block, pre {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 20px;
+            margin: 24px 0;
+            overflow-x: auto;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #000;
+        }
+        
+        .inline-code {
+            background: #f4f4f4;
+            border: 1px solid #e0e0e0;
+            border-radius: 3px;
+            padding: 2px 6px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 14px;
+            color: #000;
+        }
+        
+        ul, ol {
+            margin-bottom: 16px;
+            padding-left: 30px;
+        }
+        
+        li {
+            margin-bottom: 8px;
+        }
+        
+        .note {
+            background: #fff9e6;
+            border-left: 4px solid #ffcc00;
+            padding: 16px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        
+        .warning {
+            background: #fff0f0;
+            border-left: 4px solid #ff3333;
+            padding: 16px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        
+        .success {
+            background: #f0fff0;
+            border-left: 4px solid #00cc00;
+            padding: 16px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        
+        th {
+            background: #f8f8f8;
+            font-weight: 600;
+        }
+        
+        .toc {
+            background: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 20px;
+            margin: 30px 0;
+        }
+        
+        .toc h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+        }
+        
+        .toc ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .toc ul ul {
+            padding-left: 20px;
+        }
+        
+        .toc a {
+            color: #0066cc;
+            text-decoration: none;
+        }
+        
+        .toc a:hover {
+            text-decoration: underline;
+        }
+        
+        .section {
+            margin-bottom: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>OptiX Utility InstanceAccelerationStructure Complete Guide</h1>
+        <p style="font-size: 18px; color: #666; margin-bottom: 30px;">
+            Comprehensive documentation for the optixu::InstanceAccelerationStructure class
+        </p>
+        
+        <div class="toc">
+            <h3>Table of Contents</h3>
+            <ul>
+                <li><a href="#overview">1. Overview</a></li>
+                <li><a href="#architecture">2. Architecture and Concepts</a></li>
+                <li><a href="#api-reference">3. Complete API Reference</a></li>
+                <li><a href="#workflow">4. Essential Workflow</a></li>
+                <li><a href="#examples">5. Practical Examples</a></li>
+                <li><a href="#advanced">6. Advanced Topics</a></li>
+                <li><a href="#troubleshooting">7. Common Issues and Solutions</a></li>
+                <li><a href="#best-practices">8. Best Practices</a></li>
+            </ul>
+        </div>
+        
+        <div class="section" id="overview">
+            <h2>1. Overview</h2>
+            <p>
+                The <span class="inline-code">optixu::InstanceAccelerationStructure</span> (IAS) class is a high-level wrapper 
+                around OptiX's top-level acceleration structure (TLAS) functionality. It manages instances of geometry and other 
+                acceleration structures, enabling efficient ray tracing through complex scenes with instancing support.
+            </p>
+            
+            <h3>Key Features</h3>
+            <ul>
+                <li>Hierarchical scene organization with instance management</li>
+                <li>Support for static and dynamic scenes with update capabilities</li>
+                <li>Acceleration structure compaction for memory optimization</li>
+                <li>Motion blur support through transform animation</li>
+                <li>Multi-level instancing (nested IAS structures)</li>
+                <li>Random instance access for advanced rendering techniques</li>
+            </ul>
+        </div>
+        
+        <div class="section" id="architecture">
+            <h2>2. Architecture and Concepts</h2>
+            
+            <h3>Acceleration Structure Hierarchy</h3>
+            <p>
+                OptiX uses a two-level acceleration structure hierarchy:
+            </p>
+            <ul>
+                <li><strong>Bottom Level (GAS):</strong> GeometryAccelerationStructure containing actual geometry (triangles, curves, etc.)</li>
+                <li><strong>Top Level (IAS):</strong> InstanceAccelerationStructure containing instances of GAS or other IAS structures</li>
+            </ul>
+            
+            <pre class="code-block">
+Scene
+  └── IAS (Top Level)
+        ├── Instance 0 → GAS (geometry)
+        ├── Instance 1 → GAS (geometry)
+        ├── Instance 2 → Transform → GAS
+        └── Instance 3 → IAS (nested)
+                          ├── Instance 0 → GAS
+                          └── Instance 1 → GAS</pre>
+            
+            <h3>Instance Components</h3>
+            <p>Each instance in an IAS consists of:</p>
+            <ul>
+                <li><strong>Child traversable:</strong> Reference to GAS, Transform, or nested IAS</li>
+                <li><strong>Instance ID:</strong> User-defined identifier accessible in shaders</li>
+                <li><strong>SBT offset:</strong> Shader binding table record offset</li>
+                <li><strong>Visibility mask:</strong> Ray visibility control</li>
+                <li><strong>Flags:</strong> Instance-specific behavior flags</li>
+                <li><strong>Transform:</strong> Optional 3x4 transformation matrix</li>
+            </ul>
+        </div>
+        
+        <div class="section" id="api-reference">
+            <h2>3. Complete API Reference</h2>
+            
+            <h3>Creation and Destruction</h3>
+            <pre class="code-block">
+// Creation through Scene
+optixu::Scene scene = optixContext.createScene();
+optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
+
+// Destruction
+ias.destroy();</pre>
+            
+            <h3>Configuration Methods</h3>
+            
+            <h4>setConfiguration</h4>
+            <pre class="code-block">
+void setConfiguration(
+    ASTradeoff tradeoff,
+    AllowUpdate allowUpdate,
+    AllowCompaction allowCompaction,
+    AllowRandomInstanceAccess allowRandomAccess
+);
+
+// Example:
+ias.setConfiguration(
+    optixu::ASTradeoff::PreferFastBuild,
+    optixu::AllowUpdate::Yes,
+    optixu::AllowCompaction::Yes,
+    optixu::AllowRandomInstanceAccess::No
+);</pre>
+            
+            <table>
+                <tr>
+                    <th>Parameter</th>
+                    <th>Options</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td>ASTradeoff</td>
+                    <td>PreferFastBuild<br>PreferFastTrace</td>
+                    <td>Build speed vs traversal performance tradeoff</td>
+                </tr>
+                <tr>
+                    <td>AllowUpdate</td>
+                    <td>Yes / No</td>
+                    <td>Enable refitting for dynamic scenes</td>
+                </tr>
+                <tr>
+                    <td>AllowCompaction</td>
+                    <td>Yes / No</td>
+                    <td>Allow memory optimization after build</td>
+                </tr>
+                <tr>
+                    <td>AllowRandomInstanceAccess</td>
+                    <td>Yes / No</td>
+                    <td>Enable random access to instances in shaders</td>
+                </tr>
+            </table>
+            
+            <h4>Motion Blur Configuration</h4>
+            <pre class="code-block">
+void setMotionOptions(
+    uint32_t numKeys,
+    float timeBegin,
+    float timeEnd,
+    OptixMotionFlags flags
+);
+
+// Example:
+ias.setMotionOptions(
+    2,                           // Number of motion keys
+    0.0f,                       // Start time
+    1.0f,                       // End time
+    OPTIX_MOTION_FLAG_NONE      // Motion flags
+);</pre>
+            
+            <h3>Child Management</h3>
+            
+            <pre class="code-block">
+// Add instance to IAS
+void addChild(Instance child);
+
+// Get number of children
+uint32_t getChildCount() const;
+
+// Get child by index
+Instance getChild(uint32_t index) const;
+
+// Find child index
+uint32_t findChildIndex(Instance child) const;
+
+// Remove child
+void removeChildAt(uint32_t index);
+
+// Clear all children
+void clearChildren();</pre>
+            
+            <h3>Building and Updating</h3>
+            
+            <pre class="code-block">
+// Mark IAS as needing rebuild
+void markDirty();
+
+// Check if rebuild is needed
+bool isReady() const;
+
+// Prepare for build (get memory requirements)
+void prepareForBuild(OptixAccelBufferSizes* memReq);
+
+// Build or rebuild the IAS
+OptixTraversableHandle rebuild(
+    CUstream stream,
+    const BufferView& instanceBuffer,
+    const BufferView& accelBuffer,
+    const BufferView& scratchBuffer
+);
+
+// Update existing IAS (requires AllowUpdate::Yes)
+void update(CUstream stream, const BufferView& scratchBuffer);
+
+// Compact IAS (requires AllowCompaction::Yes)
+void compact(CUstream stream, const BufferView& compactedAccelBuffer);</pre>
+            
+            <h3>Query Methods</h3>
+            
+            <pre class="code-block">
+// Get traversable handle for ray tracing
+OptixTraversableHandle getHandle() const;
+
+// Check if compaction is available
+bool isCompactionAvailable() const;
+
+// Get compacted size
+size_t getCompactedSize() const;
+
+// Query configuration
+void getConfiguration(
+    ASTradeoff* tradeoff,
+    AllowUpdate* allowUpdate,
+    AllowCompaction* allowCompaction,
+    AllowRandomInstanceAccess* allowRandomAccess
+) const;
+
+// Query motion options
+void getMotionOptions(
+    uint32_t* numKeys,
+    float* timeBegin,
+    float* timeEnd,
+    OptixMotionFlags* flags
+) const;</pre>
+        </div>
+        
+        <div class="section" id="workflow">
+            <h2>4. Essential Workflow</h2>
+            
+            <div class="note">
+                <strong>Critical:</strong> Always call <span class="inline-code">scene.generateShaderBindingTableLayout()</span> 
+                before building any IAS. This step is mandatory for OptiX to properly set up the shader binding table.
+            </div>
+            
+            <h3>Basic IAS Creation Workflow</h3>
+            <ol>
+                <li>Create IAS from Scene</li>
+                <li>Create and configure child geometry (GAS)</li>
+                <li>Create Instance objects and set children</li>
+                <li>Add instances to IAS</li>
+                <li>Configure IAS build options</li>
+                <li>Mark IAS as dirty</li>
+                <li>Generate shader binding table layout</li>
+                <li>Get memory requirements</li>
+                <li>Allocate buffers</li>
+                <li>Build the IAS</li>
+            </ol>
+            
+            <pre class="code-block">
+// 1. Create IAS
+optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
+
+// 2-3. Create GAS and Instance (assume GAS already created)
+optixu::Instance instance = scene.createInstance();
+instance.setChild(gas);
+instance.setID(0);
+
+// 4. Add to IAS
+ias.addChild(instance);
+
+// 5. Configure IAS
+ias.setConfiguration(
+    optixu::ASTradeoff::PreferFastTrace,
+    optixu::AllowUpdate::No,
+    optixu::AllowCompaction::Yes,
+    optixu::AllowRandomInstanceAccess::No
+);
+
+// 6. Mark dirty
+ias.markDirty();
+
+// 7. Generate SBT layout (CRITICAL STEP)
+size_t sbtSize;
+scene.generateShaderBindingTableLayout(&sbtSize);
+
+// 8. Get memory requirements
+OptixAccelBufferSizes memReq;
+ias.prepareForBuild(&memReq);
+
+// 9. Allocate buffers
+cudau::Buffer instanceBuffer;
+cudau::Buffer accelBuffer;
+cudau::Buffer scratchBuffer;
+
+size_t instanceBufferSize = sizeof(OptixInstance) * ias.getChildCount();
+instanceBuffer.initialize(cudaContext, cudau::BufferType::Device, instanceBufferSize, 1);
+accelBuffer.initialize(cudaContext, cudau::BufferType::Device, memReq.outputSizeInBytes, 1);
+scratchBuffer.initialize(cudaContext, cudau::BufferType::Device, memReq.tempSizeInBytes, 1);
+
+// 10. Build IAS
+OptixTraversableHandle traversable = ias.rebuild(
+    stream, instanceBuffer, accelBuffer, scratchBuffer
+);
+
+// Synchronize
+cuStreamSynchronize(stream);</pre>
+        </div>
+        
+        <div class="section" id="examples">
+            <h2>5. Practical Examples</h2>
+            
+            <h3>Example 1: Simple IAS with Multiple Instances</h3>
+            <pre class="code-block">
+// Create multiple instances of the same GAS with different positions
+optixu::InstanceAccelerationStructure ias = scene.createInstanceAccelerationStructure();
+
+for (int i = 0; i < 5; ++i) {
+    optixu::Instance instance = scene.createInstance();
+    instance.setChild(sharedGAS);
+    instance.setID(i);
+    
+    // Set transform (translate along X axis)
+    float transform[12] = {
+        1, 0, 0, i * 2.0f,  // X axis + translation
+        0, 1, 0, 0,         // Y axis
+        0, 0, 1, 0          // Z axis
+    };
+    instance.setTransform(transform);
+    
+    ias.addChild(instance);
+}
+
+// Configure and build...
+ias.setConfiguration(
+    optixu::ASTradeoff::PreferFastTrace,
+    optixu::AllowUpdate::No,
+    optixu::AllowCompaction::No,
+    optixu::AllowRandomInstanceAccess::No
+);
+ias.markDirty();</pre>
+            
+            <h3>Example 2: IAS with Transform Node</h3>
+            <pre class="code-block">
+// Create transform for rotation and translation
+optixu::Transform transform = scene.createTransform();
+
+// Configure as matrix motion transform
+size_t transformSize;
+transform.setConfiguration(optixu::TransformType::MatrixMotion, 1, &transformSize);
+transform.setMotionOptions(0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);
+
+// Set transform matrix (45-degree rotation around Y + translation)
+float angle = 45.0f * M_PI / 180.0f;
+float matrix[12] = {
+    cos(angle),  0, sin(angle), 5.0f,
+    0,           1, 0,          2.0f,
+    -sin(angle), 0, cos(angle), 0.0f
+};
+transform.setMatrixMotionKey(0, matrix);
+transform.setChild(gas);
+transform.markDirty();
+
+// Build transform
+cudau::Buffer transformBuffer;
+transformBuffer.initialize(cudaContext, cudau::BufferType::Device, transformSize, 1);
+OptixTraversableHandle transformHandle = transform.rebuild(stream, transformBuffer);
+
+// Create instance with transform
+optixu::Instance instance = scene.createInstance();
+instance.setChild(transform);
+ias.addChild(instance);</pre>
+            
+            <h3>Example 3: Compacting an IAS</h3>
+            <pre class="code-block">
+// Build IAS with compaction enabled
+ias.setConfiguration(
+    optixu::ASTradeoff::PreferFastTrace,
+    optixu::AllowUpdate::No,
+    optixu::AllowCompaction::Yes,  // Enable compaction
+    optixu::AllowRandomInstanceAccess::No
+);
+
+// ... build IAS normally ...
+OptixTraversableHandle traversable = ias.rebuild(
+    stream, instanceBuffer, accelBuffer, scratchBuffer
+);
+cuStreamSynchronize(stream);
+
+// Check if compaction is available
+if (ias.isCompactionAvailable()) {
+    size_t compactedSize = ias.getCompactedSize();
+    
+    // Allocate compacted buffer
+    cudau::Buffer compactedBuffer;
+    compactedBuffer.initialize(cudaContext, cudau::BufferType::Device, compactedSize, 1);
+    
+    // Perform compaction
+    ias.compact(stream, compactedBuffer);
+    cuStreamSynchronize(stream);
+    
+    // Get new traversable handle
+    traversable = ias.getHandle();
+    
+    // Original accelBuffer can now be freed
+    accelBuffer.finalize();
+    
+    LOG(INFO) << "IAS compacted: " << memReq.outputSizeInBytes 
+              << " bytes -> " << compactedSize << " bytes";
+}</pre>
+            
+            <h3>Example 4: Multi-level Instancing (Nested IAS)</h3>
+            <pre class="code-block">
+// Create bottom-level IAS with multiple GAS instances
+optixu::InstanceAccelerationStructure bottomIAS = scene.createInstanceAccelerationStructure();
+
+for (int i = 0; i < 3; ++i) {
+    optixu::Instance instance = scene.createInstance();
+    instance.setChild(gasArray[i]);
+    bottomIAS.addChild(instance);
+}
+
+// Configure and build bottom IAS
+bottomIAS.setConfiguration(
+    optixu::ASTradeoff::PreferFastBuild,
+    optixu::AllowUpdate::No,
+    optixu::AllowCompaction::No,
+    optixu::AllowRandomInstanceAccess::No
+);
+bottomIAS.markDirty();
+
+// Generate SBT layout
+size_t sbtSize;
+scene.generateShaderBindingTableLayout(&sbtSize);
+
+// Build bottom IAS
+OptixAccelBufferSizes bottomMemReq;
+bottomIAS.prepareForBuild(&bottomMemReq);
+// ... allocate buffers and build ...
+
+// Create top-level IAS
+optixu::InstanceAccelerationStructure topIAS = scene.createInstanceAccelerationStructure();
+
+// Add bottom IAS as instance
+optixu::Instance topInstance = scene.createInstance();
+topInstance.setChild(bottomIAS);
+topIAS.addChild(topInstance);
+
+// Add direct GAS instances too
+optixu::Instance directInstance = scene.createInstance();
+directInstance.setChild(anotherGAS);
+topIAS.addChild(directInstance);
+
+// Build top IAS
+topIAS.setConfiguration(
+    optixu::ASTradeoff::PreferFastTrace,
+    optixu::AllowUpdate::No,
+    optixu::AllowCompaction::No,
+    optixu::AllowRandomInstanceAccess::No
+);
+topIAS.markDirty();
+// ... prepare and build ...</pre>
+            
+            <h3>Example 5: Dynamic Scene Updates</h3>
+            <pre class="code-block">
+// Configure IAS for updates
+ias.setConfiguration(
+    optixu::ASTradeoff::PreferFastTrace,
+    optixu::AllowUpdate::Yes,  // Enable updates
+    optixu::AllowCompaction::No,
+    optixu::AllowRandomInstanceAccess::No
+);
+
+// Initial build
+ias.markDirty();
+// ... build normally ...
+
+// Later, update instance transforms
+for (int i = 0; i < ias.getChildCount(); ++i) {
+    optixu::Instance instance = ias.getChild(i);
+    
+    // Update transform based on animation
+    float transform[12];
+    computeAnimatedTransform(transform, currentTime, i);
+    instance.setTransform(transform);
+}
+
+// Mark for update
+ias.markDirty();
+
+// Perform fast update (refit)
+ias.update(stream, scratchBuffer);
+cuStreamSynchronize(stream);</pre>
+        </div>
+        
+        <div class="section" id="advanced">
+            <h2>6. Advanced Topics</h2>
+            
+            <h3>Instance Flags and Visibility</h3>
+            <pre class="code-block">
+// Set instance flags
+instance.setFlags(
+    OPTIX_INSTANCE_FLAG_DISABLE_ANYHIT |
+    OPTIX_INSTANCE_FLAG_FLIP_TRIANGLE_FACING
+);
+
+// Set visibility mask (8-bit mask)
+instance.setVisibilityMask(0xFF);  // Visible to all ray types
+
+// Common visibility patterns:
+// 0x01 - Primary rays only
+// 0x02 - Shadow rays only
+// 0x04 - Reflection rays
+// 0x08 - Refraction rays</pre>
+            
+            <h3>SBT Offset Management</h3>
+            <pre class="code-block">
+// Set SBT offset for hit group selection
+instance.setSBTOffset(materialIndex * numRayTypes);
+
+// With multiple ray types:
+// Material 0: offsets 0, 1, 2 (for 3 ray types)
+// Material 1: offsets 3, 4, 5
+// Material 2: offsets 6, 7, 8</pre>
+            
+            <h3>Motion Blur with Multiple Keys</h3>
+            <pre class="code-block">
+// Configure IAS for motion blur
+ias.setMotionOptions(
+    3,      // 3 motion keys
+    0.0f,   // Time begin
+    1.0f,   // Time end
+    OPTIX_MOTION_FLAG_NONE
+);
+
+// Set motion transform keys for instances
+for (int keyIdx = 0; keyIdx < 3; ++keyIdx) {
+    float t = keyIdx / 2.0f;  // 0.0, 0.5, 1.0
+    
+    float transform[12];
+    computeTransformAtTime(transform, t);
+    instance.setMotionTransform(keyIdx, transform);
+}</pre>
+            
+            <h3>Random Instance Access</h3>
+            <pre class="code-block">
+// Enable random access
+ias.setConfiguration(
+    optixu::ASTradeoff::PreferFastTrace,
+    optixu::AllowUpdate::No,
+    optixu::AllowCompaction::No,
+    optixu::AllowRandomInstanceAccess::Yes  // Enable random access
+);
+
+// In shader code:
+// Can now use optixGetInstanceIdFromHandle()
+// to query instance properties without traversal</pre>
+        </div>
+        
+        <div class="section" id="troubleshooting">
+            <h2>7. Common Issues and Solutions</h2>
+            
+            <div class="warning">
+                <h4>Error: "Shader binding table layout generation has not been done"</h4>
+                <p><strong>Cause:</strong> Forgot to call generateShaderBindingTableLayout() before building IAS.</p>
+                <p><strong>Solution:</strong></p>
+                <pre class="code-block">
+// Always call this before prepareForBuild()
+size_t sbtSize;
+scene.generateShaderBindingTableLayout(&sbtSize);</pre>
+            </div>
+            
+            <div class="warning">
+                <h4>Error: "Transform is not ready"</h4>
+                <p><strong>Cause:</strong> Transform needs to be built before use.</p>
+                <p><strong>Solution:</strong></p>
+                <pre class="code-block">
+// After configuring transform
+transform.markDirty();
+cudau::Buffer transformBuffer;
+transformBuffer.initialize(cudaContext, cudau::BufferType::Device, transformSize, 1);
+OptixTraversableHandle transformHandle = transform.rebuild(stream, transformBuffer);</pre>
+            </div>
+            
+            <div class="warning">
+                <h4>Error: "Invalid motion configuration"</h4>
+                <p><strong>Cause:</strong> Motion transform not properly configured.</p>
+                <p><strong>Solution:</strong></p>
+                <pre class="code-block">
+// Set motion options for transforms with motion
+transform.setMotionOptions(0.0f, 1.0f, OPTIX_MOTION_FLAG_NONE);</pre>
+            </div>
+            
+            <div class="warning">
+                <h4>Error: "Material not set for geometry"</h4>
+                <p><strong>Cause:</strong> GeometryInstance requires materials before use in IAS.</p>
+                <p><strong>Solution:</strong></p>
+                <pre class="code-block">
+// Create and set material
+optixu::Material material = scene.createMaterial();
+// ... configure material ...
+geomInst.setMaterial(0, 0, material);</pre>
+            </div>
+        </div>
+        
+        <div class="section" id="best-practices">
+            <h2>8. Best Practices</h2>
+            
+            <h3>Performance Optimization</h3>
+            <ul>
+                <li><strong>Use PreferFastTrace</strong> for final builds to optimize ray traversal performance</li>
+                <li><strong>Enable compaction</strong> to reduce memory usage (typically 20-40% savings)</li>
+                <li><strong>Minimize instance count</strong> by combining static geometry when possible</li>
+                <li><strong>Use instancing</strong> for repeated geometry to save memory</li>
+                <li><strong>Batch updates</strong> when modifying multiple instances</li>
+            </ul>
+            
+            <h3>Memory Management</h3>
+            <ul>
+                <li><strong>Reuse buffers</strong> when rebuilding with same configuration</li>
+                <li><strong>Free scratch buffers</strong> immediately after build completes</li>
+                <li><strong>Compact large scenes</strong> to reduce memory footprint</li>
+                <li><strong>Use appropriate buffer types</strong> (Device for GPU-only access)</li>
+            </ul>
+            
+            <h3>Code Organization</h3>
+            <pre class="code-block">
+class SceneManager {
+private:
+    optixu::Scene scene;
+    optixu::InstanceAccelerationStructure rootIAS;
+    std::vector<optixu::Instance> instances;
+    std::vector<cudau::Buffer> buffers;
+    
+public:
+    void initialize() {
+        scene = optixContext.createScene();
+        rootIAS = scene.createInstanceAccelerationStructure();
+    }
+    
+    void addGeometry(optixu::GeometryAccelerationStructure gas) {
+        optixu::Instance instance = scene.createInstance();
+        instance.setChild(gas);
+        instance.setID(instances.size());
+        instances.push_back(instance);
+        rootIAS.addChild(instance);
+        rootIAS.markDirty();
+    }
+    
+    void build(CUstream stream) {
+        // Always generate SBT layout
+        size_t sbtSize;
+        scene.generateShaderBindingTableLayout(&sbtSize);
+        
+        // Build IAS
+        OptixAccelBufferSizes memReq;
+        rootIAS.prepareForBuild(&memReq);
+        
+        // Allocate and build...
+    }
+    
+    void cleanup() {
+        for (auto& buffer : buffers) {
+            buffer.finalize();
+        }
+        for (auto& instance : instances) {
+            instance.destroy();
+        }
+        rootIAS.destroy();
+        scene.destroy();
+    }
+};</pre>
+            
+            <h3>Debugging Tips</h3>
+            <ul>
+                <li><strong>Enable validation mode</strong> in OptiX context for detailed error messages</li>
+                <li><strong>Check isReady()</strong> before using IAS in rendering</li>
+                <li><strong>Log memory sizes</strong> to track acceleration structure growth</li>
+                <li><strong>Verify child counts</strong> match expected instance numbers</li>
+                <li><strong>Test with simple scenes</strong> before adding complexity</li>
+            </ul>
+            
+            <div class="success">
+                <h4>Checklist for IAS Setup</h4>
+                <ol>
+                    <li>✓ Create IAS from Scene</li>
+                    <li>✓ Create and configure all child geometry</li>
+                    <li>✓ Set materials on geometry instances</li>
+                    <li>✓ Create Instance objects</li>
+                    <li>✓ Set instance children and properties</li>
+                    <li>✓ Add instances to IAS</li>
+                    <li>✓ Configure IAS options</li>
+                    <li>✓ Mark IAS as dirty</li>
+                    <li>✓ Generate SBT layout</li>
+                    <li>✓ Get memory requirements</li>
+                    <li>✓ Allocate all necessary buffers</li>
+                    <li>✓ Build IAS</li>
+                    <li>✓ Synchronize stream</li>
+                    <li>✓ Store traversable handle</li>
+                </ol>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>Summary</h2>
+            <p>
+                The InstanceAccelerationStructure class provides a powerful abstraction for managing scene hierarchy 
+                in OptiX ray tracing applications. By following the workflows and best practices outlined in this guide, 
+                you can efficiently build and maintain complex scenes with instancing, transforms, and motion blur support.
+            </p>
+            <p>
+                Remember the critical importance of calling <span class="inline-code">generateShaderBindingTableLayout()</span> 
+                and properly configuring all geometry materials before building the IAS. With proper setup and configuration, 
+                the IAS enables high-performance ray tracing through complex, dynamic scenes.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
